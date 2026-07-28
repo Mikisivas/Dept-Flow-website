@@ -1,0 +1,735 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #FAFAFA; color: #0A0A0A; font-family: Inter, system-ui, -apple-system, sans-serif; font-size: 16px; -webkit-font-smoothing: antialiased; }
+  h1, h2, h3, h4, p, ul, ol, figure { margin: 0; }
+  ul { padding: 0; list-style: none; }
+  a { color: #A85E0A; text-decoration: underline; text-underline-offset: 2px; }
+  a:hover { color: #C96E10; }
+  button, input, textarea, select { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid #A85E0A; outline-offset: 2px; }
+  @keyframes skel { 0% { opacity: .55; } 50% { opacity: 1; } 100% { opacity: .55; } }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</helmet>
+
+<div style="max-width: 1280px; margin: 0 auto; padding: 0 24px 120px">
+
+  <header style="padding: 64px 0 40px; border-bottom: 1px solid #E5E5E5">
+    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 28px">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 2 4 4.6v7.1c0 4.9 3.3 8.6 8 10.3 4.7-1.7 8-5.4 8-10.3V4.6z" fill="#FF9935" stroke="#0A0A0A" stroke-width="1.5"></path><rect x="8" y="9" width="8" height="5.4" fill="#0A0A0A"></rect><rect x="10.4" y="15" width="3.2" height="1.5" fill="#0A0A0A"></rect></svg>
+      <span style="font-size: 15px; font-weight: 600; letter-spacing: -0.01em">Dept-Flow</span>
+      <span style="font-size: 13px; color: #737373">SAMACOSS</span>
+    </div>
+    <p style="font-size: 12px; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; color: #737373; margin-bottom: 12px">Group 2 of 6 · Public pages</p>
+    <h1 style="font-size: 32px; font-weight: 600; letter-spacing: -0.025em; line-height: 1.15; max-width: 26ch; text-wrap: balance">Nine unauthenticated routes, and the only two places the full crest appears</h1>
+    <p style="font-size: 16px; line-height: 1.55; color: #525252; max-width: 62ch; margin-top: 16px; text-wrap: pretty">A student's first contact with the system is a link pasted into a class WhatsApp group, opened on a phone, on cellular data. Nothing here assumes they know what Dept-Flow is.</p>
+  </header>
+
+  <section style="margin-top: 56px">
+    <div style="display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap">
+      <p style="font-size: 12px; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; color: #A85E0A">Route</p>
+      <code style="font-size: 15px; font-weight: 600; font-family: ui-monospace, SFMono-Regular, Menlo, monospace">/</code>
+      <span style="font-size: 13px; color: #737373">public · static</span>
+      <span style="display: inline-flex; align-items: center; gap: 6px; background: #FFF4E8; color: #A85E0A; padding: 3px 9px; font-size: 12px; font-weight: 600">Full crest</span>
+    </div>
+    <h2 style="font-size: 24px; font-weight: 600; letter-spacing: -0.02em; margin-top: 10px">Landing</h2>
+    <p style="font-size: 16px; line-height: 1.55; color: #525252; max-width: 62ch; margin-top: 10px; text-wrap: pretty">Answers one question — what is this and why am I on it — then gets out of the way. Three cards, two buttons, no marketing.</p>
+
+    <div style="display: flex; gap: 28px; flex-wrap: wrap; margin-top: 24px; align-items: flex-start">
+
+      <figure style="width: 390px; flex: 0 0 auto">
+        <figcaption style="font-size: 12px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: #737373; margin-bottom: 10px">Mobile 390 · the primary case</figcaption>
+        <div style="border: 1px solid #E5E5E5; background: #FFFFFF">
+          <div style="padding: 36px 24px 28px; text-align: left">
+            <img src="assets/samacoss-crest.png" width="200" height="200" alt="SAMACOSS crest" style="display: block; width: 200px; height: 200px; margin-bottom: 22px">
+            <p style="font-size: 12px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: #737373">Department of Mathematics and Computer Science</p>
+            <h3 style="font-size: 28px; font-weight: 600; letter-spacing: -0.025em; line-height: 1.15; margin-top: 10px; text-wrap: balance">Dept-Flow</h3>
+            <p style="font-size: 16px; line-height: 1.55; color: #525252; margin-top: 10px; text-wrap: pretty">Record your lecture attendance, pay your departmental dues, and see whether you'll be eligible to sit your exams.</p>
+            <div style="display: grid; gap: 10px; margin-top: 22px">
+              <a href="#login" style="display: block; background: #FF9935; color: #0A0A0A; padding: 14px 18px; font-size: 16px; font-weight: 600; text-decoration: none; min-height: 48px; transition: background-color 120ms ease" style-hover="background: #E58419" style-active="background: #C96E10">Log in</a>
+              <a href="#register" style="display: block; background: #FFFFFF; color: #0A0A0A; border: 1px solid #0A0A0A; padding: 13px 18px; font-size: 16px; font-weight: 500; text-decoration: none; min-height: 48px; transition: background-color 120ms ease" style-hover="background: #F5F5F5">Create account</a>
+            </div>
+          </div>
+
+          <div style="border-top: 1px solid #E5E5E5">
+            <div style="padding: 22px 24px; border-bottom: 1px solid #E5E5E5; display: flex; gap: 14px">
+              <div style="flex: 0 0 auto; display: flex; gap: 3px; margin-top: 3px" aria-hidden="true"><div style="width: 13px; height: 22px; background: #FF9935; border: 1px solid #FF9935"></div><div style="width: 13px; height: 22px; background: #FF9935; border: 1px solid #FF9935"></div></div>
+              <div style="min-width: 0">
+                <h4 style="font-size: 16px; font-weight: 600">Record attendance</h4>
+                <p style="font-size: 14px; line-height: 1.55; color: #525252; margin-top: 4px; text-wrap: pretty">Your lecturer calls two checkpoints per class. Enter the code at each one to earn a full mark.</p>
+              </div>
+            </div>
+            <div style="padding: 22px 24px; border-bottom: 1px solid #E5E5E5; display: flex; gap: 14px">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#0A0A0A" stroke-width="1.75" stroke-linecap="round" style="flex: 0 0 auto; margin-top: 1px" aria-hidden="true"><rect width="20" height="14" x="2" y="5" rx="2"></rect><line x1="2" x2="22" y1="10" y2="10"></line></svg>
+              <div style="min-width: 0">
+                <h4 style="font-size: 16px; font-weight: 600">Pay dues</h4>
+                <p style="font-size: 14px; line-height: 1.55; color: #525252; margin-top: 4px; text-wrap: pretty">Card or bank transfer. Until your dues clear, attendance is recorded but not counted.</p>
+              </div>
+            </div>
+            <div style="padding: 22px 24px; display: flex; gap: 14px">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#0A0A0A" stroke-width="1.75" stroke-linecap="round" style="flex: 0 0 auto; margin-top: 1px" aria-hidden="true"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"></path><path d="m9 12 2 2 4-4"></path></svg>
+              <div style="min-width: 0">
+                <h4 style="font-size: 16px; font-weight: 600">Track exam eligibility</h4>
+                <p style="font-size: 14px; line-height: 1.55; color: #525252; margin-top: 4px; text-wrap: pretty">You need 75% attendance per course. See where you stand, week by week.</p>
+              </div>
+            </div>
+          </div>
+
+          <div style="border-top: 1px solid #E5E5E5; padding: 22px 24px; background: #FAFAFA">
+            <a href="#check" style="display: inline-flex; align-items: center; min-height: 44px; font-size: 15px; font-weight: 600">Check if my matric number is registered</a>
+            <div style="height: 1px; background: #E5E5E5; margin: 20px 0"></div>
+            <p style="font-size: 13px; line-height: 1.6; color: #737373; text-wrap: pretty">Department office, Faculty of Science · <a href="#contact" style="display: inline-flex; align-items: center; min-height: 44px; font-size: 13px">samacoss@dept.edu.ng</a></p>
+            <p style="font-size: 13px; line-height: 1.6; color: #737373; margin-top: 8px; text-wrap: pretty">Your location is checked only at the moment you submit attendance, and never stored as a coordinate. <a href="#privacy" style="display: inline-flex; align-items: center; min-height: 44px; font-size: 13px">Privacy notice</a></p>
+          </div>
+        </div>
+      </figure>
+
+      <sc-if value="{{ showDesktop }}" hint-placeholder-val="{{ true }}">
+      <figure style="flex: 1 1 520px; min-width: 520px">
+        <figcaption style="font-size: 12px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: #737373; margin-bottom: 10px">Desktop · two columns, crest holds the left</figcaption>
+        <div style="border: 1px solid #E5E5E5; background: #FFFFFF">
+          <div style="display: grid; grid-template-columns: 1fr 1fr">
+            <div style="padding: 48px 40px; border-right: 1px solid #E5E5E5">
+              <img src="assets/samacoss-crest.png" width="208" height="208" alt="SAMACOSS crest" style="display: block; width: 208px; height: 208px; margin-bottom: 26px">
+              <p style="font-size: 12px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: #737373; text-wrap: pretty">Department of Mathematics and Computer Science</p>
+              <h3 style="font-size: 32px; font-weight: 600; letter-spacing: -0.03em; line-height: 1.1; margin-top: 12px">Dept-Flow</h3>
+              <p style="font-size: 16px; line-height: 1.55; color: #525252; margin-top: 12px; max-width: 40ch; text-wrap: pretty">Record your lecture attendance, pay your departmental dues, and see whether you'll be eligible to sit your exams.</p>
+              <div style="display: flex; gap: 10px; margin-top: 26px; flex-wrap: wrap">
+                <a href="#login" style="background: #FF9935; color: #0A0A0A; padding: 13px 22px; font-size: 15px; font-weight: 600; text-decoration: none; transition: background-color 120ms ease" style-hover="background: #E58419">Log in</a>
+                <a href="#register" style="background: #FFFFFF; color: #0A0A0A; border: 1px solid #0A0A0A; padding: 12px 22px; font-size: 15px; font-weight: 500; text-decoration: none; transition: background-color 120ms ease" style-hover="background: #F5F5F5">Create account</a>
+              </div>
+              <p style="margin-top: 24px"><a href="#check" style="display: inline-flex; align-items: center; min-height: 44px; font-size: 15px; font-weight: 600">Check if my matric number is registered</a></p>
+            </div>
+            <div>
+              <div style="padding: 26px 32px; border-bottom: 1px solid #E5E5E5; display: flex; gap: 16px">
+                <div style="flex: 0 0 auto; display: flex; gap: 3px; margin-top: 3px" aria-hidden="true"><div style="width: 13px; height: 22px; background: #FF9935; border: 1px solid #FF9935"></div><div style="width: 13px; height: 22px; background: #FF9935; border: 1px solid #FF9935"></div></div>
+                <div style="min-width: 0"><h4 style="font-size: 16px; font-weight: 600">Record attendance</h4><p style="font-size: 14px; line-height: 1.55; color: #525252; margin-top: 4px; text-wrap: pretty">Two checkpoints per class. Enter the code at each one to earn a full mark.</p></div>
+              </div>
+              <div style="padding: 26px 32px; border-bottom: 1px solid #E5E5E5; display: flex; gap: 16px">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#0A0A0A" stroke-width="1.75" stroke-linecap="round" style="flex: 0 0 auto; margin-top: 1px" aria-hidden="true"><rect width="20" height="14" x="2" y="5" rx="2"></rect><line x1="2" x2="22" y1="10" y2="10"></line></svg>
+                <div style="min-width: 0"><h4 style="font-size: 16px; font-weight: 600">Pay dues</h4><p style="font-size: 14px; line-height: 1.55; color: #525252; margin-top: 4px; text-wrap: pretty">Card or bank transfer. Until dues clear, attendance is recorded but not counted.</p></div>
+              </div>
+              <div style="padding: 26px 32px; border-bottom: 1px solid #E5E5E5; display: flex; gap: 16px">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#0A0A0A" stroke-width="1.75" stroke-linecap="round" style="flex: 0 0 auto; margin-top: 1px" aria-hidden="true"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"></path><path d="m9 12 2 2 4-4"></path></svg>
+                <div style="min-width: 0"><h4 style="font-size: 16px; font-weight: 600">Track exam eligibility</h4><p style="font-size: 14px; line-height: 1.55; color: #525252; margin-top: 4px; text-wrap: pretty">You need 75% attendance per course. See where you stand, week by week.</p></div>
+              </div>
+              <div style="padding: 26px 32px; background: #FAFAFA">
+                <p style="font-size: 13px; line-height: 1.6; color: #737373; text-wrap: pretty">Department office, Faculty of Science · <a href="#contact" style="display: inline-flex; align-items: center; min-height: 44px; font-size: 13px">samacoss@dept.edu.ng</a></p>
+                <p style="font-size: 13px; line-height: 1.6; color: #737373; margin-top: 8px; text-wrap: pretty">Location is checked only when you submit attendance. <a href="#privacy" style="display: inline-flex; align-items: center; min-height: 44px; font-size: 13px">Privacy notice</a></p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </figure>
+      </sc-if>
+    </div>
+
+    <sc-if value="{{ showAnnotations }}" hint-placeholder-val="{{ true }}">
+    <div style="background: #FFF4E8; padding: 18px 20px; margin-top: 16px">
+      <p style="font-size: 12px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: #A85E0A">Notes</p>
+      <ul style="margin-top: 10px; display: grid; gap: 7px">
+        <li style="font-size: 14px; line-height: 1.5; color: #525252">The checkpoint pair appears in the first card, so the motif is taught before it is used.</li>
+        <li style="font-size: 14px; line-height: 1.5; color: #525252">The privacy sentence sits in the footer of the <em>first</em> page, not buried behind a link — a location prompt with no warning is what makes students refuse it.</li>
+        <li style="font-size: 14px; line-height: 1.5; color: #525252">Droppable: if the URL should open straight on login, this page goes and <span style="font-family: ui-monospace, monospace">/</span> redirects.</li>
+      </ul>
+    </div>
+    </sc-if>
+  </section>
+
+  <section style="margin-top: 64px; padding-top: 44px; border-top: 1px solid #E5E5E5">
+    <div style="display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap">
+      <p style="font-size: 12px; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; color: #A85E0A">Route</p>
+      <code style="font-size: 15px; font-weight: 600; font-family: ui-monospace, SFMono-Regular, Menlo, monospace">/login</code>
+      <span style="font-size: 13px; color: #737373">public · 4 states</span>
+      <span style="display: inline-flex; align-items: center; gap: 6px; background: #FFF4E8; color: #A85E0A; padding: 3px 9px; font-size: 12px; font-weight: 600">Full crest</span>
+    </div>
+    <h2 style="font-size: 24px; font-weight: 600; letter-spacing: -0.02em; margin-top: 10px">Login</h2>
+    <p style="font-size: 16px; line-height: 1.55; color: #525252; max-width: 62ch; margin-top: 10px; text-wrap: pretty">One field accepts either a matric number or a staff ID, because the role is already known server-side and asking the student to pick one is a needless decision.</p>
+
+    <div style="display: flex; gap: 24px; flex-wrap: wrap; margin-top: 24px; align-items: flex-start">
+
+      <figure style="width: 358px; flex: 0 0 auto">
+        <figcaption style="font-size: 12px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: #737373; margin-bottom: 10px">Idle</figcaption>
+        <div style="border: 1px solid #E5E5E5; background: #FFFFFF; padding: 32px 24px 28px">
+          <a href="#main" style="display: inline-flex; align-items: center; min-height: 44px; font-size: 13px; font-weight: 600; background: #FFF4E8; padding: 6px 14px; margin-bottom: 12px">Skip to content</a>
+          <img src="assets/samacoss-crest.png" width="200" height="200" alt="SAMACOSS crest" style="display: block; width: 200px; height: 200px; margin-bottom: 20px">
+          <h3 id="main" style="font-size: 24px; font-weight: 600; letter-spacing: -0.02em">Log in to Dept-Flow</h3>
+          <div style="display: grid; gap: 16px; margin-top: 22px">
+            <div>
+              <label for="lg-id" style="display: block; font-size: 14px; font-weight: 600; margin-bottom: 6px">Matric number or staff ID</label>
+              <input id="lg-id" type="text" inputmode="text" autocomplete="username" spellcheck="false" translate="no" placeholder="CMP/2021/047" style="width: 100%; font-size: 16px; padding: 13px 12px; border: 1px solid #767676; background: #FFFFFF; min-height: 48px" style-focus="outline: 2px solid #A85E0A; outline-offset: 1px; border-color: #0A0A0A">
+            </div>
+            <div>
+              <label for="lg-pw" style="display: block; font-size: 14px; font-weight: 600; margin-bottom: 6px">Password</label>
+              <div style="display: flex; border: 1px solid #767676; background: #FFFFFF" style-focus-within="outline: 2px solid #A85E0A; outline-offset: 1px; border-color: #0A0A0A">
+                <input id="lg-pw" type="password" autocomplete="current-password" value="••••••••••" style="flex: 1; min-width: 0; font-size: 16px; padding: 13px 12px; border: 0; background: none; min-height: 48px" style-focus="outline: none">
+                <button type="button" style="flex: 0 0 auto; padding: 0 14px; min-width: 60px; min-height: 48px; background: none; border: 0; font-size: 14px; font-weight: 600; color: #A85E0A; cursor: pointer" style-hover="background: #FFF4E8">Show</button>
+              </div>
+            </div>
+            <label style="display: flex; align-items: center; gap: 10px; min-height: 44px; cursor: pointer">
+              <input type="checkbox" style="width: 20px; height: 20px; accent-color: #FF9935; flex: 0 0 auto">
+              <span style="font-size: 15px">Remember me on this phone</span>
+            </label>
+            <button type="button" style="width: 100%; background: #FF9935; color: #0A0A0A; border: 0; padding: 14px 18px; font-size: 16px; font-weight: 600; cursor: pointer; min-height: 48px; text-align: left; transition: background-color 120ms ease" style-hover="background: #E58419" style-active="background: #C96E10">Log in</button>
+            <div style="display: flex; justify-content: space-between; gap: 14px; flex-wrap: wrap; margin-top: 2px">
+              <a href="#forgot" style="display: inline-flex; align-items: center; min-height: 44px; font-size: 15px">Forgot password?</a>
+              <a href="#register" style="display: inline-flex; align-items: center; min-height: 44px; font-size: 15px; font-weight: 600">Create account</a>
+            </div>
+          </div>
+        </div>
+      </figure>
+
+      <figure style="width: 358px; flex: 0 0 auto">
+        <figcaption style="font-size: 12px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: #737373; margin-bottom: 10px">Submitting · button stays enabled</figcaption>
+        <div style="border: 1px solid #E5E5E5; background: #FFFFFF; padding: 32px 24px 28px">
+          <img src="assets/samacoss-crest.png" width="200" height="200" alt="SAMACOSS crest" style="display: block; width: 200px; height: 200px; margin-bottom: 20px">
+          <h3 style="font-size: 24px; font-weight: 600; letter-spacing: -0.02em">Log in to Dept-Flow</h3>
+          <div style="display: grid; gap: 16px; margin-top: 22px">
+            <div>
+              <label for="lg-id2" style="display: block; font-size: 14px; font-weight: 600; margin-bottom: 6px">Matric number or staff ID</label>
+              <input id="lg-id2" type="text" value="CMP/2021/047" translate="no" spellcheck="false" style="width: 100%; font-size: 16px; padding: 13px 12px; border: 1px solid #767676; background: #FAFAFA; min-height: 48px; font-variant-numeric: tabular-nums">
+            </div>
+            <div>
+              <label for="lg-pw2" style="display: block; font-size: 14px; font-weight: 600; margin-bottom: 6px">Password</label>
+              <input id="lg-pw2" type="password" value="••••••••••" style="width: 100%; font-size: 16px; padding: 13px 12px; border: 1px solid #767676; background: #FAFAFA; min-height: 48px">
+            </div>
+            <button type="button" style="width: 100%; background: #FF9935; color: #0A0A0A; border: 0; padding: 14px 18px; font-size: 16px; font-weight: 600; min-height: 48px; text-align: left; display: flex; align-items: center; gap: 10px; cursor: progress">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="animation: spin 800ms linear infinite" aria-hidden="true"><path d="M21 12a9 9 0 1 1-6.219-8.56"></path></svg>Logging in…</button>
+            <p aria-live="polite" style="font-size: 14px; color: #525252">Checking your details…</p>
+          </div>
+        </div>
+      </figure>
+
+      <figure style="width: 358px; flex: 0 0 auto">
+        <figcaption style="font-size: 12px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: #737373; margin-bottom: 10px">Wrong credentials · inline, never a toast</figcaption>
+        <div style="border: 1px solid #E5E5E5; background: #FFFFFF; padding: 32px 24px 28px">
+          <img src="assets/samacoss-crest.png" width="200" height="200" alt="SAMACOSS crest" style="display: block; width: 200px; height: 200px; margin-bottom: 20px">
+          <h3 style="font-size: 24px; font-weight: 600; letter-spacing: -0.02em">Log in to Dept-Flow</h3>
+          <div role="alert" style="display: flex; gap: 10px; align-items: flex-start; border: 1px solid #B91C1C; background: #FEE2E2; padding: 12px 14px; margin-top: 18px">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#B91C1C" stroke-width="2.5" stroke-linecap="round" style="flex: 0 0 auto; margin-top: 1px" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg>
+            <p style="font-size: 14px; line-height: 1.5; color: #7F1D1D; text-wrap: pretty">That matric number and password don't match. Check both, or reset your password.</p>
+          </div>
+          <div style="display: grid; gap: 16px; margin-top: 18px">
+            <div>
+              <label for="lg-id3" style="display: block; font-size: 14px; font-weight: 600; margin-bottom: 6px">Matric number or staff ID</label>
+              <input id="lg-id3" type="text" value="CMP/2021/047" translate="no" spellcheck="false" style="width: 100%; font-size: 16px; padding: 13px 12px; border: 1px solid #767676; background: #FFFFFF; min-height: 48px; font-variant-numeric: tabular-nums">
+            </div>
+            <div>
+              <label for="lg-pw3" style="display: block; font-size: 14px; font-weight: 600; margin-bottom: 6px">Password</label>
+              <input id="lg-pw3" type="password" value="•••••" aria-invalid="true" style="width: 100%; font-size: 16px; padding: 13px 12px; border: 2px solid #B91C1C; background: #FFFFFF; min-height: 48px; outline: 2px solid #A85E0A; outline-offset: 1px">
+              <p style="font-size: 13px; color: #737373; margin-top: 6px">Focus moves here on failure.</p>
+            </div>
+            <button type="button" style="width: 100%; background: #FF9935; color: #0A0A0A; border: 0; padding: 14px 18px; font-size: 16px; font-weight: 600; cursor: pointer; min-height: 48px; text-align: left">Log in</button>
+            <a href="#forgot" style="display: inline-flex; align-items: center; min-height: 44px; font-size: 15px; font-weight: 600">Forgot password?</a>
+          </div>
+        </div>
+      </figure>
+
+      <figure style="width: 358px; flex: 0 0 auto">
+        <figcaption style="font-size: 12px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: #737373; margin-bottom: 10px">Deactivated · a different message entirely</figcaption>
+        <div style="border: 1px solid #E5E5E5; background: #FFFFFF; padding: 32px 24px 28px">
+          <img src="assets/samacoss-crest.png" width="200" height="200" alt="SAMACOSS crest" style="display: block; width: 200px; height: 200px; margin-bottom: 20px">
+          <h3 style="font-size: 24px; font-weight: 600; letter-spacing: -0.02em">Log in to Dept-Flow</h3>
+          <div role="alert" style="border: 1px solid #E5E5E5; background: #FAFAFA; padding: 16px; margin-top: 18px">
+            <div style="display: flex; gap: 10px; align-items: flex-start">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0A0A0A" stroke-width="2" stroke-linecap="round" style="flex: 0 0 auto; margin-top: 2px" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+              <div style="min-width: 0">
+                <p style="font-size: 16px; font-weight: 600">This account is no longer active</p>
+                <p style="font-size: 14px; line-height: 1.55; color: #525252; margin-top: 6px; text-wrap: pretty">Contact the department office to find out why and what to do next. Your attendance history is kept.</p>
+                <a href="#contact" style="display: inline-flex; align-items: center; min-height: 44px; font-size: 15px; font-weight: 600; margin-top: 6px">samacoss@dept.edu.ng</a>
+              </div>
+            </div>
+          </div>
+          <div style="display: grid; gap: 16px; margin-top: 18px">
+            <div>
+              <label for="lg-id4" style="display: block; font-size: 14px; font-weight: 600; margin-bottom: 6px">Matric number or staff ID</label>
+              <input id="lg-id4" type="text" value="CMP/2019/003" translate="no" spellcheck="false" style="width: 100%; font-size: 16px; padding: 13px 12px; border: 1px solid #767676; background: #FFFFFF; min-height: 48px; font-variant-numeric: tabular-nums">
+            </div>
+            <p style="font-size: 13px; color: #737373; text-wrap: pretty">No password field: re-entering it cannot help, so it is removed rather than left to fail again.</p>
+          </div>
+        </div>
+      </figure>
+    </div>
+  </section>
+
+  <section style="margin-top: 64px; padding-top: 44px; border-top: 1px solid #E5E5E5">
+    <div style="display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap">
+      <p style="font-size: 12px; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; color: #A85E0A">Routes</p>
+      <code style="font-size: 15px; font-weight: 600; font-family: ui-monospace, SFMono-Regular, Menlo, monospace">/register · /register/verify · /register/password</code>
+    </div>
+    <h2 style="font-size: 24px; font-weight: 600; letter-spacing: -0.02em; margin-top: 10px">Register — three steps</h2>
+    <p style="font-size: 16px; line-height: 1.55; color: #525252; max-width: 62ch; margin-top: 10px; text-wrap: pretty">Only students on the department's register can create an account, so step one is a lookup, not a sign-up form. The simplified mark from here on — the crest has done its job.</p>
+
+    <p style="font-size: 12px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: #737373; margin-top: 32px">Step 1 · identity check</p>
+    <div style="display: flex; gap: 24px; flex-wrap: wrap; margin-top: 12px; align-items: flex-start">
+
+      <figure style="width: 358px; flex: 0 0 auto">
+        <figcaption style="font-size: 13px; color: #737373; margin-bottom: 10px">Idle</figcaption>
+        <div style="border: 1px solid #E5E5E5; background: #FFFFFF">
+          <div style="display: flex; align-items: center; gap: 8px; padding: 14px 20px; border-bottom: 1px solid #E5E5E5; min-height: 56px">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 2 4 4.6v7.1c0 4.9 3.3 8.6 8 10.3 4.7-1.7 8-5.4 8-10.3V4.6z" fill="#FF9935" stroke="#0A0A0A" stroke-width="1.5"></path><rect x="8" y="9" width="8" height="5.4" fill="#0A0A0A"></rect><rect x="10.4" y="15" width="3.2" height="1.5" fill="#0A0A0A"></rect></svg>
+            <span style="font-size: 15px; font-weight: 600; letter-spacing: -0.01em">Dept-Flow</span>
+          </div>
+          <div style="padding: 24px 20px 28px">
+            <div style="display: flex; gap: 5px; margin-bottom: 8px" role="img" aria-label="Step 1 of 3">
+              <div style="flex: 1; height: 4px; background: #FF9935"></div>
+              <div style="flex: 1; height: 4px; background: #E5E5E5"></div>
+              <div style="flex: 1; height: 4px; background: #E5E5E5"></div>
+            </div>
+            <p style="font-size: 13px; color: #737373; font-variant-numeric: tabular-nums">Step 1 of 3</p>
+            <h3 style="font-size: 24px; font-weight: 600; letter-spacing: -0.02em; margin-top: 12px; text-wrap: balance">Find yourself on the register</h3>
+            <p style="font-size: 15px; line-height: 1.55; color: #525252; margin-top: 8px; text-wrap: pretty">Only students on the department's register can create an account.</p>
+            <div style="display: grid; gap: 16px; margin-top: 22px">
+              <div>
+                <label for="rg-m" style="display: block; font-size: 14px; font-weight: 600; margin-bottom: 6px">Matric number</label>
+                <input id="rg-m" type="text" spellcheck="false" translate="no" placeholder="CMP/2021/047" style="width: 100%; font-size: 16px; padding: 13px 12px; border: 1px solid #767676; min-height: 48px; font-variant-numeric: tabular-nums" style-focus="outline: 2px solid #A85E0A; outline-offset: 1px; border-color: #0A0A0A">
+              </div>
+              <div>
+                <label for="rg-s" style="display: block; font-size: 14px; font-weight: 600; margin-bottom: 6px">Surname</label>
+                <input id="rg-s" type="text" autocomplete="family-name" placeholder="Okonkwo" style="width: 100%; font-size: 16px; padding: 13px 12px; border: 1px solid #767676; min-height: 48px" style-focus="outline: 2px solid #A85E0A; outline-offset: 1px; border-color: #0A0A0A">
+                <p style="font-size: 13px; color: #737373; margin-top: 6px">Exactly as it appears on your admission record.</p>
+              </div>
+              <div>
+                <label for="rg-l" style="display: block; font-size: 14px; font-weight: 600; margin-bottom: 6px">Your level</label>
+                <select id="rg-l" style="width: 100%; font-size: 16px; padding: 13px 12px; border: 1px solid #767676; min-height: 48px; background: #FFFFFF; color: #0A0A0A; font-variant-numeric: tabular-nums" style-focus="outline: 2px solid #A85E0A; outline-offset: 1px; border-color: #0A0A0A">
+                  <option value="">Select your level</option>
+                  <option value="100">100 level</option>
+                  <option value="200">200 level</option>
+                  <option value="300">300 level</option>
+                  <option value="400">400 level</option>
+                </select>
+                <p style="font-size: 13px; color: #737373; margin-top: 6px; text-wrap: pretty">We already know your programme — the code in your matric number tells us whether you offer Mathematics, Computer Science or Statistics.</p>
+              </div>
+              <button type="button" style="width: 100%; background: #FF9935; color: #0A0A0A; border: 0; padding: 14px 18px; font-size: 16px; font-weight: 600; cursor: pointer; min-height: 48px; text-align: left; transition: background-color 120ms ease" style-hover="background: #E58419" style-active="background: #C96E10">Continue</button>
+            </div>
+          </div>
+        </div>
+      </figure>
+
+      <figure style="width: 358px; flex: 0 0 auto">
+        <figcaption style="font-size: 13px; color: #737373; margin-bottom: 10px">No match</figcaption>
+        <div style="border: 1px solid #E5E5E5; background: #FFFFFF">
+          <div style="display: flex; align-items: center; gap: 8px; padding: 14px 20px; border-bottom: 1px solid #E5E5E5; min-height: 56px">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 2 4 4.6v7.1c0 4.9 3.3 8.6 8 10.3 4.7-1.7 8-5.4 8-10.3V4.6z" fill="#FF9935" stroke="#0A0A0A" stroke-width="1.5"></path><rect x="8" y="9" width="8" height="5.4" fill="#0A0A0A"></rect><rect x="10.4" y="15" width="3.2" height="1.5" fill="#0A0A0A"></rect></svg>
+            <span style="font-size: 15px; font-weight: 600; letter-spacing: -0.01em">Dept-Flow</span>
+          </div>
+          <div style="padding: 24px 20px 28px">
+            <div style="display: flex; gap: 5px; margin-bottom: 8px" role="img" aria-label="Step 1 of 3"><div style="flex: 1; height: 4px; background: #FF9935"></div><div style="flex: 1; height: 4px; background: #E5E5E5"></div><div style="flex: 1; height: 4px; background: #E5E5E5"></div></div>
+            <p style="font-size: 13px; color: #737373; font-variant-numeric: tabular-nums">Step 1 of 3</p>
+            <h3 style="font-size: 24px; font-weight: 600; letter-spacing: -0.02em; margin-top: 12px; text-wrap: balance">Find yourself on the register</h3>
+            <div role="alert" style="display: flex; gap: 10px; align-items: flex-start; border: 1px solid #B91C1C; background: #FEE2E2; padding: 12px 14px; margin-top: 16px">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#B91C1C" stroke-width="2.5" stroke-linecap="round" style="flex: 0 0 auto; margin-top: 1px" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg>
+              <p style="font-size: 14px; line-height: 1.5; color: #7F1D1D; text-wrap: pretty">We couldn't find you on the register. Check your details, or visit the department office with your ID.</p>
+            </div>
+            <div style="display: grid; gap: 16px; margin-top: 18px">
+              <div>
+                <label for="rg-m2" style="display: block; font-size: 14px; font-weight: 600; margin-bottom: 6px">Matric number</label>
+                <input id="rg-m2" type="text" value="CMP/2021/470" aria-invalid="true" spellcheck="false" translate="no" style="width: 100%; font-size: 16px; padding: 13px 12px; border: 2px solid #B91C1C; min-height: 48px; font-variant-numeric: tabular-nums; outline: 2px solid #A85E0A; outline-offset: 1px">
+              </div>
+              <div>
+                <label for="rg-s2" style="display: block; font-size: 14px; font-weight: 600; margin-bottom: 6px">Surname</label>
+                <input id="rg-s2" type="text" value="Okonkwo" style="width: 100%; font-size: 16px; padding: 13px 12px; border: 1px solid #767676; min-height: 48px">
+              </div>
+              <div>
+                <label for="rg-l2" style="display: block; font-size: 14px; font-weight: 600; margin-bottom: 6px">Your level</label>
+                <select id="rg-l2" ref="{{ levelRef }}" value="{{ retainedLevel }}" onChange="{{ onLevelChange }}" style="width: 100%; font-size: 16px; padding: 13px 12px; border: 1px solid #767676; min-height: 48px; background: #FFFFFF; color: #0A0A0A; font-variant-numeric: tabular-nums">
+                  <option value="100">100 level</option>
+                  <option value="200">200 level</option>
+                  <option value="300">300 level</option>
+                  <option value="400">400 level</option>
+                </select>
+                <p style="font-size: 13px; color: #737373; margin-top: 6px">Kept from your last attempt.</p>
+              </div>
+              <button type="button" style="width: 100%; background: #FF9935; color: #0A0A0A; border: 0; padding: 14px 18px; font-size: 16px; font-weight: 600; cursor: pointer; min-height: 48px; text-align: left">Continue</button>
+              <p style="font-size: 14px; line-height: 1.55; color: #525252; text-wrap: pretty">Registered late? The office adds single rows to the register on request.</p>
+            </div>
+          </div>
+        </div>
+      </figure>
+
+      <figure style="width: 358px; flex: 0 0 auto">
+        <figcaption style="font-size: 13px; color: #737373; margin-bottom: 10px">Already claimed</figcaption>
+        <div style="border: 1px solid #E5E5E5; background: #FFFFFF">
+          <div style="display: flex; align-items: center; gap: 8px; padding: 14px 20px; border-bottom: 1px solid #E5E5E5; min-height: 56px">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 2 4 4.6v7.1c0 4.9 3.3 8.6 8 10.3 4.7-1.7 8-5.4 8-10.3V4.6z" fill="#FF9935" stroke="#0A0A0A" stroke-width="1.5"></path><rect x="8" y="9" width="8" height="5.4" fill="#0A0A0A"></rect><rect x="10.4" y="15" width="3.2" height="1.5" fill="#0A0A0A"></rect></svg>
+            <span style="font-size: 15px; font-weight: 600; letter-spacing: -0.01em">Dept-Flow</span>
+          </div>
+          <div style="padding: 24px 20px 28px">
+            <div style="display: flex; gap: 5px; margin-bottom: 8px" role="img" aria-label="Step 1 of 3"><div style="flex: 1; height: 4px; background: #FF9935"></div><div style="flex: 1; height: 4px; background: #E5E5E5"></div><div style="flex: 1; height: 4px; background: #E5E5E5"></div></div>
+            <p style="font-size: 13px; color: #737373; font-variant-numeric: tabular-nums">Step 1 of 3</p>
+            <div role="alert" style="border: 1px solid #E5E5E5; background: #FAFAFA; padding: 16px; margin-top: 16px">
+              <p style="font-size: 17px; font-weight: 600; text-wrap: balance">An account already exists for this matric number</p>
+              <p style="font-size: 14px; line-height: 1.55; color: #525252; margin-top: 8px; text-wrap: pretty">If you didn't create it, someone has claimed your number. Take your ID to the department office — they can revoke it and free the number for you.</p>
+              <a href="#dispute" style="display: inline-flex; align-items: center; min-height: 44px; font-size: 15px; font-weight: 600; margin-top: 8px">Report this</a>
+            </div>
+            <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #E5E5E5">
+              <p style="font-size: 14px; line-height: 1.55; color: #525252; text-wrap: pretty">If it was you: <a href="#login" style="font-size: 14px; font-weight: 600">log in</a> or <a href="#forgot" style="font-size: 14px; font-weight: 600">reset your password</a>.</p>
+              <p style="font-size: 13px; color: #737373; margin-top: 14px; text-wrap: pretty">The claimant's name is never shown here — it would tell an impostor exactly whose identity to imitate.</p>
+            </div>
+          </div>
+        </div>
+      </figure>
+    </div>
+
+    <p style="font-size: 12px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: #737373; margin-top: 40px">Step 2 · phone and one-time code</p>
+    <div style="display: flex; gap: 24px; flex-wrap: wrap; margin-top: 12px; align-items: flex-start">
+
+      <figure style="width: 358px; flex: 0 0 auto">
+        <figcaption style="font-size: 13px; color: #737373; margin-bottom: 10px">Entering phone · match confirmed above</figcaption>
+        <div style="border: 1px solid #E5E5E5; background: #FFFFFF">
+          <div style="display: flex; align-items: center; gap: 8px; padding: 14px 20px; border-bottom: 1px solid #E5E5E5; min-height: 56px">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 2 4 4.6v7.1c0 4.9 3.3 8.6 8 10.3 4.7-1.7 8-5.4 8-10.3V4.6z" fill="#FF9935" stroke="#0A0A0A" stroke-width="1.5"></path><rect x="8" y="9" width="8" height="5.4" fill="#0A0A0A"></rect><rect x="10.4" y="15" width="3.2" height="1.5" fill="#0A0A0A"></rect></svg>
+            <span style="font-size: 15px; font-weight: 600; letter-spacing: -0.01em">Dept-Flow</span>
+          </div>
+          <div style="padding: 24px 20px 28px">
+            <div style="display: flex; gap: 5px; margin-bottom: 8px" role="img" aria-label="Step 2 of 3"><div style="flex: 1; height: 4px; background: #FF9935"></div><div style="flex: 1; height: 4px; background: #FF9935"></div><div style="flex: 1; height: 4px; background: #E5E5E5"></div></div>
+            <p style="font-size: 13px; color: #737373; font-variant-numeric: tabular-nums">Step 2 of 3</p>
+            <div style="background: #FFF4E8; padding: 14px 16px; margin-top: 14px">
+              <p style="font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #A85E0A">Matched on the register</p>
+              <p style="font-size: 17px; font-weight: 600; margin-top: 6px">Chidera Okonkwo</p>
+              <p style="font-size: 14px; color: #525252; margin-top: 2px; font-variant-numeric: tabular-nums" translate="no">CMP/2021/047</p>
+              <p style="font-size: 14px; color: #525252; margin-top: 2px">Computer Science · Level 400</p>
+            </div>
+            <p style="font-size: 15px; line-height: 1.55; color: #525252; margin-top: 16px; text-wrap: pretty">Not you? <a href="#register" style="font-size: 15px; font-weight: 600">Go back and check your details.</a></p>
+            <div style="display: grid; gap: 16px; margin-top: 20px">
+              <div>
+                <label for="rg-p" style="display: block; font-size: 14px; font-weight: 600; margin-bottom: 6px">Your phone number</label>
+                <input id="rg-p" type="tel" inputmode="tel" autocomplete="tel" placeholder="0803 000 0000" style="width: 100%; font-size: 16px; padding: 13px 12px; border: 1px solid #767676; min-height: 48px; font-variant-numeric: tabular-nums" style-focus="outline: 2px solid #A85E0A; outline-offset: 1px; border-color: #0A0A0A">
+                <p style="font-size: 13px; color: #737373; margin-top: 6px; text-wrap: pretty">We send one code to this number. It also becomes how you reset your password.</p>
+              </div>
+              <button type="button" style="width: 100%; background: #FF9935; color: #0A0A0A; border: 0; padding: 14px 18px; font-size: 16px; font-weight: 600; cursor: pointer; min-height: 48px; text-align: left; transition: background-color 120ms ease" style-hover="background: #E58419" style-active="background: #C96E10">Send code</button>
+            </div>
+          </div>
+        </div>
+      </figure>
+
+      <figure style="width: 358px; flex: 0 0 auto">
+        <figcaption style="font-size: 13px; color: #737373; margin-bottom: 10px">Awaiting code · resend on cooldown</figcaption>
+        <div style="border: 1px solid #E5E5E5; background: #FFFFFF">
+          <div style="display: flex; align-items: center; gap: 8px; padding: 14px 20px; border-bottom: 1px solid #E5E5E5; min-height: 56px">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 2 4 4.6v7.1c0 4.9 3.3 8.6 8 10.3 4.7-1.7 8-5.4 8-10.3V4.6z" fill="#FF9935" stroke="#0A0A0A" stroke-width="1.5"></path><rect x="8" y="9" width="8" height="5.4" fill="#0A0A0A"></rect><rect x="10.4" y="15" width="3.2" height="1.5" fill="#0A0A0A"></rect></svg>
+            <span style="font-size: 15px; font-weight: 600; letter-spacing: -0.01em">Dept-Flow</span>
+          </div>
+          <div style="padding: 24px 20px 28px">
+            <div style="display: flex; gap: 5px; margin-bottom: 8px" role="img" aria-label="Step 2 of 3"><div style="flex: 1; height: 4px; background: #FF9935"></div><div style="flex: 1; height: 4px; background: #FF9935"></div><div style="flex: 1; height: 4px; background: #E5E5E5"></div></div>
+            <p style="font-size: 13px; color: #737373; font-variant-numeric: tabular-nums">Step 2 of 3</p>
+            <h3 style="font-size: 24px; font-weight: 600; letter-spacing: -0.02em; margin-top: 12px; text-wrap: balance">Enter the code we sent</h3>
+            <p style="font-size: 15px; line-height: 1.55; color: #525252; margin-top: 8px; font-variant-numeric: tabular-nums">Sent to 0803 000 0000. <a href="#back" style="display: inline-flex; align-items: center; min-height: 44px; font-size: 15px">Change</a></p>
+            <fieldset style="border: 0; padding: 0; margin: 22px 0 0">
+              <legend style="font-size: 14px; font-weight: 600; margin-bottom: 8px; padding: 0">6-digit code</legend>
+              <div style="display: flex; gap: 7px">
+                <input type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="1" value="4" aria-label="Digit 1" spellcheck="false" style="width: 100%; min-width: 0; height: 56px; text-align: center; font-size: 22px; font-weight: 600; border: 1px solid #767676; font-variant-numeric: tabular-nums">
+                <input type="text" inputmode="numeric" maxlength="1" value="9" aria-label="Digit 2" spellcheck="false" style="width: 100%; min-width: 0; height: 56px; text-align: center; font-size: 22px; font-weight: 600; border: 1px solid #767676; font-variant-numeric: tabular-nums">
+                <input type="text" inputmode="numeric" maxlength="1" value="2" aria-label="Digit 3" spellcheck="false" style="width: 100%; min-width: 0; height: 56px; text-align: center; font-size: 22px; font-weight: 600; border: 1px solid #767676; font-variant-numeric: tabular-nums">
+                <input type="text" inputmode="numeric" maxlength="1" value="" aria-label="Digit 4" spellcheck="false" style="width: 100%; min-width: 0; height: 56px; text-align: center; font-size: 22px; font-weight: 600; border: 1px solid #0A0A0A; outline: 2px solid #A85E0A; outline-offset: 1px; font-variant-numeric: tabular-nums">
+                <input type="text" inputmode="numeric" maxlength="1" value="" aria-label="Digit 5" spellcheck="false" style="width: 100%; min-width: 0; height: 56px; text-align: center; font-size: 22px; font-weight: 600; border: 1px solid #767676; font-variant-numeric: tabular-nums">
+                <input type="text" inputmode="numeric" maxlength="1" value="" aria-label="Digit 6" spellcheck="false" style="width: 100%; min-width: 0; height: 56px; text-align: center; font-size: 22px; font-weight: 600; border: 1px solid #767676; font-variant-numeric: tabular-nums">
+              </div>
+            </fieldset>
+            <p style="font-size: 13px; color: #737373; margin-top: 10px; text-wrap: pretty">Paste the whole code if your phone offers it — pasting is never blocked.</p>
+            <button type="button" style="width: 100%; background: #FF9935; color: #0A0A0A; border: 0; padding: 14px 18px; font-size: 16px; font-weight: 600; cursor: pointer; min-height: 48px; text-align: left; margin-top: 18px; transition: background-color 120ms ease" style-hover="background: #E58419">Verify</button>
+            <p style="font-size: 15px; color: #737373; margin-top: 16px; font-variant-numeric: tabular-nums">Resend code in 0:42</p>
+          </div>
+        </div>
+      </figure>
+
+      <figure style="width: 358px; flex: 0 0 auto">
+        <figcaption style="font-size: 13px; color: #737373; margin-bottom: 10px">Wrong code · and expired below it</figcaption>
+        <div style="border: 1px solid #E5E5E5; background: #FFFFFF">
+          <div style="display: flex; align-items: center; gap: 8px; padding: 14px 20px; border-bottom: 1px solid #E5E5E5; min-height: 56px">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 2 4 4.6v7.1c0 4.9 3.3 8.6 8 10.3 4.7-1.7 8-5.4 8-10.3V4.6z" fill="#FF9935" stroke="#0A0A0A" stroke-width="1.5"></path><rect x="8" y="9" width="8" height="5.4" fill="#0A0A0A"></rect><rect x="10.4" y="15" width="3.2" height="1.5" fill="#0A0A0A"></rect></svg>
+            <span style="font-size: 15px; font-weight: 600; letter-spacing: -0.01em">Dept-Flow</span>
+          </div>
+          <div style="padding: 24px 20px 28px">
+            <h3 style="font-size: 24px; font-weight: 600; letter-spacing: -0.02em; text-wrap: balance">Enter the code we sent</h3>
+            <div role="alert" style="display: flex; gap: 10px; align-items: flex-start; border: 1px solid #B91C1C; background: #FEE2E2; padding: 12px 14px; margin-top: 16px">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#B91C1C" stroke-width="2.5" stroke-linecap="round" style="flex: 0 0 auto; margin-top: 1px" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg>
+              <p style="font-size: 14px; line-height: 1.5; color: #7F1D1D; text-wrap: pretty">That code isn't right. Check the message and try again — 2 attempts left.</p>
+            </div>
+            <div style="display: flex; gap: 7px; margin-top: 18px">
+              <input type="text" inputmode="numeric" maxlength="1" value="4" aria-invalid="true" aria-label="Digit 1" style="width: 100%; min-width: 0; height: 56px; text-align: center; font-size: 22px; font-weight: 600; border: 2px solid #B91C1C; font-variant-numeric: tabular-nums">
+              <input type="text" inputmode="numeric" maxlength="1" value="9" aria-label="Digit 2" style="width: 100%; min-width: 0; height: 56px; text-align: center; font-size: 22px; font-weight: 600; border: 2px solid #B91C1C; font-variant-numeric: tabular-nums">
+              <input type="text" inputmode="numeric" maxlength="1" value="2" aria-label="Digit 3" style="width: 100%; min-width: 0; height: 56px; text-align: center; font-size: 22px; font-weight: 600; border: 2px solid #B91C1C; font-variant-numeric: tabular-nums">
+              <input type="text" inputmode="numeric" maxlength="1" value="7" aria-label="Digit 4" style="width: 100%; min-width: 0; height: 56px; text-align: center; font-size: 22px; font-weight: 600; border: 2px solid #B91C1C; font-variant-numeric: tabular-nums">
+              <input type="text" inputmode="numeric" maxlength="1" value="1" aria-label="Digit 5" style="width: 100%; min-width: 0; height: 56px; text-align: center; font-size: 22px; font-weight: 600; border: 2px solid #B91C1C; font-variant-numeric: tabular-nums">
+              <input type="text" inputmode="numeric" maxlength="1" value="6" aria-label="Digit 6" style="width: 100%; min-width: 0; height: 56px; text-align: center; font-size: 22px; font-weight: 600; border: 2px solid #B91C1C; font-variant-numeric: tabular-nums">
+            </div>
+            <button type="button" style="width: 100%; background: #FF9935; color: #0A0A0A; border: 0; padding: 14px 18px; font-size: 16px; font-weight: 600; cursor: pointer; min-height: 48px; text-align: left; margin-top: 18px">Verify</button>
+            <button type="button" style="width: 100%; background: none; border: 0; padding: 12px 0; font-size: 15px; font-weight: 600; color: #A85E0A; cursor: pointer; min-height: 44px; text-align: left; margin-top: 6px">Send a new code</button>
+
+            <div style="height: 1px; background: #E5E5E5; margin: 22px 0"></div>
+            <p style="font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #737373">Expired variant</p>
+            <div role="alert" style="border: 1px solid #E5E5E5; background: #FAFAFA; padding: 12px 14px; margin-top: 10px; display: flex; gap: 10px; align-items: flex-start">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#525252" stroke-width="2" stroke-linecap="round" style="flex: 0 0 auto; margin-top: 1px" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+              <p style="font-size: 14px; line-height: 1.5; color: #525252; text-wrap: pretty">This code has expired. Send a new one — it takes a few seconds to arrive.</p>
+            </div>
+          </div>
+        </div>
+      </figure>
+    </div>
+
+    <p style="font-size: 12px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: #737373; margin-top: 40px">Step 3 · password and consent</p>
+    <div style="display: flex; gap: 24px; flex-wrap: wrap; margin-top: 12px; align-items: flex-start">
+
+      <figure style="width: 358px; flex: 0 0 auto">
+        <figcaption style="font-size: 13px; color: #737373; margin-bottom: 10px">Idle · consent not pre-ticked</figcaption>
+        <div style="border: 1px solid #E5E5E5; background: #FFFFFF">
+          <div style="display: flex; align-items: center; gap: 8px; padding: 14px 20px; border-bottom: 1px solid #E5E5E5; min-height: 56px">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 2 4 4.6v7.1c0 4.9 3.3 8.6 8 10.3 4.7-1.7 8-5.4 8-10.3V4.6z" fill="#FF9935" stroke="#0A0A0A" stroke-width="1.5"></path><rect x="8" y="9" width="8" height="5.4" fill="#0A0A0A"></rect><rect x="10.4" y="15" width="3.2" height="1.5" fill="#0A0A0A"></rect></svg>
+            <span style="font-size: 15px; font-weight: 600; letter-spacing: -0.01em">Dept-Flow</span>
+          </div>
+          <div style="padding: 24px 20px 28px">
+            <div style="display: flex; gap: 5px; margin-bottom: 8px" role="img" aria-label="Step 3 of 3"><div style="flex: 1; height: 4px; background: #FF9935"></div><div style="flex: 1; height: 4px; background: #FF9935"></div><div style="flex: 1; height: 4px; background: #FF9935"></div></div>
+            <p style="font-size: 13px; color: #737373; font-variant-numeric: tabular-nums">Step 3 of 3</p>
+            <h3 style="font-size: 24px; font-weight: 600; letter-spacing: -0.02em; margin-top: 12px; text-wrap: balance">Set your password</h3>
+            <div style="display: grid; gap: 16px; margin-top: 20px">
+              <div>
+                <label for="rg-pw" style="display: block; font-size: 14px; font-weight: 600; margin-bottom: 6px">Password</label>
+                <input id="rg-pw" type="password" autocomplete="new-password" value="••••••••••••" style="width: 100%; font-size: 16px; padding: 13px 12px; border: 1px solid #767676; min-height: 48px">
+                <div style="display: flex; gap: 4px; margin-top: 8px" role="img" aria-label="Password strength: strong">
+                  <div style="flex: 1; height: 4px; background: #15803D"></div>
+                  <div style="flex: 1; height: 4px; background: #15803D"></div>
+                  <div style="flex: 1; height: 4px; background: #15803D"></div>
+                  <div style="flex: 1; height: 4px; background: #E5E5E5"></div>
+                </div>
+                <p style="font-size: 13px; color: #525252; margin-top: 6px">Strong · at least 8 characters</p>
+              </div>
+              <div>
+                <label for="rg-pw2" style="display: block; font-size: 14px; font-weight: 600; margin-bottom: 6px">Confirm password</label>
+                <input id="rg-pw2" type="password" autocomplete="new-password" value="••••••••••••" style="width: 100%; font-size: 16px; padding: 13px 12px; border: 1px solid #767676; min-height: 48px">
+              </div>
+              <div style="border: 1px solid #E5E5E5; background: #FAFAFA; padding: 14px 16px">
+                <label style="display: flex; gap: 12px; align-items: flex-start; cursor: pointer">
+                  <input type="checkbox" required="required" style="width: 20px; height: 20px; margin-top: 2px; accent-color: #FF9935; flex: 0 0 auto">
+                  <span style="font-size: 14px; line-height: 1.55; color: #0A0A0A; text-wrap: pretty">I understand that my location is checked <strong style="font-weight: 600">only at the moment I submit attendance</strong> — never continuously — and that the coordinates are deleted after a short period. <a href="#privacy" style="font-size: 14px">Read the privacy notice</a></span>
+                </label>
+              </div>
+              <button type="button" style="width: 100%; background: #FF9935; color: #0A0A0A; border: 0; padding: 14px 18px; font-size: 16px; font-weight: 600; cursor: pointer; min-height: 48px; text-align: left; transition: background-color 120ms ease" style-hover="background: #E58419" style-active="background: #C96E10">Create account</button>
+              <p style="font-size: 13px; color: #737373; text-wrap: pretty">Required. The button submits and shows the error rather than sitting disabled with no explanation.</p>
+            </div>
+          </div>
+        </div>
+      </figure>
+
+      <figure style="width: 358px; flex: 0 0 auto">
+        <figcaption style="font-size: 13px; color: #737373; margin-bottom: 10px">Consent missing · focus moves to the error</figcaption>
+        <div style="border: 1px solid #E5E5E5; background: #FFFFFF">
+          <div style="display: flex; align-items: center; gap: 8px; padding: 14px 20px; border-bottom: 1px solid #E5E5E5; min-height: 56px">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 2 4 4.6v7.1c0 4.9 3.3 8.6 8 10.3 4.7-1.7 8-5.4 8-10.3V4.6z" fill="#FF9935" stroke="#0A0A0A" stroke-width="1.5"></path><rect x="8" y="9" width="8" height="5.4" fill="#0A0A0A"></rect><rect x="10.4" y="15" width="3.2" height="1.5" fill="#0A0A0A"></rect></svg>
+            <span style="font-size: 15px; font-weight: 600; letter-spacing: -0.01em">Dept-Flow</span>
+          </div>
+          <div style="padding: 24px 20px 28px">
+            <h3 style="font-size: 24px; font-weight: 600; letter-spacing: -0.02em; text-wrap: balance">Set your password</h3>
+            <div style="display: grid; gap: 16px; margin-top: 20px">
+              <div>
+                <label for="rg-pw3" style="display: block; font-size: 14px; font-weight: 600; margin-bottom: 6px">Password</label>
+                <input id="rg-pw3" type="password" value="••••••" style="width: 100%; font-size: 16px; padding: 13px 12px; border: 1px solid #767676; min-height: 48px">
+                <div style="display: flex; gap: 4px; margin-top: 8px" role="img" aria-label="Password strength: weak"><div style="flex: 1; height: 4px; background: #B91C1C"></div><div style="flex: 1; height: 4px; background: #E5E5E5"></div><div style="flex: 1; height: 4px; background: #E5E5E5"></div><div style="flex: 1; height: 4px; background: #E5E5E5"></div></div>
+                <p style="font-size: 13px; color: #B91C1C; margin-top: 6px">Too short — use at least 8 characters.</p>
+              </div>
+              <div style="border: 2px solid #B91C1C; background: #FEE2E2; padding: 14px 16px; outline: 2px solid #A85E0A; outline-offset: 1px">
+                <label style="display: flex; gap: 12px; align-items: flex-start; cursor: pointer">
+                  <input type="checkbox" aria-invalid="true" style="width: 20px; height: 20px; margin-top: 2px; accent-color: #FF9935; flex: 0 0 auto">
+                  <span style="font-size: 14px; line-height: 1.55; text-wrap: pretty">I understand that my location is checked only at the moment I submit attendance, and that the coordinates are deleted after a short period.</span>
+                </label>
+                <p role="alert" style="font-size: 14px; font-weight: 600; color: #7F1D1D; margin-top: 10px; padding-left: 32px">Tick this to continue — the system can't record attendance without it.</p>
+              </div>
+              <button type="button" style="width: 100%; background: #FF9935; color: #0A0A0A; border: 0; padding: 14px 18px; font-size: 16px; font-weight: 600; cursor: pointer; min-height: 48px; text-align: left">Create account</button>
+            </div>
+          </div>
+        </div>
+      </figure>
+    </div>
+  </section>
+
+  <section style="margin-top: 64px; padding-top: 44px; border-top: 1px solid #E5E5E5">
+    <div style="display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap">
+      <p style="font-size: 12px; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; color: #A85E0A">Routes</p>
+      <code style="font-size: 15px; font-weight: 600; font-family: ui-monospace, SFMono-Regular, Menlo, monospace">/check · /forgot · /reset</code>
+    </div>
+    <h2 style="font-size: 24px; font-weight: 600; letter-spacing: -0.02em; margin-top: 10px">Matric check, forgot and reset</h2>
+    <p style="font-size: 16px; line-height: 1.55; color: #525252; max-width: 62ch; margin-top: 10px; text-wrap: pretty">One field each. The matric check exists so a student discovers an impostor early, in September, rather than at the eligibility list in March.</p>
+
+    <div style="display: flex; gap: 24px; flex-wrap: wrap; margin-top: 24px; align-items: flex-start">
+
+      <figure style="width: 358px; flex: 0 0 auto">
+        <figcaption style="font-size: 13px; color: #737373; margin-bottom: 10px">/check · available</figcaption>
+        <div style="border: 1px solid #E5E5E5; background: #FFFFFF; padding: 26px 20px 28px">
+          <h3 style="font-size: 22px; font-weight: 600; letter-spacing: -0.02em; text-wrap: balance">Is your matric number free?</h3>
+          <div style="margin-top: 18px">
+            <label for="ck-1" style="display: block; font-size: 14px; font-weight: 600; margin-bottom: 6px">Matric number</label>
+            <input id="ck-1" type="text" value="CMP/2021/218" spellcheck="false" translate="no" style="width: 100%; font-size: 16px; padding: 13px 12px; border: 1px solid #767676; min-height: 48px; font-variant-numeric: tabular-nums">
+          </div>
+          <button type="button" style="width: 100%; background: #FF9935; color: #0A0A0A; border: 0; padding: 14px 18px; font-size: 16px; font-weight: 600; cursor: pointer; min-height: 48px; text-align: left; margin-top: 14px">Check</button>
+          <div role="status" style="display: flex; gap: 10px; align-items: flex-start; background: #DCFCE7; padding: 14px 16px; margin-top: 18px">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#14532D" stroke-width="2.5" stroke-linecap="round" style="flex: 0 0 auto; margin-top: 1px" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="m9 12 2 2 4-4"></path></svg>
+            <div style="min-width: 0">
+              <p style="font-size: 15px; font-weight: 600; color: #14532D">Available — you can register</p>
+              <a href="#register" style="display: inline-flex; align-items: center; min-height: 44px; font-size: 15px; font-weight: 600; margin-top: 2px; color: #14532D">Create your account</a>
+            </div>
+          </div>
+        </div>
+      </figure>
+
+      <figure style="width: 358px; flex: 0 0 auto">
+        <figcaption style="font-size: 13px; color: #737373; margin-bottom: 10px">/check · claimed, name withheld</figcaption>
+        <div style="border: 1px solid #E5E5E5; background: #FFFFFF; padding: 26px 20px 28px">
+          <h3 style="font-size: 22px; font-weight: 600; letter-spacing: -0.02em; text-wrap: balance">Is your matric number free?</h3>
+          <div style="margin-top: 18px">
+            <label for="ck-2" style="display: block; font-size: 14px; font-weight: 600; margin-bottom: 6px">Matric number</label>
+            <input id="ck-2" type="text" value="CMP/2021/047" spellcheck="false" translate="no" style="width: 100%; font-size: 16px; padding: 13px 12px; border: 1px solid #767676; min-height: 48px; font-variant-numeric: tabular-nums">
+          </div>
+          <button type="button" style="width: 100%; background: #FF9935; color: #0A0A0A; border: 0; padding: 14px 18px; font-size: 16px; font-weight: 600; cursor: pointer; min-height: 48px; text-align: left; margin-top: 14px">Check</button>
+          <div role="status" style="border: 1px solid #E5E5E5; background: #FAFAFA; padding: 16px; margin-top: 18px">
+            <p style="font-size: 16px; font-weight: 600">Already claimed</p>
+            <p style="font-size: 14px; line-height: 1.55; color: #525252; margin-top: 6px; text-wrap: pretty">If this is your matric number, take your ID to the department office. They can revoke the account and free the number.</p>
+            <p style="font-size: 13px; color: #737373; margin-top: 12px; text-wrap: pretty">We don't show who claimed it.</p>
+          </div>
+        </div>
+      </figure>
+
+      <figure style="width: 358px; flex: 0 0 auto">
+        <figcaption style="font-size: 13px; color: #737373; margin-bottom: 10px">/forgot · then /reset, mirroring step 2 and 3</figcaption>
+        <div style="border: 1px solid #E5E5E5; background: #FFFFFF; padding: 26px 20px 28px">
+          <h3 style="font-size: 22px; font-weight: 600; letter-spacing: -0.02em; text-wrap: balance">Reset your password</h3>
+          <p style="font-size: 15px; line-height: 1.55; color: #525252; margin-top: 8px; text-wrap: pretty">We'll text a code to the phone number on your account.</p>
+          <div style="margin-top: 18px">
+            <label for="fg-1" style="display: block; font-size: 14px; font-weight: 600; margin-bottom: 6px">Matric number</label>
+            <input id="fg-1" type="text" placeholder="CMP/2021/047" spellcheck="false" translate="no" style="width: 100%; font-size: 16px; padding: 13px 12px; border: 1px solid #767676; min-height: 48px; font-variant-numeric: tabular-nums" style-focus="outline: 2px solid #A85E0A; outline-offset: 1px; border-color: #0A0A0A">
+          </div>
+          <button type="button" style="width: 100%; background: #FF9935; color: #0A0A0A; border: 0; padding: 14px 18px; font-size: 16px; font-weight: 600; cursor: pointer; min-height: 48px; text-align: left; margin-top: 14px; transition: background-color 120ms ease" style-hover="background: #E58419">Send code</button>
+          <p style="font-size: 14px; line-height: 1.55; color: #525252; margin-top: 16px; text-wrap: pretty">Changed your number? The department office can update it after checking your ID.</p>
+          <div style="height: 1px; background: #E5E5E5; margin: 20px 0"></div>
+          <p style="font-size: 13px; color: #737373; line-height: 1.55; text-wrap: pretty"><strong style="color: #0A0A0A; font-weight: 600">/reset</strong> reuses the OTP boxes from step 2 and the password field from step 3 unchanged — same markup, same validation, no second design.</p>
+        </div>
+      </figure>
+    </div>
+  </section>
+
+  <section style="margin-top: 64px; padding-top: 44px; border-top: 1px solid #E5E5E5">
+    <div style="display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap">
+      <p style="font-size: 12px; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; color: #A85E0A">Routes</p>
+      <code style="font-size: 15px; font-weight: 600; font-family: ui-monospace, SFMono-Regular, Menlo, monospace">/privacy · /404 · /500</code>
+    </div>
+    <h2 style="font-size: 24px; font-weight: 600; letter-spacing: -0.02em; margin-top: 10px">Privacy notice and error pages</h2>
+    <p style="font-size: 16px; line-height: 1.55; color: #525252; max-width: 62ch; margin-top: 10px; text-wrap: pretty">The privacy notice is a page students will actually be pointed at during registration, so it is written for them rather than for a regulator.</p>
+
+    <div style="display: flex; gap: 24px; flex-wrap: wrap; margin-top: 24px; align-items: flex-start">
+
+      <figure style="width: 390px; flex: 0 0 auto">
+        <figcaption style="font-size: 13px; color: #737373; margin-bottom: 10px">/privacy</figcaption>
+        <div style="border: 1px solid #E5E5E5; background: #FFFFFF">
+          <div style="display: flex; align-items: center; gap: 8px; padding: 14px 20px; border-bottom: 1px solid #E5E5E5; min-height: 56px">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 2 4 4.6v7.1c0 4.9 3.3 8.6 8 10.3 4.7-1.7 8-5.4 8-10.3V4.6z" fill="#FF9935" stroke="#0A0A0A" stroke-width="1.5"></path><rect x="8" y="9" width="8" height="5.4" fill="#0A0A0A"></rect><rect x="10.4" y="15" width="3.2" height="1.5" fill="#0A0A0A"></rect></svg>
+            <span style="font-size: 15px; font-weight: 600; letter-spacing: -0.01em">Dept-Flow</span>
+          </div>
+          <div style="padding: 26px 20px 28px">
+            <h3 style="font-size: 24px; font-weight: 600; letter-spacing: -0.02em; text-wrap: balance">What we collect, and what we don't</h3>
+            <p style="font-size: 14px; color: #737373; margin-top: 8px">Last updated 12 September 2025</p>
+
+            <div style="margin-top: 22px; padding-top: 20px; border-top: 1px solid #E5E5E5">
+              <h4 style="font-size: 17px; font-weight: 600">Your location</h4>
+              <p style="font-size: 15px; line-height: 1.6; color: #525252; margin-top: 8px; text-wrap: pretty">Checked once, at the second you press Submit on an attendance code, to confirm you are in the lecture hall. It is not tracked between checkpoints, not tracked between classes, and never while the site is closed.</p>
+              <p style="font-size: 15px; line-height: 1.6; color: #525252; margin-top: 10px; text-wrap: pretty">We keep the pass-or-fail result. The coordinates themselves are deleted after 30 days. No coordinate is ever shown to a lecturer, the HOD, or an administrator.</p>
+            </div>
+
+            <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #E5E5E5">
+              <h4 style="font-size: 17px; font-weight: 600">What we never collect</h4>
+              <ul style="margin-top: 10px; display: grid; gap: 8px">
+                <li style="font-size: 15px; line-height: 1.55; color: #525252; display: flex; gap: 9px"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#B91C1C" stroke-width="2.5" stroke-linecap="round" style="flex: 0 0 auto; margin-top: 3px" aria-hidden="true"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>Fingerprints, face scans or any biometric</li>
+                <li style="font-size: 15px; line-height: 1.55; color: #525252; display: flex; gap: 9px"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#B91C1C" stroke-width="2.5" stroke-linecap="round" style="flex: 0 0 auto; margin-top: 3px" aria-hidden="true"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>Background or continuous location</li>
+                <li style="font-size: 15px; line-height: 1.55; color: #525252; display: flex; gap: 9px"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#B91C1C" stroke-width="2.5" stroke-linecap="round" style="flex: 0 0 auto; margin-top: 3px" aria-hidden="true"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>Your card details — those stay with the payment provider</li>
+              </ul>
+            </div>
+
+            <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #E5E5E5">
+              <h4 style="font-size: 17px; font-weight: 600">Your rights</h4>
+              <p style="font-size: 15px; line-height: 1.6; color: #525252; margin-top: 8px; text-wrap: pretty">Under the Nigeria Data Protection Act 2023 you can ask what is held about you, correct it, or complain to the department. Attendance and payment records are kept for the length of your programme, because they determine exam eligibility.</p>
+              <a href="#contact" style="display: inline-flex; align-items: center; min-height: 44px; font-size: 15px; font-weight: 600; margin-top: 8px">samacoss@dept.edu.ng</a>
+            </div>
+          </div>
+        </div>
+      </figure>
+
+      <figure style="width: 358px; flex: 0 0 auto">
+        <figcaption style="font-size: 13px; color: #737373; margin-bottom: 10px">/404</figcaption>
+        <div style="border: 1px solid #E5E5E5; background: #FFFFFF; padding: 56px 24px 60px">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" style="margin-bottom: 22px" aria-hidden="true"><path d="M12 2 4 4.6v7.1c0 4.9 3.3 8.6 8 10.3 4.7-1.7 8-5.4 8-10.3V4.6z" fill="#FF9935" stroke="#0A0A0A" stroke-width="1.5"></path><rect x="8" y="9" width="8" height="5.4" fill="#0A0A0A"></rect><rect x="10.4" y="15" width="3.2" height="1.5" fill="#0A0A0A"></rect></svg>
+          <p style="font-size: 13px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: #737373; font-variant-numeric: tabular-nums">Error 404</p>
+          <h3 style="font-size: 26px; font-weight: 600; letter-spacing: -0.025em; margin-top: 10px; text-wrap: balance">This page isn't here</h3>
+          <p style="font-size: 15px; line-height: 1.55; color: #525252; margin-top: 10px; text-wrap: pretty">The link may be old, or the address mistyped.</p>
+          <a href="#home" style="display: inline-block; background: #FF9935; color: #0A0A0A; padding: 13px 18px; font-size: 15px; font-weight: 600; text-decoration: none; margin-top: 22px; transition: background-color 120ms ease" style-hover="background: #E58419">Go to Dept-Flow</a>
+        </div>
+      </figure>
+
+      <figure style="width: 358px; flex: 0 0 auto">
+        <figcaption style="font-size: 13px; color: #737373; margin-bottom: 10px">/500</figcaption>
+        <div style="border: 1px solid #E5E5E5; background: #FFFFFF; padding: 56px 24px 60px">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" style="margin-bottom: 22px" aria-hidden="true"><path d="M12 2 4 4.6v7.1c0 4.9 3.3 8.6 8 10.3 4.7-1.7 8-5.4 8-10.3V4.6z" fill="#FF9935" stroke="#0A0A0A" stroke-width="1.5"></path><rect x="8" y="9" width="8" height="5.4" fill="#0A0A0A"></rect><rect x="10.4" y="15" width="3.2" height="1.5" fill="#0A0A0A"></rect></svg>
+          <p style="font-size: 13px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: #737373; font-variant-numeric: tabular-nums">Error 500</p>
+          <h3 style="font-size: 26px; font-weight: 600; letter-spacing: -0.025em; margin-top: 10px; text-wrap: balance">Something broke on our side</h3>
+          <p style="font-size: 15px; line-height: 1.55; color: #525252; margin-top: 10px; text-wrap: pretty">Nothing you did. If you were submitting attendance, it was <strong style="font-weight: 600; color: #0A0A0A">not</strong> recorded — tell your lecturer now.</p>
+          <a href="#retry" style="display: inline-block; background: #FF9935; color: #0A0A0A; padding: 13px 18px; font-size: 15px; font-weight: 600; text-decoration: none; margin-top: 22px; transition: background-color 120ms ease" style-hover="background: #E58419">Try again</a>
+        </div>
+      </figure>
+    </div>
+
+    <sc-if value="{{ showAnnotations }}" hint-placeholder-val="{{ true }}">
+    <div style="background: #FFF4E8; padding: 18px 20px; margin-top: 20px">
+      <p style="font-size: 12px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: #A85E0A">Notes</p>
+      <ul style="margin-top: 10px; display: grid; gap: 7px">
+        <li style="font-size: 14px; line-height: 1.5; color: #525252">Error pages carry the simplified mark, not the crest — at this scale the crest is decoration, and the rule reserves it for landing, login and print.</li>
+        <li style="font-size: 14px; line-height: 1.5; color: #525252">The 500 page names the attendance consequence, because a student hitting it mid-checkpoint is the one person who must act immediately.</li>
+        <li style="font-size: 14px; line-height: 1.5; color: #525252">Every field is 48px tall with a 16px font — under 16px, iOS Safari zooms the viewport on focus.</li>
+        <li style="font-size: 14px; line-height: 1.5; color: #525252">Matric numbers and course codes carry <span style="font-family: ui-monospace, monospace">translate="no"</span> and <span style="font-family: ui-monospace, monospace">spellcheck="false"</span> throughout.</li>
+      </ul>
+    </div>
+    </sc-if>
+  </section>
+
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;showAnnotations&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Spec sheet&quot;},&quot;showDesktop&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Spec sheet&quot;}}">
+class Component extends DCLogic {
+  state = { retainedLevel: '400' };
+
+  // React only sets the live `selected` property on <select>; serializers read the
+  // content attribute, so mirror the value onto defaultSelected ourselves.
+  syncLevel() {
+    const s = this._levelRef && this._levelRef.current;
+    if (!s) return;
+    Array.from(s.options).forEach(o => { o.defaultSelected = o.value === this.state.retainedLevel; });
+  }
+
+  componentDidMount() { this.syncLevel(); }
+  componentDidUpdate() { this.syncLevel(); }
+
+  renderVals() {
+    this._levelRef = this._levelRef || React.createRef();
+    return {
+      showAnnotations: this.props.showAnnotations ?? true,
+      showDesktop: this.props.showDesktop ?? true,
+      retainedLevel: this.state.retainedLevel,
+      levelRef: this._levelRef,
+      onLevelChange: e => this.setState({ retainedLevel: e.target.value })
+    };
+  }
+}
+
+</script>
+</body>
+</html>

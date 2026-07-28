@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #FAFAFA; color: #0A0A0A; font-family: Inter, system-ui, -apple-system, sans-serif; font-size: 16px; -webkit-font-smoothing: antialiased; }
+  h1, h2, h3, h4, p, ul, ol, figure, table { margin: 0; }
+  ul { padding: 0; list-style: none; }
+  a { color: #A85E0A; text-decoration: underline; text-underline-offset: 2px; }
+  a:hover { color: #C96E10; }
+  button, input, textarea, select { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid #A85E0A; outline-offset: 2px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</helmet>
+
+<div style="max-width: 1280px; margin: 0 auto; padding: 0 24px 120px">
+
+  <header style="padding: 64px 0 40px; border-bottom: 1px solid #E5E5E5">
+    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 28px">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 2 4 4.6v7.1c0 4.9 3.3 8.6 8 10.3 4.7-1.7 8-5.4 8-10.3V4.6z" fill="#FF9935" stroke="#0A0A0A" stroke-width="1.5"></path><rect x="8" y="9" width="8" height="5.4" fill="#0A0A0A"></rect><rect x="10.4" y="15" width="3.2" height="1.5" fill="#0A0A0A"></rect></svg>
+      <span style="font-size: 15px; font-weight: 600; letter-spacing: -0.01em">Dept-Flow</span>
+      <span style="font-size: 13px; color: #737373">SAMACOSS</span>
+    </div>
+    <p style="font-size: 12px; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; color: #737373; margin-bottom: 12px">Group 5 of 6 · HOD pages</p>
+    <h1 style="font-size: 32px; font-weight: 600; letter-spacing: -0.025em; line-height: 1.15; max-width: 26ch; text-wrap: balance">Eight routes of academic authority, each one leaving a record</h1>
+    <p style="font-size: 16px; line-height: 1.55; color: #525252; max-width: 62ch; margin-top: 16px; text-wrap: pretty">Desktop-first: this is desk work. Every action here changes a student's standing, so each one previews its own consequence as a count before it asks for a reason.</p>
+  </header>
+
+  <section style="margin-top: 56px">
+    <div style="display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap">
+      <p style="font-size: 12px; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; color: #A85E0A">Route</p>
+      <code style="font-size: 15px; font-weight: 600; font-family: ui-monospace, SFMono-Regular, Menlo, monospace">/hod</code>
+      <span style="font-size: 13px; color: #737373">HOD · shell + overview</span>
+    </div>
+    <h2 style="font-size: 24px; font-weight: 600; letter-spacing: -0.02em; margin-top: 10px">Dashboard</h2>
+    <p style="font-size: 16px; line-height: 1.55; color: #525252; max-width: 62ch; margin-top: 10px; text-wrap: pretty">A distribution, not an average. A department mean of 74% reads as almost fine and hides the 252 students below the line, which is the only thing this page exists to surface.</p>
+
+    <div style="margin-top: 24px; border: 1px solid #E5E5E5; background: #FFFFFF; display: grid; grid-template-columns: 232px 1fr">
+      <nav aria-label="Main" style="border-right: 1px solid #E5E5E5; padding: 16px 12px; display: grid; gap: 2px; align-content: start">
+        <div style="display: flex; align-items: center; gap: 8px; padding: 6px 8px 18px">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 2 4 4.6v7.1c0 4.9 3.3 8.6 8 10.3 4.7-1.7 8-5.4 8-10.3V4.6z" fill="#FF9935" stroke="#0A0A0A" stroke-width="1.5"></path><rect x="8" y="9" width="8" height="5.4" fill="#0A0A0A"></rect><rect x="10.4" y="15" width="3.2" height="1.5" fill="#0A0A0A"></rect></svg>
+          <span style="font-size: 15px; font-weight: 600; letter-spacing: -0.01em">Dept-Flow</span>
+          <span style="font-size: 11px; font-weight: 600; color: #A85E0A; background: #FFF4E8; padding: 2px 6px; letter-spacing: 0.04em">HOD</span>
+        </div>
+        <a href="#hod" aria-current="page" style="display: flex; align-items: center; gap: 10px; padding: 10px; min-height: 44px; text-decoration: none; color: #0A0A0A; font-size: 14px; font-weight: 600; background: #FFF4E8; border-left: 2px solid #FF9935"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"></path></svg>Overview</a>
+        <a href="#risk" style="display: flex; align-items: center; gap: 10px; padding: 10px; min-height: 44px; text-decoration: none; color: #525252; font-size: 14px; border-left: 2px solid transparent" style-hover="background: #FAFAFA; color: #0A0A0A"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg>At-risk students<span style="margin-left: auto; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; color: #B91C1C">313</span></a>
+        <a href="#grace" style="display: flex; align-items: center; gap: 10px; padding: 10px; min-height: 44px; text-decoration: none; color: #525252; font-size: 14px; border-left: 2px solid transparent" style-hover="background: #FAFAFA; color: #0A0A0A"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>Grace period</a>
+        <a href="#waivers" style="display: flex; align-items: center; gap: 10px; padding: 10px; min-height: 44px; text-decoration: none; color: #525252; font-size: 14px; border-left: 2px solid transparent" style-hover="background: #FAFAFA; color: #0A0A0A"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"></path><path d="M14 2v4a2 2 0 0 0 2 2h4"></path><path d="M16 13H8"></path><path d="M16 17H8"></path></svg>Waivers<span style="margin-left: auto; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; color: #737373">4</span></a>
+        <a href="#disputes" style="display: flex; align-items: center; gap: 10px; padding: 10px; min-height: 44px; text-decoration: none; color: #525252; font-size: 14px; border-left: 2px solid transparent" style-hover="background: #FAFAFA; color: #0A0A0A"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 22a10 10 0 1 0-9.94-11H2"></path><path d="M12 8v4l3 2"></path></svg>Disputes<span style="margin-left: auto; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; color: #737373">3</span></a>
+        <a href="#eligibility" style="display: flex; align-items: center; gap: 10px; padding: 10px; min-height: 44px; text-decoration: none; color: #525252; font-size: 14px; border-left: 2px solid transparent" style-hover="background: #FAFAFA; color: #0A0A0A"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"></path><path d="m9 12 2 2 4-4"></path></svg>Eligibility list</a>
+        <a href="#lecturers" style="display: flex; align-items: center; gap: 10px; padding: 10px; min-height: 44px; text-decoration: none; color: #525252; font-size: 14px; border-left: 2px solid transparent" style-hover="background: #FAFAFA; color: #0A0A0A"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path></svg>Lecturers</a>
+      </nav>
+
+      <div style="padding: 24px; background: #FAFAFA">
+        <h3 style="font-size: 22px; font-weight: 600; letter-spacing: -0.02em">Department overview</h3>
+        <p style="font-size: 14px; color: #525252; margin-top: 4px; font-variant-numeric: tabular-nums">2025/2026 · week 9 of 13 · 486 students</p>
+
+        <div style="display: flex; gap: 12px; align-items: flex-start; background: #FFF4E8; border-left: 2px solid #FF9935; padding: 14px 16px; margin-top: 18px">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#A85E0A" stroke-width="2" stroke-linecap="round" style="flex: 0 0 auto; margin-top: 2px" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+          <div style="min-width: 0">
+            <p style="font-size: 15px; font-weight: 600">Grace period active for Level 400 · expires 11 August</p>
+            <p style="font-size: 14px; color: #525252; margin-top: 2px; text-wrap: pretty">89 students can record attendance again. Their sessions stay uncounted until each one clears.</p>
+          </div>
+          <a href="#grace" style="margin-left: auto; display: inline-flex; align-items: center; min-height: 44px; font-size: 14px; font-weight: 600; flex: 0 0 auto">Manage</a>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1px; background: #E5E5E5; border: 1px solid #E5E5E5; margin-top: 16px">
+          <div style="background: #FFFFFF; padding: 16px">
+            <p style="font-size: 28px; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -0.025em">252</p>
+            <p style="font-size: 13px; color: #525252; margin-top: 3px">below 75% now</p>
+          </div>
+          <div style="background: #FFFFFF; padding: 16px">
+            <p style="font-size: 28px; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -0.025em">61</p>
+            <p style="font-size: 13px; color: #525252; margin-top: 3px">trending below</p>
+          </div>
+          <div style="background: #FFFFFF; padding: 16px">
+            <p style="font-size: 28px; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -0.025em; color: #15803D">301</p>
+            <p style="font-size: 13px; color: #525252; margin-top: 3px">cleared</p>
+          </div>
+          <div style="background: #FFFFFF; padding: 16px">
+            <p style="font-size: 28px; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -0.025em; color: #525252">42</p>
+            <p style="font-size: 13px; color: #525252; margin-top: 3px">provisional</p>
+          </div>
+          <div style="background: #FFFFFF; padding: 16px">
+            <p style="font-size: 28px; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -0.025em; color: #B91C1C">143</p>
+            <p style="font-size: 13px; color: #525252; margin-top: 3px">locked</p>
+          </div>
+        </div>
+
+        <div style="background: #FFFFFF; border: 1px solid #E5E5E5; padding: 20px; margin-top: 16px">
+          <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 16px; flex-wrap: wrap">
+            <p style="font-size: 16px; font-weight: 600">Attendance distribution</p>
+            <p style="font-size: 13px; color: #737373; font-variant-numeric: tabular-nums">486 students · median 74% · equal 15-point bins</p>
+          </div>
+          <div style="display: flex; align-items: flex-end; gap: 6px; height: 150px; margin-top: 20px; position: relative">
+            <div style="position: absolute; left: 0; right: 0; bottom: 0; top: 0; pointer-events: none">
+              <div style="position: absolute; left: 71.4%; top: -6px; bottom: 22px; width: 2px; background: #0A0A0A"></div>
+              <p style="position: absolute; left: 71.4%; top: -22px; transform: translateX(-50%); font-size: 12px; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums">75% line</p>
+            </div>
+            <div style="flex: 1; display: grid; align-content: end; gap: 6px"><div style="height: 9px; background: #B91C1C" role="img" aria-label="0–15 percent: 10 students"></div><p style="font-size: 11px; color: #737373; text-align: center; font-variant-numeric: tabular-nums">0–15</p></div>
+            <div style="flex: 1; display: grid; align-content: end; gap: 6px"><div style="height: 20px; background: #B91C1C" role="img" aria-label="15–30 percent: 22 students"></div><p style="font-size: 11px; color: #737373; text-align: center; font-variant-numeric: tabular-nums">15–30</p></div>
+            <div style="flex: 1; display: grid; align-content: end; gap: 6px"><div style="height: 40px; background: #B91C1C" role="img" aria-label="30–45 percent: 44 students"></div><p style="font-size: 11px; color: #737373; text-align: center; font-variant-numeric: tabular-nums">30–45</p></div>
+            <div style="flex: 1; display: grid; align-content: end; gap: 6px"><div style="height: 61px; background: #B91C1C" role="img" aria-label="45–60 percent: 68 students"></div><p style="font-size: 11px; color: #737373; text-align: center; font-variant-numeric: tabular-nums">45–60</p></div>
+            <div style="flex: 1; display: grid; align-content: end; gap: 6px"><div style="height: 97px; background: #B91C1C" role="img" aria-label="60–75 percent: 108 students"></div><p style="font-size: 11px; color: #737373; text-align: center; font-variant-numeric: tabular-nums">60–75</p></div>
+            <div style="flex: 1; display: grid; align-content: end; gap: 6px"><div style="height: 142px; background: #FF9935" role="img" aria-label="75–90 percent: 158 students"></div><p style="font-size: 11px; color: #737373; text-align: center; font-variant-numeric: tabular-nums">75–90</p></div>
+            <div style="flex: 1; display: grid; align-content: end; gap: 6px"><div style="height: 68px; background: #FF9935" role="img" aria-label="90–100 percent: 76 students"></div><p style="font-size: 11px; color: #737373; text-align: center; font-variant-numeric: tabular-nums">90–100</p></div>
+          </div>
+          <div style="display: flex; gap: 18px; margin-top: 16px; flex-wrap: wrap; border-top: 1px solid #E5E5E5; padding-top: 14px">
+            <div style="display: flex; align-items: center; gap: 7px"><div style="width: 12px; height: 12px; background: #B91C1C; flex: 0 0 auto" aria-hidden="true"></div><p style="font-size: 13px; color: #525252; font-variant-numeric: tabular-nums">252 below the line</p></div>
+            <div style="display: flex; align-items: center; gap: 7px"><div style="width: 12px; height: 12px; background: #FF9935; flex: 0 0 auto" aria-hidden="true"></div><p style="font-size: 13px; color: #525252; font-variant-numeric: tabular-nums">234 at or above</p></div>
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; margin-top: 16px">
+          <a href="#disputes" style="display: block; background: #FFFFFF; border: 1px solid #E5E5E5; padding: 16px; text-decoration: none; color: #0A0A0A; transition: background-color 120ms ease" style-hover="background: #FFF4E8">
+            <p style="font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums">3 disputes</p>
+            <p style="font-size: 14px; color: #525252; margin-top: 3px">Oldest waiting 4 days</p>
+          </a>
+          <a href="#waivers" style="display: block; background: #FFFFFF; border: 1px solid #E5E5E5; padding: 16px; text-decoration: none; color: #0A0A0A; transition: background-color 120ms ease" style-hover="background: #FFF4E8">
+            <p style="font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums">4 waiver requests</p>
+            <p style="font-size: 14px; color: #525252; margin-top: 3px">All hardship claims</p>
+          </a>
+          <a href="#lecturers" style="display: block; background: #FFFFFF; border: 1px solid #E5E5E5; padding: 16px; text-decoration: none; color: #0A0A0A; transition: background-color 120ms ease" style-hover="background: #FFF4E8">
+            <p style="font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums">1 lecturer</p>
+            <p style="font-size: 14px; color: #525252; margin-top: 3px">Paper batches above 30%</p>
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section style="margin-top: 64px; padding-top: 44px; border-top: 1px solid #E5E5E5">
+    <div style="display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap">
+      <p style="font-size: 12px; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; color: #A85E0A">Route</p>
+      <code style="font-size: 15px; font-weight: 600; font-family: ui-monospace, SFMono-Regular, Menlo, monospace">/hod/grace</code>
+      <span style="font-size: 13px; color: #737373">HOD · 4 states</span>
+      <span style="display: inline-flex; align-items: center; gap: 6px; border: 1px solid #B91C1C; color: #B91C1C; padding: 3px 9px; font-size: 12px; font-weight: 600">Highest consequence in the system</span>
+    </div>
+    <h2 style="font-size: 24px; font-weight: 600; letter-spacing: -0.02em; margin-top: 10px">Grace period control</h2>
+    <p style="font-size: 16px; line-height: 1.55; color: #525252; max-width: 62ch; margin-top: 10px; text-wrap: pretty">One form field changes 143 students' access at once. The count updates live as the scope changes, so the number is read before the button is pressed rather than after.</p>
+
+    <div style="display: flex; gap: 24px; flex-wrap: wrap; margin-top: 24px; align-items: flex-start">
+
+      <figure style="flex: 1 1 480px; min-width: 480px">
+        <figcaption style="font-size: 12px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: #737373; margin-bottom: 10px">Creating · impact preview updates live</figcaption>
+        <div style="border: 1px solid #E5E5E5; background: #FFFFFF">
+          <div style="padding: 20px 24px; border-bottom: 1px solid #E5E5E5">
+            <h3 style="font-size: 20px; font-weight: 600; letter-spacing: -0.015em">Open a grace period</h3>
+            <p style="font-size: 15px; line-height: 1.55; color: #525252; margin-top: 6px; max-width: 60ch; text-wrap: pretty">Locked students can record attendance again. It does not count their sessions — only paying or a waiver does that.</p>
+          </div>
+          <div style="padding: 22px 24px; display: grid; gap: 18px">
+            <div>
+              <p style="font-size: 14px; font-weight: 600; margin-bottom: 8px">Who does this cover?</p>
+              <div style="display: grid; gap: 8px">
+                <label style="display: flex; align-items: center; gap: 12px; border: 1px solid #767676; padding: 13px 16px; min-height: 52px; cursor: pointer" style-hover="background: #FAFAFA">
+                  <input type="radio" name="scope" value="all" checked="{{ scopeAll }}" onChange="{{ onScope }}" style="width: 20px; height: 20px; accent-color: #FF9935; flex: 0 0 auto">
+                  <span style="font-size: 16px">Whole department</span>
+                  <span style="margin-left: auto; font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums">143 locked</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 12px; border: 1px solid #767676; padding: 13px 16px; min-height: 52px; cursor: pointer" style-hover="background: #FAFAFA">
+                  <input type="radio" name="scope" value="400" checked="{{ scope400 }}" onChange="{{ onScope }}" style="width: 20px; height: 20px; accent-color: #FF9935; flex: 0 0 auto">
+                  <span style="font-size: 16px">Level 400 only</span>
+                  <span style="margin-left: auto; font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums">89 locked</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 12px; border: 1px solid #767676; padding: 13px 16px; min-height: 52px; cursor: pointer" style-hover="background: #FAFAFA">
+                  <input type="radio" name="scope" value="300" checked="{{ scope300 }}" onChange="{{ onScope }}" style="width: 20px; height: 20px; accent-color: #FF9935; flex: 0 0 auto">
+                  <span style="font-size: 16px">Level 300 only</span>
+                  <span style="margin-left: auto; font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums">31 locked</span>
+                </label>
+              </div>
+            </div>
+            <div>
+              <label for="gr-until" style="display: block; font-size: 14px; font-weight: 600; margin-bottom: 6px">Runs until</label>
+              <input id="gr-until" type="date" value="2026-08-11" style="width: 100%; max-width: 260px; font-size: 16px; padding: 12px; border: 1px solid #767676; min-height: 48px; background: #FFFFFF" style-focus="outline: 2px solid #A85E0A; outline-offset: 1px; border-color: #0A0A0A">
+              <p style="font-size: 13px; color: #737373; margin-top: 6px">Attendance re-locks the following morning unless extended.</p>
+            </div>
+            <div>
+              <label for="gr-why" style="display: block; font-size: 14px; font-weight: 600; margin-bottom: 6px">Reason <span style="color: #525252; font-weight: 400">· recorded in the audit log</span></label>
+              <textarea id="gr-why" rows="3" placeholder="Bank transfer delays reported across Level 400 after the portal outage." style="width: 100%; font-size: 15px; padding: 12px; border: 1px solid #767676; resize: vertical" style-focus="outline: 2px solid #A85E0A; outline-offset: 1px; border-color: #0A0A0A"></textarea>
+            </div>
+
+            <div style="border: 2px solid #0A0A0A; padding: 18px 20px">
+              <p style="font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #737373">What this will do</p>
+              <p aria-live="polite" style="font-size: 19px; font-weight: 600; margin-top: 8px; line-height: 1.35; text-wrap: pretty">{{ impactLine }}</p>
+              <div style="display: flex; gap: 24px; margin-top: 14px; flex-wrap: wrap">
+                <div><p style="font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums">{{ affected }}</p><p style="font-size: 13px; color: #525252; margin-top: 2px">students unlocked</p></div>
+                <div><p style="font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums">{{ sessions }}</p><p style="font-size: 13px; color: #525252; margin-top: 2px">sessions still uncounted</p></div>
+              </div>
+            </div>
+
+            <div style="display: flex; gap: 10px; flex-wrap: wrap">
+              <button type="button" style="background: #FF9935; color: #0A0A0A; border: 0; padding: 14px 20px; font-size: 16px; font-weight: 600; cursor: pointer; min-height: 48px; transition: background-color 120ms ease" style-hover="background: #E58419" style-active="background: #C96E10">Review and open</button>
+              <button type="button" style="background: #FFFFFF; color: #0A0A0A; border: 1px solid #0A0A0A; padding: 13px 20px; font-size: 16px; font-weight: 500; cursor: pointer; min-height: 48px; transition: background-color 120ms ease" style-hover="background: #F5F5F5">Discard</button>
+            </div>
+          </div>
+        </div>
+      </figure>
+
+      <div style="flex: 1 1 340px; min-width: 340px; display: grid; gap: 20px">
+        <figure>
+          <figcaption style="font-size: 12px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: #737373; margin-bottom: 10px">Active</figcaption>
+          <div style="border: 2px solid #0A0A0A; background: #FFFFFF; padding: 20px">
+            <div style="display: flex; align-items: center; gap: 8px">
+              <span style="width: 9px; height: 9px; background: #FF9935; border: 1px solid #C96E10; border-radius: 50%; flex: 0 0 auto" aria-hidden="true"></span>
+              <p style="font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #A85E0A">Running now</p>
+            </div>
+            <p style="font-size: 20px; font-weight: 600; margin-top: 10px; letter-spacing: -0.015em; text-wrap: pretty">Level 400 · until 11 August</p>
+            <p style="font-size: 15px; line-height: 1.55; color: #525252; margin-top: 8px; font-variant-numeric: tabular-nums; text-wrap: pretty">89 students unlocked · 748 sessions still uncounted · 15 days left</p>
+            <div style="background: #FAFAFA; border: 1px solid #E5E5E5; padding: 13px 15px; margin-top: 14px">
+              <p style="font-size: 13px; color: #737373">Opened by Prof. A. Balogun, 12 July</p>
+              <p style="font-size: 14px; line-height: 1.5; color: #525252; margin-top: 5px; text-wrap: pretty">"Bank transfer delays reported across Level 400 after the portal outage."</p>
+            </div>
+            <div style="display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap">
+              <button type="button" style="background: #FFFFFF; border: 1px solid #0A0A0A; padding: 11px 16px; font-size: 15px; font-weight: 500; cursor: pointer; min-height: 44px" style-hover="background: #F5F5F5">Extend</button>
+              <button type="button" style="background: #FFFFFF; border: 1px solid #B91C1C; color: #B91C1C; padding: 11px 16px; font-size: 15px; font-weight: 600; cursor: pointer; min-height: 44px" style-hover="background: #FEE2E2">End early</button>
+            </div>
+          </div>
+        </figure>
+
+        <figure>
+          <figcaption style="font-size: 12px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: #737373; margin-bottom: 10px">None active</figcaption>
+          <div style="border: 1px solid #E5E5E5; background: #FFFFFF; padding: 32px 20px 36px">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#737373" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+            <p style="font-size: 18px; font-weight: 600; margin-top: 14px; letter-spacing: -0.015em">No grace period running</p>
+            <p style="font-size: 15px; line-height: 1.55; color: #525252; margin-top: 6px; text-wrap: pretty">143 students are currently locked out of recording attendance.</p>
+            <button type="button" style="background: #FF9935; color: #0A0A0A; border: 0; padding: 13px 18px; font-size: 16px; font-weight: 600; cursor: pointer; min-height: 48px; margin-top: 16px; transition: background-color 120ms ease" style-hover="background: #E58419">Open a grace period</button>
+          </div>
+        </figure>
+
+        <figure>
+          <figcaption style="font-size: 12px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: #737373; margin-bottom: 10px">History</figcaption>
+          <div style="border: 1px solid #E5E5E5; background: #FFFFFF">
+            <div style="padding: 14px 18px; border-bottom: 1px solid #E5E5E5">
+              <p style="font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums">Whole department · 4 Feb – 6 Mar</p>
+              <p style="font-size: 13px; color: #737373; margin-top: 3px">Prof. A. Balogun · 486 students</p>
+              <p style="font-size: 14px; line-height: 1.5; color: #525252; margin-top: 6px; text-wrap: pretty">"Payment gateway outage during the first fortnight of the session."</p>
+            </div>
+            <div style="padding: 14px 18px">
+              <p style="font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums">Level 200 · 12 Nov – 19 Nov</p>
+              <p style="font-size: 13px; color: #737373; margin-top: 3px">Prof. A. Balogun · 74 students</p>
+              <p style="font-size: 14px; line-height: 1.5; color: #525252; margin-top: 6px; text-wrap: pretty">"Late release of the bursary disbursement."</p>
+            </div>
+          </div>
+        </figure>
+      </div>
+    </div>
+
+    <p style="font-size: 12px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: #737373; margin-top: 40px">Confirming</p>
+    <div style="margin-top: 14px; background: rgba(10,10,10,.45); padding: 40px 20px; display: grid; place-items: center; min-height: 460px">
+      <div role="dialog" aria-modal="true" aria-labelledby="dlg-grace" style="width: 100%; max-width: 460px; background: #FFFFFF; border: 1px solid #E5E5E5; box-shadow: 0 20px 48px rgba(10,10,10,.22)">
+        <div style="padding: 24px 24px 0">
+          <h3 id="dlg-grace" style="font-size: 20px; font-weight: 600; letter-spacing: -0.015em; text-wrap: balance">Open a grace period for 89 locked students?</h3>
+          <p style="font-size: 15px; line-height: 1.55; color: #525252; margin-top: 10px; text-wrap: pretty">This restores attendance access until <strong style="font-weight: 600">11 August 2026</strong>. Their provisional sessions stay uncounted until each student clears.</p>
+          <div style="background: #FAFAFA; border: 1px solid #E5E5E5; padding: 14px 16px; margin-top: 16px; display: grid; gap: 8px">
+            <div style="display: flex; justify-content: space-between; gap: 16px"><span style="font-size: 14px; color: #525252">Students affected</span><span style="font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums">89</span></div>
+            <div style="display: flex; justify-content: space-between; gap: 16px"><span style="font-size: 14px; color: #525252">Scope</span><span style="font-size: 14px; font-weight: 600">Level 400 only</span></div>
+            <div style="display: flex; justify-content: space-between; gap: 16px"><span style="font-size: 14px; color: #525252">Sessions still uncounted</span><span style="font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums">748</span></div>
+          </div>
+          <div style="background: #FFF4E8; padding: 13px 15px; margin-top: 14px">
+            <p style="font-size: 14px; line-height: 1.5; color: #A85E0A; text-wrap: pretty">Logged against your name. Senior staff can see who opened this and why.</p>
+          </div>
+        </div>
+        <div style="display: flex; gap: 10px; justify-content: flex-end; padding: 20px 24px 24px; flex-wrap: wrap">
+          <button type="button" style="background: #FFFFFF; color: #0A0A0A; border: 1px solid #0A0A0A; padding: 11px 18px; font-size: 15px; font-weight: 500; cursor: pointer; min-height: 44px" style-hover="background: #F5F5F5">Back to the form</button>
+          <button type="button" style="background: #FF9935; color: #0A0A0A; border: 0; padding: 12px 18px; font-size: 15px; font-weight: 600; cursor: pointer; min-height: 44px; transition: background-color 120ms ease" style-hover="background: #E58419" style-active="background: #C96E10">Open grace period</button>
+        </div>
+      </div>
+    </div>
+
+    <sc-if value="{{ showAnnotations }}" hint-placeholder-val="{{ true }}">
+    <div style="background: #FFF4E8; padding: 18px 20px; margin-top: 16px">
+      <p style="font-size: 12px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: #A85E0A">Notes</p>
+      <ul style="margin-top: 10px; display: grid; gap: 7px">
+        <li style="font-size: 14px; line-height: 1.5; color: #525252">The preview panel is live — switch the scope radio above and the count changes before you commit. A number that only appears in the dialog gets skimmed.</li>
+        <li style="font-size: 14px; line-height: 1.5; color: #525252">Grace unlocks recording; it never counts sessions. Both the form and the dialog say so, because conflating them would be the expensive misunderstanding.</li>
+        <li style="font-size: 14px; line-height: 1.5; color: #525252">The confirm button repeats the action's name, and the cancel is "Back to the form" — nobody loses their typed reason.</li>
+      </ul>
+    </div>
+    </sc-if>
+  </section>
+
+  <section style="margin-top: 64px; padding-top: 44px; border-top: 1px solid #E5E5E5">
+    <div style="display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap">
+      <p style="font-size: 12px; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; color: #A85E0A">Routes</p>
+      <code style="font-size: 15px; font-weight: 600; font-family: ui-monospace, SFMono-Regular, Menlo, monospace">/hod/risk · /hod/students/[matric]</code>
+    </div>
+    <h2 style="font-size: 24px; font-weight: 600; letter-spacing: -0.02em; margin-top: 10px">At-risk students and student detail</h2>
+    <p style="font-size: 16px; line-height: 1.55; color: #525252; max-width: 62ch; margin-top: 10px; text-wrap: pretty">The strip is in the table for a reason: five half marks in a row and five absences read identically as "42%", but they are different conversations.</p>
+
+    <figure style="margin-top: 24px; border: 1px solid #E5E5E5; background: #FFFFFF">
+      <figcaption style="padding: 18px 24px; border-bottom: 1px solid #E5E5E5; display: flex; align-items: center; gap: 14px; flex-wrap: wrap">
+        <div>
+          <h3 style="font-size: 20px; font-weight: 600; letter-spacing: -0.015em">At-risk students</h3>
+          <p style="font-size: 14px; color: #525252; margin-top: 3px; font-variant-numeric: tabular-nums">313 students · 252 already below 75%, 61 heading there</p>
+        </div>
+        <div style="display: flex; gap: 8px; margin-left: auto; flex-wrap: wrap">
+          <select aria-label="Filter by level" style="font-size: 14px; padding: 10px 12px; border: 1px solid #767676; min-height: 44px; background: #FFFFFF">
+            <option>All levels</option>
+            <option>Level 400</option>
+            <option>Level 300</option>
+          </select>
+          <select aria-label="Filter by course" style="font-size: 14px; padding: 10px 12px; border: 1px solid #767676; min-height: 44px; background: #FFFFFF">
+            <option>All courses</option>
+            <option>CMP 301</option>
+            <option>STA 202</option>
+          </select>
+          <button type="button" style="background: #FFFFFF; border: 1px solid #0A0A0A; padding: 10px 16px; font-size: 14px; font-weight: 500; cursor: pointer; min-height: 44px" style-hover="background: #F5F5F5">Export</button>
+        </div>
+      </figcaption>
+      <table style="width: 100%; border-collapse: collapse; font-size: 14px">
+        <thead>
+          <tr style="background: #FAFAFA">
+            <th scope="col" style="text-align: left; padding: 11px 24px; font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #525252; border-bottom: 1px solid #E5E5E5">Student</th>
+            <th scope="col" style="text-align: left; padding: 11px 12px; font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #525252; border-bottom: 1px solid #E5E5E5">Course</th>
+            <th scope="col" aria-sort="ascending" style="text-align: right; padding: 11px 12px; font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #0A0A0A; border-bottom: 1px solid #E5E5E5; white-space: nowrap">Now ↑</th>
+            <th scope="col" style="text-align: right; padding: 11px 12px; font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #525252; border-bottom: 1px solid #E5E5E5">Predicted</th>
+            <th scope="col" style="text-align: left; padding: 11px 12px; font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #525252; border-bottom: 1px solid #E5E5E5">Pattern</th>
+            <th scope="col" style="text-align: left; padding: 11px 24px; font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #525252; border-bottom: 1px solid #E5E5E5">Recent sessions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style="border-bottom: 1px solid #E5E5E5; transition: background-color 100ms ease" style-hover="background: #FFF4E8">
+            <td style="padding: 13px 24px"><a href="#student" style="font-weight: 600; color: #0A0A0A; text-decoration: none" style-hover="color: #A85E0A; text-decoration: underline">Halima Sanusi</a><br><span style="font-size: 13px; color: #737373; font-variant-numeric: tabular-nums" translate="no">CMP/2021/112 · L400</span></td>
+            <td style="padding: 13px 12px; font-variant-numeric: tabular-nums" translate="no">STA 202</td>
+            <td style="padding: 13px 12px; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums">31%</td>
+            <td style="padding: 13px 12px; text-align: right; color: #B91C1C; font-weight: 600; font-variant-numeric: tabular-nums">44%</td>
+            <td style="padding: 13px 12px"><span style="display: inline-flex; align-items: center; gap: 6px; border: 1px solid #B91C1C; color: #B91C1C; padding: 3px 8px; font-size: 12px; font-weight: 600"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg>Disengaging</span></td>
+            <td style="padding: 13px 24px"><div style="display: flex; gap: 6px" role="img" aria-label="Absent, absent, half, absent, absent, half"><div style="display: flex; gap: 2px"><div style="width: 12px; height: 22px; background: #FFFFFF; border: 1px solid #767676"></div><div style="width: 12px; height: 22px; background: #FFFFFF; border: 1px solid #767676"></div></div><div style="display: flex; gap: 2px"><div style="width: 12px; height: 22px; background: #FFFFFF; border: 1px solid #767676"></div><div style="width: 12px; height: 22px; background: #FFFFFF; border: 1px solid #767676"></div></div><div style="display: flex; gap: 2px"><div style="width: 12px; height: 22px; background: #FF9935; border: 1px solid #FF9935"></div><div style="width: 12px; height: 22px; background: #FFFFFF; border: 1px solid #767676"></div></div><div style="display: flex; gap: 2px"><div style="width: 12px; height: 22px; background: #FFFFFF; border: 1px solid #767676"></div><div style="width: 12px; height: 22px; background: #FFFFFF; border: 1px solid #767676"></div></div><div style="display: flex; gap: 2px"><div style="width: 12px; height: 22px; background: #FFFFFF; border: 1px solid #767676"></div><div style="width: 12px; height: 22px; background: #FFFFFF; border: 1px solid #767676"></div></div><div style="display: flex; gap: 2px"><div style="width: 12px; height: 22px; background: #FF9935; border: 1px solid #FF9935"></div><div style="width: 12px; height: 22px; background: #FFFFFF; border: 1px solid #767676"></div></div></div></td>
+          </tr>
+          <tr style="border-bottom: 1px solid #E5E5E5; transition: background-color 100ms ease" style-hover="background: #FFF4E8">
+            <td style="padding: 13px 24px"><a href="#student" style="font-weight: 600; color: #0A0A0A; text-decoration: none" style-hover="color: #A85E0A; text-decoration: underline">Chidera Okonkwo</a><br><span style="font-size: 13px; color: #737373; font-variant-numeric: tabular-nums" translate="no">CMP/2021/047 · L400</span></td>
+            <td style="padding: 13px 12px; font-variant-numeric: tabular-nums" translate="no">STA 202</td>
+            <td style="padding: 13px 12px; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums">42%</td>
+            <td style="padding: 13px 12px; text-align: right; color: #B91C1C; font-weight: 600; font-variant-numeric: tabular-nums">58%</td>
+            <td style="padding: 13px 12px"><span style="display: inline-flex; align-items: center; gap: 6px; border: 1px solid #B91C1C; color: #B91C1C; padding: 3px 8px; font-size: 12px; font-weight: 600"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg>Leaves early</span></td>
+            <td style="padding: 13px 24px"><div style="display: flex; gap: 6px" role="img" aria-label="Half, half, full, half, half, half"><div style="display: flex; gap: 2px"><div style="width: 12px; height: 22px; background: #FF9935; border: 1px solid #FF9935"></div><div style="width: 12px; height: 22px; background: #FFFFFF; border: 1px solid #767676"></div></div><div style="display: flex; gap: 2px"><div style="width: 12px; height: 22px; background: #FF9935; border: 1px solid #FF9935"></div><div style="width: 12px; height: 22px; background: #FFFFFF; border: 1px solid #767676"></div></div><div style="display: flex; gap: 2px"><div style="width: 12px; height: 22px; background: #FF9935; border: 1px solid #FF9935"></div><div style="width: 12px; height: 22px; background: #FF9935; border: 1px solid #FF9935"></div></div><div style="display: flex; gap: 2px"><div style="width: 12px; height: 22px; background: #FF9935; border: 1px solid #FF9935"></div><div style="width: 12px; height: 22px; background: #FFFFFF; border: 1px solid #767676"></div></div><div style="display: flex; gap: 2px"><div style="width: 12px; height: 22px; background: #FF9935; border: 1px solid #FF9935"></div><div style="width: 12px; height: 22px; background: #FFFFFF; border: 1px solid #767676"></div></div><div style="display: flex; gap: 2px"><div style="width: 12px; height: 22px; background: #FF9935; border: 1px solid #FF9935"></div><div style="width: 12px; height: 22px; background: #FFFFFF; border: 1px solid #767676"></div></div></div></td>
+          </tr>
+          <tr style="transition: background-color 100ms ease" style-hover="background: #FFF4E8">
+            <td style="padding: 13px 24px"><a href="#student" style="font-weight: 600; color: #0A0A0A; text-decoration: none" style-hover="color: #A85E0A; text-decoration: underline">Tunde Adeyemi</a><br><span style="font-size: 13px; color: #737373; font-variant-numeric: tabular-nums" translate="no">MTH/2022/018 · L300</span></td>
+            <td style="padding: 13px 12px; font-variant-numeric: tabular-nums" translate="no">MTH 205</td>
+            <td style="padding: 13px 12px; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums">55%</td>
+            <td style="padding: 13px 12px; text-align: right; color: #B91C1C; font-weight: 600; font-variant-numeric: tabular-nums">67%</td>
+            <td style="padding: 13px 12px"><span style="display: inline-flex; align-items: center; gap: 6px; border: 1px solid #B91C1C; color: #B91C1C; padding: 3px 8px; font-size: 12px; font-weight: 600"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg>Leaves early</span></td>
+            <td style="padding: 13px 24px"><div style="display: flex; gap: 6px" role="img" aria-label="Full, half, half, full, half, absent"><div style="display: flex; gap: 2px"><div style="width: 12px; height: 22px; background: #FF9935; border: 1px solid #FF9935"></div><div style="width: 12px; height: 22px; background: #FF9935; border: 1px solid #FF9935"></div></div><div style="display: flex; gap: 2px"><div style="width: 12px; height: 22px; background: #FF9935; border: 1px solid #FF9935"></div><div style="width: 12px; height: 22px; background: #FFFFFF; border: 1px solid #767676"></div></div><div style="display: flex; gap: 2px"><div style="width: 12px; height: 22px; background: #FF9935; border: 1px solid #FF9935"></div><div style="width: 12px; height: 22px; background: #FFFFFF; border: 1px solid #767676"></div></div><div style="display: flex; gap: 2px"><div style="width: 12px; height: 22px; background: #FF9935; border: 1px solid #FF9935"></div><div style="width: 12px; height: 22px; background: #FF9935; border: 1px solid #FF9935"></div></div><div style="display: flex; gap: 2px"><div style="width: 12px; height: 22px; background: #FF9935; border: 1px solid #FF9935"></div><div style="width: 12px; height: 22px; background: #FFFFFF; border: 1px solid #767676"></div></div><div style="display: flex; gap: 2px"><div style="width: 12px; height: 22px; background: #FFFFFF; border: 1px solid #767676"></div><div style="width: 12px; height: 22px; background: #FFFFFF; border: 1px solid #767676"></div></div></div></td>
+          </tr>
+        </tbody>
+      </table>
+    </figure>
+
+    <figure style="margin-top: 28px; border: 1px solid #E5E5E5; background: #FFFFFF">
+      <figcaption style="padding: 20px 24px; border-bottom: 1px solid #E5E5E5">
+        <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; flex-wrap: wrap">
+          <div>
+            <nav aria-label="Breadcrumb" style="margin-bottom: 8px"><a href="#risk" style="display: inline-flex; align-items: center; min-height: 44px; font-size: 13px">At-risk students</a></nav>
+            <h3 style="font-size: 24px; font-weight: 600; letter-spacing: -0.02em">Chidera Okonkwo</h3>
+            <p style="font-size: 14px; color: #525252; margin-top: 5px; font-variant-numeric: tabular-nums" translate="no">CMP/2021/047</p>
+            <p style="font-size: 14px; color: #525252; margin-top: 2px">Computer Science · Level 400</p>
+          </div>
+          <div style="display: flex; gap: 10px; flex-wrap: wrap">
+            <button type="button" style="background: #FFFFFF; border: 1px solid #0A0A0A; padding: 12px 18px; font-size: 15px; font-weight: 500; cursor: pointer; min-height: 44px" style-hover="background: #F5F5F5">Resolve dispute</button>
+            <button type="button" style="background: #FF9935; color: #0A0A0A; border: 0; padding: 12px 18px; font-size: 15px; font-weight: 600; cursor: pointer; min-height: 44px; transition: background-color 120ms ease" style-hover="background: #E58419" style-active="background: #C96E10">Grant clearance</button>
+          </div>
+        </div>
+        <div style="display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap">
+          <span style="display: inline-flex; align-items: center; gap: 6px; border: 1px dashed #949494; color: #525252; padding: 4px 10px; font-size: 13px; font-weight: 500">Provisional · 9 sessions waiting</span>
+          <span style="display: inline-flex; align-items: center; gap: 6px; border: 1px solid #B91C1C; color: #B91C1C; padding: 4px 10px; font-size: 13px; font-weight: 600"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg>At risk in 1 course</span>
+        </div>
+      </figcaption>
+
+      <div style="padding: 22px 24px; border-bottom: 1px solid #E5E5E5; display: grid; gap: 22px">
+        <div>
+          <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 16px">
+            <div><p style="font-size: 16px; font-weight: 600" translate="no">CMP 301 · Operating Systems</p><p style="font-size: 13px; color: #737373; margin-top: 2px; font-variant-numeric: tabular-nums">9.5 of 13 sessions</p></div>
+            <p style="font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -0.02em">73%</p>
+          </div>
+          <div style="margin-top: 12px; position: relative; padding-bottom: 26px">
+            <div style="height: 14px; background: #F5F5F5; border: 1px solid #E5E5E5; position: relative; overflow: hidden"><div style="position: absolute; inset: 0 27% 0 0; background: #FF9935"></div></div>
+            <div style="position: absolute; left: 75%; top: -4px; bottom: 14px; width: 2px; background: #0A0A0A"></div>
+            <p style="position: absolute; left: 75%; bottom: 0; transform: translateX(-50%); font-size: 12px; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums">75% needed</p>
+          </div>
+        </div>
+        <div>
+          <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 16px">
+            <div><p style="font-size: 16px; font-weight: 600" translate="no">STA 202 · Probability II</p><p style="font-size: 13px; color: #737373; margin-top: 2px; font-variant-numeric: tabular-nums">5.5 of 13 sessions</p></div>
+            <p style="font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -0.02em">42%</p>
+          </div>
+          <div style="margin-top: 12px; position: relative; padding-bottom: 26px">
+            <div style="height: 14px; background: #F5F5F5; border: 1px solid #E5E5E5; position: relative; overflow: hidden"><div style="position: absolute; inset: 0 58% 0 0; background: #FF9935"></div></div>
+            <div style="position: absolute; left: 75%; top: -4px; bottom: 14px; width: 2px; background: #0A0A0A"></div>
+            <p style="position: absolute; left: 75%; bottom: 0; transform: translateX(-50%); font-size: 12px; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums">75% needed</p>
+          </div>
+          <p style="font-size: 15px; line-height: 1.5; margin-top: 4px; text-wrap: pretty">Catches the first checkpoint almost every week and misses the second. Worth asking whether the class clashes with something.</p>
+        </div>
+      </div>
+
+      <div style="padding: 20px 24px; border-bottom: 1px solid #E5E5E5">
+        <p style="font-size: 12px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: #737373">Session history · STA 202</p>
+        <div style="display: flex; gap: 9px; margin-top: 14px; flex-wrap: wrap">
+          <div style="display: flex; gap: 3px" role="img" aria-label="Week 1, half"><div style="width: 16px; height: 26px; background: #FF9935; border: 1px solid #FF9935"></div><div style="width: 16px; height: 26px; background: #FFFFFF; border: 1px solid #767676"></div></div>
+          <div style="display: flex; gap: 3px" role="img" aria-label="Week 2, half"><div style="width: 16px; height: 26px; background: #FF9935; border: 1px solid #FF9935"></div><div style="width: 16px; height: 26px; background: #FFFFFF; border: 1px solid #767676"></div></div>
+          <div style="display: flex; gap: 3px" role="img" aria-label="Week 3, full"><div style="width: 16px; height: 26px; background: #FF9935; border: 1px solid #FF9935"></div><div style="width: 16px; height: 26px; background: #FF9935; border: 1px solid #FF9935"></div></div>
+          <div style="display: flex; gap: 3px" role="img" aria-label="Week 4, half"><div style="width: 16px; height: 26px; background: #FF9935; border: 1px solid #FF9935"></div><div style="width: 16px; height: 26px; background: #FFFFFF; border: 1px solid #767676"></div></div>
+          <div style="display: flex; gap: 3px" role="img" aria-label="Week 5, absent"><div style="width: 16px; height: 26px; background: #FFFFFF; border: 1px solid #767676"></div><div style="width: 16px; height: 26px; background: #FFFFFF; border: 1px solid #767676"></div></div>
+          <div style="display: flex; gap: 3px" role="img" aria-label="Week 6, half"><div style="width: 16px; height: 26px; background: #FF9935; border: 1px solid #FF9935"></div><div style="width: 16px; height: 26px; background: #FFFFFF; border: 1px solid #767676"></div></div>
+          <div style="display: flex; gap: 3px" role="img" aria-label="Week 7, half"><div style="width: 16px; height: 26px; background: #FF9935; border: 1px solid #FF9935"></div><div style="width: 16px; height: 26px; background: #FFFFFF; border: 1px solid #767676"></div></div>
+          <div style="display: flex; gap: 3px" role="img" aria-label="Week 8, half"><div style="width: 16px; height: 26px; background: #FF9935; border: 1px solid #FF9935"></div><div style="width: 16px; height: 26px; background: #FFFFFF; border: 1px solid #767676"></div></div>
+          <div style="display: flex; gap: 3px" role="img" aria-label="Week 9, provisional"><div style="width: 16px; height: 26px; background: #FFFFFF; border: 1px dashed #949494"></div><div style="width: 16px; height: 26px; background: #FFFFFF; border: 1px dashed #949494"></div></div>
+        </div>
+      </div>
+
+      <div style="padding: 20px 24px">
+        <p style="font-size: 12px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: #737373">Overrides applied to this student</p>
+        <div style="border: 1px solid #E5E5E5; margin-top: 12px">
+          <div style="padding: 13px 16px; border-bottom: 1px solid #E5E5E5; display: flex; gap: 16px; flex-wrap: wrap">
+            <p style="font-size: 14px; color: #737373; font-variant-numeric: tabular-nums; flex: 0 0 110px">12 Jul 2026</p>
+            <p style="font-size: 14px; line-height: 1.5; color: #525252; min-width: 0; text-wrap: pretty"><strong style="color: #0A0A0A; font-weight: 600">Grace period applied</strong> · Prof. A. Balogun · Level 400 scope, until 11 August</p>
+          </div>
+          <div style="padding: 13px 16px; display: flex; gap: 16px; flex-wrap: wrap">
+            <p style="font-size: 14px; color: #737373; font-variant-numeric: tabular-nums; flex: 0 0 110px">30 Jun 2025</p>
+            <p style="font-size: 14px; line-height: 1.5; color: #525252; min-width: 0; text-wrap: pretty"><strong style="color: #0A0A0A; font-weight: 600">Paper register entry</strong> · Dr Adebayo · CMP 301, network outage</p>
+          </div>
+        </div>
+        <p style="font-size: 13px; color: #737373; margin-top: 12px; text-wrap: pretty">No location data appears on this page, and none exists to show.</p>
+      </div>
+    </figure>
+  </section>
+
+  <section style="margin-top: 64px; padding-top: 44px; border-top: 1px solid #E5E5E5">
+    <div style="display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap">
+      <p style="font-size: 12px; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; color: #A85E0A">Routes</p>
+      <code style="font-size: 15px; font-weight: 600; font-family: ui-monospace, SFMono-Regular, Menlo, monospace">/hod/waivers · /hod/disputes</code>
+    </div>
+    <h2 style="font-size: 24px; font-weight: 600; letter-spacing: -0.02em; margin-top: 10px">Waivers and disputes</h2>
+    <p style="font-size: 16px; line-height: 1.55; color: #525252; max-width: 62ch; margin-top: 10px; text-wrap: pretty">Both queues state the effect of the decision in sessions, not in abstractions — a waiver that counts nine sessions is a different decision from one that counts two.</p>
+
+    <div style="display: flex; gap: 24px; flex-wrap: wrap; margin-top: 24px; align-items: flex-start">
+
+      <figure style="flex: 1 1 440px; min-width: 440px">
+        <figcaption style="font-size: 12px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: #737373; margin-bottom: 10px">/hod/waivers · pending</figcaption>
+        <div style="border: 1px solid #E5E5E5; background: #FFFFFF">
+          <div style="padding: 18px 20px; border-bottom: 1px solid #E5E5E5">
+            <h3 style="font-size: 20px; font-weight: 600; letter-spacing: -0.015em">Waiver requests</h3>
+            <p style="font-size: 14px; color: #525252; margin-top: 3px; font-variant-numeric: tabular-nums">4 pending · 12 granted this session</p>
+          </div>
+          <div style="padding: 18px 20px; border-bottom: 1px solid #E5E5E5">
+            <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap">
+              <div style="min-width: 0">
+                <p style="font-size: 16px; font-weight: 600">Halima Sanusi</p>
+                <p style="font-size: 13px; color: #737373; margin-top: 2px; font-variant-numeric: tabular-nums" translate="no">CMP/2021/112 · Level 400 · requested 4 days ago</p>
+              </div>
+              <span style="display: inline-flex; align-items: center; gap: 6px; border: 1px solid #B91C1C; color: #B91C1C; padding: 4px 10px; font-size: 13px; font-weight: 600; flex: 0 0 auto"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>Locked</span>
+            </div>
+            <div style="background: #FAFAFA; border: 1px solid #E5E5E5; padding: 13px 15px; margin-top: 12px">
+              <p style="font-size: 14px; line-height: 1.55; color: #525252; text-wrap: pretty">"My father's business closed in March and I have not been able to raise the dues. I have been attending every class."</p>
+            </div>
+            <div style="border: 2px solid #0A0A0A; padding: 13px 15px; margin-top: 12px">
+              <p style="font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #737373">Granting will</p>
+              <p style="font-size: 16px; font-weight: 600; margin-top: 6px; text-wrap: pretty">Count her 14 waiting sessions</p>
+              <div style="display: flex; align-items: baseline; gap: 10px; margin-top: 8px">
+                <p style="font-size: 15px; color: #525252; font-variant-numeric: tabular-nums">31%</p>
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#0A0A0A" stroke-width="2.5" stroke-linecap="round" style="flex: 0 0 auto" aria-hidden="true"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg>
+                <p style="font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums">79%</p>
+              </div>
+            </div>
+            <div style="display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap">
+              <button type="button" style="background: #FF9935; color: #0A0A0A; border: 0; padding: 12px 18px; font-size: 15px; font-weight: 600; cursor: pointer; min-height: 44px; transition: background-color 120ms ease" style-hover="background: #E58419" style-active="background: #C96E10">Grant clearance</button>
+              <button type="button" style="background: #FFFFFF; border: 1px solid #0A0A0A; padding: 11px 18px; font-size: 15px; font-weight: 500; cursor: pointer; min-height: 44px" style-hover="background: #F5F5F5">Decline</button>
+            </div>
+          </div>
+          <div style="padding: 18px 20px">
+            <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap">
+              <div style="min-width: 0">
+                <p style="font-size: 16px; font-weight: 600">Emeka Nwosu</p>
+                <p style="font-size: 13px; color: #737373; margin-top: 2px; font-variant-numeric: tabular-nums" translate="no">CMP/2021/203 · Level 400 · requested 2 days ago</p>
+              </div>
+              <span style="display: inline-flex; align-items: center; gap: 6px; border: 1px dashed #949494; color: #525252; padding: 4px 10px; font-size: 13px; font-weight: 500; flex: 0 0 auto">Provisional</span>
+            </div>
+            <p style="font-size: 15px; color: #525252; margin-top: 10px; font-variant-numeric: tabular-nums">Granting would count 6 sessions · 48% → 71%</p>
+          </div>
+        </div>
+      </figure>
+
+      <figure style="flex: 1 1 440px; min-width: 440px">
+        <figcaption style="font-size: 12px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: #737373; margin-bottom: 10px">/hod/disputes · open</figcaption>
+        <div style="border: 1px solid #E5E5E5; background: #FFFFFF">
+          <div style="padding: 18px 20px; border-bottom: 1px solid #E5E5E5">
+            <h3 style="font-size: 20px; font-weight: 600; letter-spacing: -0.015em">Attendance disputes</h3>
+            <p style="font-size: 14px; color: #525252; margin-top: 3px; font-variant-numeric: tabular-nums">3 open · oldest waiting 4 days</p>
+          </div>
+          <div style="padding: 18px 20px; border-bottom: 1px solid #E5E5E5">
+            <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap">
+              <div style="min-width: 0">
+                <p style="font-size: 16px; font-weight: 600">Emeka Nwosu</p>
+                <p style="font-size: 13px; color: #737373; margin-top: 2px; font-variant-numeric: tabular-nums" translate="no">CMP 301 · Tuesday 21 July · checkpoint 1</p>
+              </div>
+              <span style="display: inline-flex; align-items: center; gap: 6px; background: #DBEAFE; color: #1E3A8A; padding: 4px 10px; font-size: 13px; font-weight: 600; flex: 0 0 auto">Digital session</span>
+            </div>
+            <div style="background: #FAFAFA; border: 1px solid #E5E5E5; padding: 13px 15px; margin-top: 12px">
+              <p style="font-size: 13px; font-weight: 600; color: #737373">Student says</p>
+              <p style="font-size: 14px; line-height: 1.55; color: #525252; margin-top: 5px; text-wrap: pretty">"I was in LT2 the whole class but it kept rejecting me. My friend beside me got through."</p>
+            </div>
+            <div style="border: 1px solid #B91C1C; padding: 13px 15px; margin-top: 10px">
+              <p style="font-size: 13px; font-weight: 600; color: #B91C1C">System recorded</p>
+              <p style="font-size: 14px; line-height: 1.55; color: #525252; margin-top: 5px; font-variant-numeric: tabular-nums; text-wrap: pretty">3 attempts, all rejected as outside the lecture hall · 10:09, 10:11, 10:14</p>
+            </div>
+            <div style="display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap">
+              <button type="button" style="background: #FF9935; color: #0A0A0A; border: 0; padding: 12px 18px; font-size: 15px; font-weight: 600; cursor: pointer; min-height: 44px; transition: background-color 120ms ease" style-hover="background: #E58419" style-active="background: #C96E10">Correct the record</button>
+              <button type="button" style="background: #FFFFFF; border: 1px solid #0A0A0A; padding: 11px 18px; font-size: 15px; font-weight: 500; cursor: pointer; min-height: 44px" style-hover="background: #F5F5F5">Uphold rejection</button>
+            </div>
+            <p style="font-size: 13px; color: #737373; margin-top: 10px; text-wrap: pretty">Either way needs a reason. Corrections are attributed to you in the audit log.</p>
+          </div>
+          <div style="padding: 18px 20px">
+            <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap">
+              <div style="min-width: 0">
+                <p style="font-size: 16px; font-weight: 600">Ngozi Eze</p>
+                <p style="font-size: 13px; color: #737373; margin-top: 2px; font-variant-numeric: tabular-nums" translate="no">CMP 405 · Monday 20 July · both checkpoints</p>
+              </div>
+              <span style="display: inline-flex; align-items: center; gap: 6px; border: 1px solid #767676; color: #525252; padding: 4px 10px; font-size: 13px; font-weight: 600; flex: 0 0 auto">Paper batch</span>
+            </div>
+            <p style="font-size: 15px; line-height: 1.55; color: #525252; margin-top: 10px; text-wrap: pretty">Says she signed the paper sheet but was not entered. Batch was submitted by Dr Adebayo, 47 of 61 students.</p>
+          </div>
+        </div>
+      </figure>
+    </div>
+  </section>
+
+  <section style="margin-top: 64px; padding-top: 44px; border-top: 1px solid #E5E5E5">
+    <div style="display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap">
+      <p style="font-size: 12px; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; color: #A85E0A">Routes</p>
+      <code style="font-size: 15px; font-weight: 600; font-family: ui-monospace, SFMono-Regular, Menlo, monospace">/hod/eligibility · /hod/lecturers</code>
+    </div>
+    <h2 style="font-size: 24px; font-weight: 600; letter-spacing: -0.02em; margin-top: 10px">Eligibility list and lecturer oversight</h2>
+    <p style="font-size: 16px; line-height: 1.55; color: #525252; max-width: 62ch; margin-top: 10px; text-wrap: pretty">The eligibility list is the final output of the whole system, and authorizing it is a signature, not an export. Nothing prints until it is signed.</p>
+
+    <figure style="margin-top: 24px; border: 1px solid #E5E5E5; background: #FFFFFF">
+      <figcaption style="padding: 20px 24px; border-bottom: 1px solid #E5E5E5">
+        <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; flex-wrap: wrap">
+          <div>
+            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap">
+              <h3 style="font-size: 22px; font-weight: 600; letter-spacing: -0.02em" translate="no">CMP 301 · exam eligibility</h3>
+              <span style="display: inline-flex; align-items: center; gap: 6px; border: 1px dashed #949494; color: #525252; padding: 4px 10px; font-size: 13px; font-weight: 500">Draft · not authorized</span>
+            </div>
+            <p style="font-size: 14px; color: #525252; margin-top: 6px; font-variant-numeric: tabular-nums">13 of 13 sessions held · 68 students · 2025/2026</p>
+          </div>
+          <div style="display: flex; gap: 10px; flex-wrap: wrap">
+            <button type="button" disabled="disabled" style="background: #FFFFFF; border: 1px solid #767676; padding: 12px 18px; font-size: 15px; font-weight: 500; min-height: 44px; opacity: .45; cursor: not-allowed">Print</button>
+            <button type="button" style="background: #FF9935; color: #0A0A0A; border: 0; padding: 12px 18px; font-size: 15px; font-weight: 600; cursor: pointer; min-height: 44px; transition: background-color 120ms ease" style-hover="background: #E58419" style-active="background: #C96E10">Authorize list</button>
+          </div>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1px; background: #E5E5E5; border: 1px solid #E5E5E5; margin-top: 18px">
+          <div style="background: #FFFFFF; padding: 14px 16px"><p style="font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums; color: #15803D">46</p><p style="font-size: 13px; color: #525252; margin-top: 2px">eligible</p></div>
+          <div style="background: #FFFFFF; padding: 14px 16px"><p style="font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums; color: #B91C1C">22</p><p style="font-size: 13px; color: #525252; margin-top: 2px">not eligible</p></div>
+          <div style="background: #FFFFFF; padding: 14px 16px"><p style="font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums; color: #525252">4</p><p style="font-size: 13px; color: #525252; margin-top: 2px">still provisional</p></div>
+        </div>
+        <div style="display: flex; gap: 11px; align-items: flex-start; border: 1px solid #B91C1C; padding: 13px 15px; margin-top: 16px">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#B91C1C" stroke-width="2.5" stroke-linecap="round" style="flex: 0 0 auto; margin-top: 1px" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg>
+          <p style="font-size: 14px; line-height: 1.5; color: #525252; text-wrap: pretty"><strong style="color: #0A0A0A; font-weight: 600">4 students are still provisional.</strong> Authorizing now records them as not eligible. Settle their dues or grant a waiver first.</p>
+        </div>
+      </figcaption>
+      <table style="width: 100%; border-collapse: collapse; font-size: 14px">
+        <thead>
+          <tr style="background: #FAFAFA">
+            <th scope="col" style="text-align: left; padding: 11px 24px; font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #525252; border-bottom: 1px solid #E5E5E5">Student</th>
+            <th scope="col" style="text-align: right; padding: 11px 12px; font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #525252; border-bottom: 1px solid #E5E5E5">Sessions</th>
+            <th scope="col" style="text-align: right; padding: 11px 12px; font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #525252; border-bottom: 1px solid #E5E5E5">Final</th>
+            <th scope="col" style="text-align: left; padding: 11px 24px; font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #525252; border-bottom: 1px solid #E5E5E5">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style="border-bottom: 1px solid #E5E5E5">
+            <td style="padding: 12px 24px"><p style="font-weight: 500">Ngozi Eze</p><p style="font-size: 13px; color: #737373; font-variant-numeric: tabular-nums" translate="no">CMP/2021/088</p></td>
+            <td style="padding: 12px; text-align: right; font-variant-numeric: tabular-nums">11.5 / 13</td>
+            <td style="padding: 12px; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums">88%</td>
+            <td style="padding: 12px 24px"><span style="display: inline-flex; align-items: center; gap: 6px; background: #DCFCE7; color: #14532D; padding: 4px 10px; font-size: 13px; font-weight: 600"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="m9 12 2 2 4-4"></path></svg>Eligible</span></td>
+          </tr>
+          <tr style="border-bottom: 1px solid #E5E5E5">
+            <td style="padding: 12px 24px"><p style="font-weight: 500">Chidera Okonkwo</p><p style="font-size: 13px; color: #737373; font-variant-numeric: tabular-nums" translate="no">CMP/2021/047</p></td>
+            <td style="padding: 12px; text-align: right; font-variant-numeric: tabular-nums">9.5 / 13</td>
+            <td style="padding: 12px; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums">73%</td>
+            <td style="padding: 12px 24px"><span style="display: inline-flex; align-items: center; gap: 6px; background: #B91C1C; color: #FFFFFF; padding: 4px 10px; font-size: 13px; font-weight: 600"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>Not eligible</span></td>
+          </tr>
+          <tr style="border-bottom: 1px solid #E5E5E5; background: #FAFAFA">
+            <td style="padding: 12px 24px"><p style="font-weight: 500">Halima Sanusi</p><p style="font-size: 13px; color: #737373; font-variant-numeric: tabular-nums" translate="no">CMP/2021/112</p></td>
+            <td style="padding: 12px; text-align: right; font-variant-numeric: tabular-nums">4.0 / 13</td>
+            <td style="padding: 12px; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; color: #525252">31%</td>
+            <td style="padding: 12px 24px"><span style="display: inline-flex; align-items: center; gap: 6px; border: 1px dashed #949494; color: #525252; padding: 4px 10px; font-size: 13px; font-weight: 500">Provisional · 14 waiting</span></td>
+          </tr>
+          <tr>
+            <td style="padding: 12px 24px"><p style="font-weight: 500">Yusuf Bello</p><p style="font-size: 13px; color: #737373; font-variant-numeric: tabular-nums" translate="no">CMP/2021/151</p></td>
+            <td style="padding: 12px; text-align: right; font-variant-numeric: tabular-nums">10.0 / 13</td>
+            <td style="padding: 12px; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums">77%</td>
+            <td style="padding: 12px 24px"><span style="display: inline-flex; align-items: center; gap: 6px; background: #DCFCE7; color: #14532D; padding: 4px 10px; font-size: 13px; font-weight: 600"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="m9 12 2 2 4-4"></path></svg>Eligible</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </figure>
+
+    <div style="display: flex; gap: 24px; flex-wrap: wrap; margin-top: 28px; align-items: flex-start">
+
+      <figure style="flex: 1 1 340px; min-width: 340px">
+        <figcaption style="font-size: 12px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: #737373; margin-bottom: 10px">Authorized · locked and signed</figcaption>
+        <div style="border: 2px solid #15803D; background: #FFFFFF; padding: 20px">
+          <div style="display: flex; gap: 11px; align-items: flex-start">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#15803D" stroke-width="2.5" stroke-linecap="round" style="flex: 0 0 auto; margin-top: 1px" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="m9 12 2 2 4-4"></path></svg>
+            <div style="min-width: 0">
+              <p style="font-size: 18px; font-weight: 600; letter-spacing: -0.015em" translate="no">CMP 301 list authorized</p>
+              <p style="font-size: 14px; line-height: 1.55; color: #525252; margin-top: 6px; font-variant-numeric: tabular-nums; text-wrap: pretty">Prof. A. Balogun · 27 July 2026, 14:22 · 46 eligible, 22 not eligible</p>
+            </div>
+          </div>
+          <p style="font-size: 14px; line-height: 1.55; color: #525252; margin-top: 14px; text-wrap: pretty">The list is frozen. Changing it now requires a new authorization, and both versions stay in the audit log.</p>
+          <div style="display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap">
+            <button type="button" style="background: #FF9935; color: #0A0A0A; border: 0; padding: 12px 18px; font-size: 15px; font-weight: 600; cursor: pointer; min-height: 44px; transition: background-color 120ms ease" style-hover="background: #E58419">Print list</button>
+            <button type="button" style="background: #FFFFFF; border: 1px solid #0A0A0A; padding: 11px 18px; font-size: 15px; font-weight: 500; cursor: pointer; min-height: 44px" style-hover="background: #F5F5F5">Re-open</button>
+          </div>
+        </div>
+      </figure>
+
+      <figure style="flex: 1 1 520px; min-width: 520px">
+        <figcaption style="font-size: 12px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: #737373; margin-bottom: 10px">/hod/lecturers · the paper fallback, monitored</figcaption>
+        <div style="border: 1px solid #E5E5E5; background: #FFFFFF">
+          <table style="width: 100%; border-collapse: collapse; font-size: 14px">
+            <thead>
+              <tr style="background: #FAFAFA">
+                <th scope="col" style="text-align: left; padding: 11px 20px; font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #525252; border-bottom: 1px solid #E5E5E5">Lecturer</th>
+                <th scope="col" style="text-align: right; padding: 11px 10px; font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #525252; border-bottom: 1px solid #E5E5E5">Held</th>
+                <th scope="col" aria-sort="descending" style="text-align: right; padding: 11px 10px; font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #0A0A0A; border-bottom: 1px solid #E5E5E5">Paper ↓</th>
+                <th scope="col" style="text-align: right; padding: 11px 10px; font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #525252; border-bottom: 1px solid #E5E5E5">1-checkpoint</th>
+                <th scope="col" style="text-align: right; padding: 11px 20px; font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #525252; border-bottom: 1px solid #E5E5E5">Cancelled</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr style="border-bottom: 1px solid #E5E5E5; background: #FEE2E2">
+                <td style="padding: 13px 20px"><p style="font-weight: 600">Dr O. Ilesanmi</p><p style="font-size: 13px; color: #525252" translate="no">STA 202, STA 304</p></td>
+                <td style="padding: 13px 10px; text-align: right; font-variant-numeric: tabular-nums">24</td>
+                <td style="padding: 13px 10px; text-align: right"><span style="font-weight: 600; color: #B91C1C; font-variant-numeric: tabular-nums">38%</span><br><span style="font-size: 12px; color: #525252; font-variant-numeric: tabular-nums">9 sessions</span></td>
+                <td style="padding: 13px 10px; text-align: right; font-variant-numeric: tabular-nums">21%</td>
+                <td style="padding: 13px 20px; text-align: right; font-variant-numeric: tabular-nums">3</td>
+              </tr>
+              <tr style="border-bottom: 1px solid #E5E5E5">
+                <td style="padding: 13px 20px"><p style="font-weight: 600">Dr K. Adebayo</p><p style="font-size: 13px; color: #525252" translate="no">CMP 301, CMP 405</p></td>
+                <td style="padding: 13px 10px; text-align: right; font-variant-numeric: tabular-nums">25</td>
+                <td style="padding: 13px 10px; text-align: right"><span style="font-variant-numeric: tabular-nums">8%</span><br><span style="font-size: 12px; color: #525252; font-variant-numeric: tabular-nums">2 sessions</span></td>
+                <td style="padding: 13px 10px; text-align: right; font-variant-numeric: tabular-nums">4%</td>
+                <td style="padding: 13px 20px; text-align: right; font-variant-numeric: tabular-nums">1</td>
+              </tr>
+              <tr>
+                <td style="padding: 13px 20px"><p style="font-weight: 600">Prof. M. Balogun</p><p style="font-size: 13px; color: #525252" translate="no">MTH 205</p></td>
+                <td style="padding: 13px 10px; text-align: right; font-variant-numeric: tabular-nums">13</td>
+                <td style="padding: 13px 10px; text-align: right"><span style="font-variant-numeric: tabular-nums">0%</span><br><span style="font-size: 12px; color: #525252">none</span></td>
+                <td style="padding: 13px 10px; text-align: right; font-variant-numeric: tabular-nums">8%</td>
+                <td style="padding: 13px 20px; text-align: right; font-variant-numeric: tabular-nums">0</td>
+              </tr>
+            </tbody>
+          </table>
+          <div style="padding: 16px 20px; border-top: 1px solid #E5E5E5; background: #FAFAFA">
+            <p style="font-size: 14px; line-height: 1.55; color: #525252; text-wrap: pretty">Sorted by paper rate, descending, so the outlier is always the first row. 38% is not a network problem — it is a conversation.</p>
+          </div>
+        </div>
+      </figure>
+    </div>
+
+    <sc-if value="{{ showAnnotations }}" hint-placeholder-val="{{ true }}">
+    <div style="background: #FFF4E8; padding: 18px 20px; margin-top: 20px">
+      <p style="font-size: 12px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: #A85E0A">Notes</p>
+      <ul style="margin-top: 10px; display: grid; gap: 7px">
+        <li style="font-size: 14px; line-height: 1.5; color: #525252">Print is disabled until the list is authorized — an unsigned list circulating as a PDF is the failure mode this page exists to prevent.</li>
+        <li style="font-size: 14px; line-height: 1.5; color: #525252">The provisional warning sits above the table, not in the dialog, because it is a reason not to press the button at all.</li>
+        <li style="font-size: 14px; line-height: 1.5; color: #525252">Lecturer oversight is comparative by design: one lecturer's 38% only means something beside a colleague's 8%.</li>
+        <li style="font-size: 14px; line-height: 1.5; color: #525252">The flagged lecturer row is tinted <em>and</em> carries a red figure with a session count, so it survives a greyscale print.</li>
+      </ul>
+    </div>
+    </sc-if>
+  </section>
+
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;showAnnotations&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Spec sheet&quot;}}">
+class Component extends DCLogic {
+  state = { scope: '400' };
+
+  renderVals() {
+    const data = {
+      all: { n: 143, s: 1204, label: 'the whole department' },
+      '400': { n: 89, s: 748, label: 'Level 400' },
+      '300': { n: 31, s: 262, label: 'Level 300' }
+    };
+    const d = data[this.state.scope];
+    return {
+      showAnnotations: this.props.showAnnotations ?? true,
+      scopeAll: this.state.scope === 'all',
+      scope400: this.state.scope === '400',
+      scope300: this.state.scope === '300',
+      affected: d.n,
+      sessions: d.s.toLocaleString('en-NG'),
+      impactLine: `Restore attendance access for ${d.n} locked students in ${d.label} until 11 August.`,
+      onScope: e => this.setState({ scope: e.target.value })
+    };
+  }
+}
+
+</script>
+</body>
+</html>

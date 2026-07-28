@@ -1,0 +1,840 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #FAFAFA; color: #0A0A0A; font-family: Inter, system-ui, -apple-system, sans-serif; font-size: 16px; -webkit-font-smoothing: antialiased; }
+  h1, h2, h3, h4, p, ul, ol, figure, table { margin: 0; }
+  ul { padding: 0; list-style: none; }
+  a { color: #A85E0A; text-decoration: underline; text-underline-offset: 2px; }
+  a:hover { color: #C96E10; }
+  button, input, textarea, select { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid #A85E0A; outline-offset: 2px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</helmet>
+
+<div style="max-width: 1280px; margin: 0 auto; padding: 0 24px 120px">
+
+  <header style="padding: 64px 0 40px; border-bottom: 1px solid #E5E5E5">
+    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 28px">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 2 4 4.6v7.1c0 4.9 3.3 8.6 8 10.3 4.7-1.7 8-5.4 8-10.3V4.6z" fill="#FF9935" stroke="#0A0A0A" stroke-width="1.5"></path><rect x="8" y="9" width="8" height="5.4" fill="#0A0A0A"></rect><rect x="10.4" y="15" width="3.2" height="1.5" fill="#0A0A0A"></rect></svg>
+      <span style="font-size: 15px; font-weight: 600; letter-spacing: -0.01em">Dept-Flow</span>
+      <span style="font-size: 13px; color: #737373">SAMACOSS</span>
+    </div>
+    <p style="font-size: 12px; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; color: #737373; margin-bottom: 12px">Group 6 of 6 · Admin pages</p>
+    <h1 style="font-size: 32px; font-weight: 600; letter-spacing: -0.025em; line-height: 1.15; max-width: 26ch; text-wrap: balance">Ten routes of plumbing, and no named student in trouble anywhere</h1>
+    <p style="font-size: 16px; line-height: 1.55; color: #525252; max-width: 62ch; margin-top: 16px; text-wrap: pretty">Admin runs the machine; the HOD judges the students. This role sees aggregates, queues and transactions — never an at-risk list. Every destructive action here is a soft delete with a reason attached.</p>
+  </header>
+
+  <section style="margin-top: 56px">
+    <div style="display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap">
+      <p style="font-size: 12px; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; color: #A85E0A">Route</p>
+      <code style="font-size: 15px; font-weight: 600; font-family: ui-monospace, SFMono-Regular, Menlo, monospace">/admin</code>
+      <span style="font-size: 13px; color: #737373">admin · 3 states</span>
+    </div>
+    <h2 style="font-size: 24px; font-weight: 600; letter-spacing: -0.02em; margin-top: 10px">Dashboard</h2>
+    <p style="font-size: 16px; line-height: 1.55; color: #525252; max-width: 62ch; margin-top: 10px; text-wrap: pretty">Operational health, not academic outcome. The GPS rejection rate is the one number here that catches fraud, so it gets the anomaly treatment.</p>
+
+    <div style="margin-top: 24px; border: 1px solid #E5E5E5; background: #FFFFFF; display: grid; grid-template-columns: 232px 1fr">
+      <nav aria-label="Main" style="border-right: 1px solid #E5E5E5; padding: 16px 12px; display: grid; gap: 2px; align-content: start">
+        <div style="display: flex; align-items: center; gap: 8px; padding: 6px 8px 18px">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 2 4 4.6v7.1c0 4.9 3.3 8.6 8 10.3 4.7-1.7 8-5.4 8-10.3V4.6z" fill="#FF9935" stroke="#0A0A0A" stroke-width="1.5"></path><rect x="8" y="9" width="8" height="5.4" fill="#0A0A0A"></rect><rect x="10.4" y="15" width="3.2" height="1.5" fill="#0A0A0A"></rect></svg>
+          <span style="font-size: 15px; font-weight: 600; letter-spacing: -0.01em">Dept-Flow</span>
+          <span style="font-size: 11px; font-weight: 600; color: #A85E0A; background: #FFF4E8; padding: 2px 6px; letter-spacing: 0.04em">ADMIN</span>
+        </div>
+        <a href="#admin" aria-current="page" style="display: flex; align-items: center; gap: 10px; padding: 10px; min-height: 44px; text-decoration: none; color: #0A0A0A; font-size: 14px; font-weight: 600; background: #FFF4E8; border-left: 2px solid #FF9935"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"></path></svg>Overview</a>
+        <a href="#whitelist" style="display: flex; align-items: center; gap: 10px; padding: 10px; min-height: 44px; text-decoration: none; color: #525252; font-size: 14px; border-left: 2px solid transparent" style-hover="background: #FAFAFA; color: #0A0A0A"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" x2="12" y1="3" y2="15"></line></svg>Whitelist</a>
+        <a href="#regdisputes" style="display: flex; align-items: center; gap: 10px; padding: 10px; min-height: 44px; text-decoration: none; color: #525252; font-size: 14px; border-left: 2px solid transparent" style-hover="background: #FAFAFA; color: #0A0A0A"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 22a10 10 0 1 0-9.94-11H2"></path><path d="M12 8v4l3 2"></path></svg>Registration<span style="margin-left: auto; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; color: #B91C1C">2</span></a>
+        <a href="#students" style="display: flex; align-items: center; gap: 10px; padding: 10px; min-height: 44px; text-decoration: none; color: #525252; font-size: 14px; border-left: 2px solid transparent" style-hover="background: #FAFAFA; color: #0A0A0A"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path></svg>Students</a>
+        <a href="#payments" style="display: flex; align-items: center; gap: 10px; padding: 10px; min-height: 44px; text-decoration: none; color: #525252; font-size: 14px; border-left: 2px solid transparent" style-hover="background: #FAFAFA; color: #0A0A0A"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect width="20" height="14" x="2" y="5" rx="2"></rect><line x1="2" x2="22" y1="10" y2="10"></line></svg>Payments<span style="margin-left: auto; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; color: #B91C1C">7</span></a>
+        <a href="#timetable" style="display: flex; align-items: center; gap: 10px; padding: 10px; min-height: 44px; text-decoration: none; color: #525252; font-size: 14px; border-left: 2px solid transparent" style-hover="background: #FAFAFA; color: #0A0A0A"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect width="18" height="18" x="3" y="4" rx="2"></rect><path d="M3 10h18"></path><path d="M8 2v4"></path><path d="M16 2v4"></path></svg>Timetable</a>
+        <a href="#courses" style="display: flex; align-items: center; gap: 10px; padding: 10px; min-height: 44px; text-decoration: none; color: #525252; font-size: 14px; border-left: 2px solid transparent" style-hover="background: #FAFAFA; color: #0A0A0A"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H19a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H6.5a1 1 0 0 1 0-5H20"></path></svg>Courses</a>
+        <a href="#rollover" style="display: flex; align-items: center; gap: 10px; padding: 10px; min-height: 44px; text-decoration: none; color: #525252; font-size: 14px; border-left: 2px solid transparent" style-hover="background: #FAFAFA; color: #0A0A0A"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"></path><polyline points="21 3 21 9 15 9"></polyline></svg>Level rollover</a>
+        <a href="#config" style="display: flex; align-items: center; gap: 10px; padding: 10px; min-height: 44px; text-decoration: none; color: #525252; font-size: 14px; border-left: 2px solid transparent" style-hover="background: #FAFAFA; color: #0A0A0A"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2"></path><circle cx="12" cy="12" r="3"></circle></svg>Configuration</a>
+        <a href="#audit" style="display: flex; align-items: center; gap: 10px; padding: 10px; min-height: 44px; text-decoration: none; color: #525252; font-size: 14px; border-left: 2px solid transparent" style-hover="background: #FAFAFA; color: #0A0A0A"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"></path><path d="M14 2v4a2 2 0 0 0 2 2h4"></path><path d="M16 13H8"></path><path d="M16 17H8"></path></svg>Audit log</a>
+      </nav>
+
+      <div style="padding: 24px; background: #FAFAFA">
+        <h3 style="font-size: 22px; font-weight: 600; letter-spacing: -0.02em">System overview</h3>
+        <p style="font-size: 14px; color: #525252; margin-top: 4px; font-variant-numeric: tabular-nums">2025/2026 · dues window closes in 6 days · 486 students</p>
+
+        <div role="alert" style="display: flex; gap: 12px; align-items: flex-start; border: 2px solid #B91C1C; background: #FEE2E2; padding: 16px 18px; margin-top: 18px">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#7F1D1D" stroke-width="2.5" stroke-linecap="round" style="flex: 0 0 auto; margin-top: 2px" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg>
+          <div style="min-width: 0">
+            <p style="font-size: 16px; font-weight: 600; color: #7F1D1D">Location rejections spiked in LT4 this morning</p>
+            <p style="font-size: 14px; line-height: 1.55; color: #7F1D1D; margin-top: 4px; font-variant-numeric: tabular-nums; text-wrap: pretty">34 rejections in one session against a 4% baseline. Either the geo-fence for that hall is wrong, or someone is submitting from outside it.</p>
+          </div>
+          <a href="#config" style="margin-left: auto; display: inline-flex; align-items: center; min-height: 44px; font-size: 14px; font-weight: 600; color: #7F1D1D; flex: 0 0 auto">Check LT4</a>
+        </div>
+
+        <p style="font-size: 12px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: #737373; margin-top: 22px">Compliance by level</p>
+        <div style="background: #FFFFFF; border: 1px solid #E5E5E5; margin-top: 10px">
+          <div style="padding: 14px 18px; border-bottom: 1px solid #E5E5E5">
+            <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px">
+              <p style="font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums">Level 400</p>
+              <p style="font-size: 14px; color: #525252; font-variant-numeric: tabular-nums">148 students</p>
+            </div>
+            <div style="display: flex; height: 22px; margin-top: 8px; border: 1px solid #E5E5E5" role="img" aria-label="Level 400: 38 percent cleared, 2 percent provisional, 60 percent locked">
+              <div style="width: 38%; background: #15803D"></div>
+              <div style="width: 2%; background: #E5E5E5"></div>
+              <div style="width: 60%; background: #B91C1C"></div>
+            </div>
+            <p style="font-size: 13px; color: #525252; margin-top: 6px; font-variant-numeric: tabular-nums">56 cleared · 3 provisional · 89 locked</p>
+          </div>
+          <div style="padding: 14px 18px; border-bottom: 1px solid #E5E5E5">
+            <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px">
+              <p style="font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums">Level 300</p>
+              <p style="font-size: 14px; color: #525252; font-variant-numeric: tabular-nums">122 students</p>
+            </div>
+            <div style="display: flex; height: 22px; margin-top: 8px; border: 1px solid #E5E5E5" role="img" aria-label="Level 300: 70 percent cleared, 5 percent provisional, 25 percent locked">
+              <div style="width: 70%; background: #15803D"></div>
+              <div style="width: 5%; background: #E5E5E5"></div>
+              <div style="width: 25%; background: #B91C1C"></div>
+            </div>
+            <p style="font-size: 13px; color: #525252; margin-top: 6px; font-variant-numeric: tabular-nums">85 cleared · 6 provisional · 31 locked</p>
+          </div>
+          <div style="padding: 14px 18px; border-bottom: 1px solid #E5E5E5">
+            <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px">
+              <p style="font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums">Level 200</p>
+              <p style="font-size: 14px; color: #525252; font-variant-numeric: tabular-nums">108 students</p>
+            </div>
+            <div style="display: flex; height: 22px; margin-top: 8px; border: 1px solid #E5E5E5" role="img" aria-label="Level 200: 74 percent cleared, 12 percent provisional, 14 percent locked">
+              <div style="width: 74%; background: #15803D"></div>
+              <div style="width: 12%; background: #E5E5E5"></div>
+              <div style="width: 14%; background: #B91C1C"></div>
+            </div>
+            <p style="font-size: 13px; color: #525252; margin-top: 6px; font-variant-numeric: tabular-nums">80 cleared · 13 provisional · 15 locked</p>
+          </div>
+          <div style="padding: 14px 18px">
+            <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px">
+              <p style="font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums">Level 100</p>
+              <p style="font-size: 14px; color: #525252; font-variant-numeric: tabular-nums">108 students</p>
+            </div>
+            <div style="display: flex; height: 22px; margin-top: 8px; border: 1px solid #E5E5E5" role="img" aria-label="Level 100: 74 percent cleared, 19 percent provisional, 7 percent locked">
+              <div style="width: 74%; background: #15803D"></div>
+              <div style="width: 19%; background: #E5E5E5"></div>
+              <div style="width: 7%; background: #B91C1C"></div>
+            </div>
+            <p style="font-size: 13px; color: #525252; margin-top: 6px; font-variant-numeric: tabular-nums">80 cleared · 20 provisional · 8 locked</p>
+          </div>
+          <div style="padding: 12px 18px; border-top: 1px solid #E5E5E5; background: #FAFAFA; display: flex; gap: 18px; flex-wrap: wrap">
+            <div style="display: flex; align-items: center; gap: 7px"><div style="width: 12px; height: 12px; background: #15803D; flex: 0 0 auto" aria-hidden="true"></div><p style="font-size: 13px; color: #525252; font-variant-numeric: tabular-nums">301 cleared</p></div>
+            <div style="display: flex; align-items: center; gap: 7px"><div style="width: 12px; height: 12px; background: #E5E5E5; border: 1px solid #949494; flex: 0 0 auto" aria-hidden="true"></div><p style="font-size: 13px; color: #525252; font-variant-numeric: tabular-nums">42 provisional</p></div>
+            <div style="display: flex; align-items: center; gap: 7px"><div style="width: 12px; height: 12px; background: #B91C1C; flex: 0 0 auto" aria-hidden="true"></div><p style="font-size: 13px; color: #525252; font-variant-numeric: tabular-nums">143 locked</p></div>
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; margin-top: 16px">
+          <a href="#payments" style="display: block; background: #FFFFFF; border: 1px solid #E5E5E5; padding: 16px; text-decoration: none; color: #0A0A0A; transition: background-color 120ms ease" style-hover="background: #FFF4E8">
+            <p style="font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #737373">Payments</p>
+            <p style="font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; margin-top: 6px">7 unverified</p>
+            <p style="font-size: 14px; color: #525252; margin-top: 3px; font-variant-numeric: tabular-nums">2 failed webhooks · oldest 19h</p>
+          </a>
+          <a href="#regdisputes" style="display: block; background: #FFFFFF; border: 1px solid #E5E5E5; padding: 16px; text-decoration: none; color: #0A0A0A; transition: background-color 120ms ease" style-hover="background: #FFF4E8">
+            <p style="font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #737373">Registration</p>
+            <p style="font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; margin-top: 6px">2 disputes</p>
+            <p style="font-size: 14px; color: #525252; margin-top: 3px; font-variant-numeric: tabular-nums">31 whitelist rows unclaimed</p>
+          </a>
+          <div style="background: #FFFFFF; border: 1px solid #E5E5E5; padding: 16px">
+            <p style="font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #737373">Location rejections</p>
+            <p style="font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; margin-top: 6px; color: #B91C1C">11% today</p>
+            <p style="font-size: 14px; color: #525252; margin-top: 3px; font-variant-numeric: tabular-nums">4% baseline · LT4 driving it</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section style="margin-top: 64px; padding-top: 44px; border-top: 1px solid #E5E5E5">
+    <div style="display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap">
+      <p style="font-size: 12px; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; color: #A85E0A">Routes</p>
+      <code style="font-size: 15px; font-weight: 600; font-family: ui-monospace, SFMono-Regular, Menlo, monospace">/admin/whitelist · /admin/rollover</code>
+      <span style="display: inline-flex; align-items: center; gap: 6px; border: 1px solid #B91C1C; color: #B91C1C; padding: 3px 9px; font-size: 12px; font-weight: 600">Never commit blind</span>
+    </div>
+    <h2 style="font-size: 24px; font-weight: 600; letter-spacing: -0.02em; margin-top: 10px">Whitelist upload and level rollover</h2>
+    <p style="font-size: 16px; line-height: 1.55; color: #525252; max-width: 62ch; margin-top: 10px; text-wrap: pretty">Two bulk operations, both irreversible in practice, both gated behind a diff you have to read. The programme is parsed from each matric prefix, so a wrong prefix is a validation error rather than a silent miscategorisation.</p>
+
+    <figure style="margin-top: 24px; border: 1px solid #E5E5E5; background: #FFFFFF">
+      <figcaption style="padding: 20px 24px; border-bottom: 1px solid #E5E5E5">
+        <p style="font-size: 12px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: #737373">Whitelist · preview before commit</p>
+        <h3 style="font-size: 20px; font-weight: 600; letter-spacing: -0.015em; margin-top: 6px">register-2025-2026.csv</h3>
+        <p style="font-size: 14px; color: #525252; margin-top: 4px; font-variant-numeric: tabular-nums">498 rows read · matric no, surname, level</p>
+      </figcaption>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1px; background: #E5E5E5; border-bottom: 1px solid #E5E5E5">
+        <div style="background: #FFFFFF; padding: 16px 20px"><p style="font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums; color: #15803D">+ 42</p><p style="font-size: 13px; color: #525252; margin-top: 3px">new rows</p></div>
+        <div style="background: #FFFFFF; padding: 16px 20px"><p style="font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums">~ 9</p><p style="font-size: 13px; color: #525252; margin-top: 3px">changed</p></div>
+        <div style="background: #FFFFFF; padding: 16px 20px"><p style="font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums; color: #525252">440</p><p style="font-size: 13px; color: #525252; margin-top: 3px">unchanged</p></div>
+        <div style="background: #FFFFFF; padding: 16px 20px"><p style="font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums; color: #B91C1C">7</p><p style="font-size: 13px; color: #525252; margin-top: 3px">rejected</p></div>
+      </div>
+      <div style="padding: 18px 24px; border-bottom: 1px solid #E5E5E5">
+        <p style="font-size: 12px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: #B91C1C">7 rows rejected · fix these in the file and re-upload</p>
+        <div style="border: 1px solid #B91C1C; margin-top: 12px">
+          <div style="padding: 11px 14px; border-bottom: 1px solid #FECACA; display: flex; gap: 16px; flex-wrap: wrap">
+            <p style="font-size: 13px; color: #737373; font-variant-numeric: tabular-nums; flex: 0 0 64px">Row 18</p>
+            <p style="font-size: 14px; font-variant-numeric: tabular-nums; flex: 0 0 130px" translate="no">ENG/2025/004</p>
+            <p style="font-size: 14px; color: #525252; min-width: 0">Unknown programme prefix — expected MTH, CMP or STA</p>
+          </div>
+          <div style="padding: 11px 14px; border-bottom: 1px solid #FECACA; display: flex; gap: 16px; flex-wrap: wrap">
+            <p style="font-size: 13px; color: #737373; font-variant-numeric: tabular-nums; flex: 0 0 64px">Row 91</p>
+            <p style="font-size: 14px; font-variant-numeric: tabular-nums; flex: 0 0 130px" translate="no">CMP/2025/113</p>
+            <p style="font-size: 14px; color: #525252; min-width: 0">Duplicate of row 44</p>
+          </div>
+          <div style="padding: 11px 14px; border-bottom: 1px solid #FECACA; display: flex; gap: 16px; flex-wrap: wrap">
+            <p style="font-size: 13px; color: #737373; font-variant-numeric: tabular-nums; flex: 0 0 64px">Row 203</p>
+            <p style="font-size: 14px; font-variant-numeric: tabular-nums; flex: 0 0 130px" translate="no">STA/2025/07</p>
+            <p style="font-size: 14px; color: #525252; min-width: 0">Serial must be three digits</p>
+          </div>
+          <div style="padding: 11px 14px; display: flex; gap: 16px; flex-wrap: wrap">
+            <p style="font-size: 13px; color: #737373; font-variant-numeric: tabular-nums; flex: 0 0 64px">Row 260</p>
+            <p style="font-size: 14px; font-variant-numeric: tabular-nums; flex: 0 0 130px" translate="no">MTH/2025/082</p>
+            <p style="font-size: 14px; color: #525252; min-width: 0">Level empty</p>
+          </div>
+        </div>
+        <p style="font-size: 14px; color: #525252; margin-top: 10px; text-wrap: pretty">Committing skips these 7 rows and applies the other 491.</p>
+      </div>
+      <div style="padding: 18px 24px; border-bottom: 1px solid #E5E5E5">
+        <p style="font-size: 12px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: #737373">9 changed rows</p>
+        <table style="width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 10px">
+          <thead>
+            <tr>
+              <th scope="col" style="text-align: left; padding: 8px 0; font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #525252; border-bottom: 1px solid #E5E5E5">Matric</th>
+              <th scope="col" style="text-align: left; padding: 8px 12px; font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #525252; border-bottom: 1px solid #E5E5E5">Field</th>
+              <th scope="col" style="text-align: left; padding: 8px 12px; font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #525252; border-bottom: 1px solid #E5E5E5">Was</th>
+              <th scope="col" style="text-align: left; padding: 8px 0; font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #525252; border-bottom: 1px solid #E5E5E5">Becomes</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr style="border-bottom: 1px solid #E5E5E5">
+              <td style="padding: 10px 0; font-variant-numeric: tabular-nums" translate="no">CMP/2021/047</td>
+              <td style="padding: 10px 12px; color: #525252">Level</td>
+              <td style="padding: 10px 12px; color: #737373; font-variant-numeric: tabular-nums">300</td>
+              <td style="padding: 10px 0; font-weight: 600; font-variant-numeric: tabular-nums">400</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #E5E5E5">
+              <td style="padding: 10px 0; font-variant-numeric: tabular-nums" translate="no">MTH/2022/018</td>
+              <td style="padding: 10px 12px; color: #525252">Surname</td>
+              <td style="padding: 10px 12px; color: #737373">Adeyemi</td>
+              <td style="padding: 10px 0; font-weight: 600">Adeyemi-Cole</td>
+            </tr>
+            <tr>
+              <td style="padding: 10px 0; font-variant-numeric: tabular-nums" translate="no">STA/2023/044</td>
+              <td style="padding: 10px 12px; color: #525252">Level</td>
+              <td style="padding: 10px 12px; color: #737373; font-variant-numeric: tabular-nums">100</td>
+              <td style="padding: 10px 0; font-weight: 600; font-variant-numeric: tabular-nums">200</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div style="padding: 18px 24px; background: #FAFAFA; display: flex; gap: 10px; flex-wrap: wrap; align-items: center">
+        <button type="button" style="background: #FF9935; color: #0A0A0A; border: 0; padding: 13px 20px; font-size: 16px; font-weight: 600; cursor: pointer; min-height: 48px; transition: background-color 120ms ease" style-hover="background: #E58419" style-active="background: #C96E10">Commit 491 rows</button>
+        <button type="button" style="background: #FFFFFF; color: #0A0A0A; border: 1px solid #0A0A0A; padding: 12px 20px; font-size: 16px; font-weight: 500; cursor: pointer; min-height: 48px" style-hover="background: #F5F5F5">Discard upload</button>
+        <p style="font-size: 14px; color: #525252; margin-left: auto; text-wrap: pretty">Claimed rows are never overwritten by an upload.</p>
+      </div>
+    </figure>
+
+    <div style="display: flex; gap: 24px; flex-wrap: wrap; margin-top: 28px; align-items: flex-start">
+      <figure style="flex: 1 1 420px; min-width: 420px">
+        <figcaption style="font-size: 12px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: #737373; margin-bottom: 10px">Whitelist · empty and uploading</figcaption>
+        <div style="display: grid; gap: 16px">
+          <div style="border: 1px solid #E5E5E5; background: #FFFFFF; padding: 40px 24px 44px">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#737373" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" x2="12" y1="3" y2="15"></line></svg>
+            <h4 style="font-size: 20px; font-weight: 600; margin-top: 16px; letter-spacing: -0.015em; text-wrap: balance">No register uploaded for this session</h4>
+            <p style="font-size: 15px; line-height: 1.55; color: #525252; margin-top: 8px; text-wrap: pretty">Nobody can create an account until the department's register is here.</p>
+            <button type="button" style="background: #FF9935; color: #0A0A0A; border: 0; padding: 13px 18px; font-size: 16px; font-weight: 600; cursor: pointer; min-height: 48px; margin-top: 16px; transition: background-color 120ms ease" style-hover="background: #E58419">Upload CSV</button>
+            <p style="font-size: 13px; color: #737373; margin-top: 12px; font-variant-numeric: tabular-nums; text-wrap: pretty">Columns: matric no, surname, level. Programme comes from the matric prefix.</p>
+          </div>
+          <div style="border: 1px solid #E5E5E5; background: #FFFFFF; padding: 22px 24px" aria-busy="true">
+            <div style="display: flex; gap: 11px; align-items: center">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1D4ED8" stroke-width="2.5" stroke-linecap="round" style="flex: 0 0 auto; animation: spin 900ms linear infinite" aria-hidden="true"><path d="M21 12a9 9 0 1 1-6.219-8.56"></path></svg>
+              <div style="min-width: 0">
+                <p style="font-size: 16px; font-weight: 600">Reading register-2025-2026.csv</p>
+                <p aria-live="polite" style="font-size: 14px; color: #525252; margin-top: 2px; font-variant-numeric: tabular-nums">Validating row 312 of 498</p>
+              </div>
+            </div>
+            <div style="height: 8px; background: #F5F5F5; border: 1px solid #E5E5E5; margin-top: 12px; overflow: hidden"><div style="height: 100%; width: 63%; background: #FF9935"></div></div>
+          </div>
+        </div>
+      </figure>
+
+      <figure style="flex: 1 1 420px; min-width: 420px">
+        <figcaption style="font-size: 12px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: #737373; margin-bottom: 10px">/admin/rollover · preview</figcaption>
+        <div style="border: 1px solid #E5E5E5; background: #FFFFFF">
+          <div style="padding: 20px 24px; border-bottom: 1px solid #E5E5E5">
+            <h3 style="font-size: 20px; font-weight: 600; letter-spacing: -0.015em">Promote everyone one level</h3>
+            <p style="font-size: 15px; line-height: 1.55; color: #525252; margin-top: 6px; text-wrap: pretty">Promotion is unconditional — there is no CGPA check and no repeat-of-level option. Run this once, at the start of the session.</p>
+          </div>
+          <div style="padding: 20px 24px; border-bottom: 1px solid #E5E5E5">
+            <label for="rl-session" style="display: block; font-size: 14px; font-weight: 600; margin-bottom: 6px">Into which session?</label>
+            <select id="rl-session" style="width: 100%; max-width: 280px; font-size: 16px; padding: 12px; border: 1px solid #767676; min-height: 48px; background: #FFFFFF; font-variant-numeric: tabular-nums" style-focus="outline: 2px solid #A85E0A; outline-offset: 1px; border-color: #0A0A0A">
+              <option>2026/2027</option>
+              <option>2027/2028</option>
+            </select>
+          </div>
+          <div style="padding: 20px 24px; border-bottom: 1px solid #E5E5E5">
+            <div style="border: 2px solid #0A0A0A; padding: 18px 20px">
+              <p style="font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #737373">What this will do</p>
+              <p style="font-size: 19px; font-weight: 600; margin-top: 8px; line-height: 1.35; text-wrap: pretty">338 students move up one level. 108 final-year students are marked Graduating.</p>
+              <div style="display: grid; gap: 1px; background: #E5E5E5; border: 1px solid #E5E5E5; margin-top: 16px">
+                <div style="background: #FFFFFF; padding: 10px 14px; display: flex; justify-content: space-between; gap: 16px"><span style="font-size: 14px; color: #525252; font-variant-numeric: tabular-nums">Level 100 → 200</span><span style="font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums">108 students</span></div>
+                <div style="background: #FFFFFF; padding: 10px 14px; display: flex; justify-content: space-between; gap: 16px"><span style="font-size: 14px; color: #525252; font-variant-numeric: tabular-nums">Level 200 → 300</span><span style="font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums">108 students</span></div>
+                <div style="background: #FFFFFF; padding: 10px 14px; display: flex; justify-content: space-between; gap: 16px"><span style="font-size: 14px; color: #525252; font-variant-numeric: tabular-nums">Level 300 → 400</span><span style="font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums">122 students</span></div>
+                <div style="background: #FFFFFF; padding: 10px 14px; display: flex; justify-content: space-between; gap: 16px"><span style="font-size: 14px; color: #525252; font-variant-numeric: tabular-nums">Level 400 → Graduating</span><span style="font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums">108 students</span></div>
+                <div style="background: #FFFFFF; padding: 10px 14px; display: flex; justify-content: space-between; gap: 16px"><span style="font-size: 14px; color: #B91C1C; font-variant-numeric: tabular-nums">Level 400 → held back</span><span style="font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; color: #B91C1C">40 students</span></div>
+              </div>
+              <p style="font-size: 14px; color: #525252; margin-top: 12px; font-variant-numeric: tabular-nums; text-wrap: pretty">148 Level 400 students: 108 graduate, 40 are held back because their eligibility is unauthorized. 338 + 108 + 40 = 486.</p>
+            </div>
+            <div style="display: flex; gap: 11px; align-items: flex-start; border: 1px solid #B91C1C; padding: 13px 15px; margin-top: 14px">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#B91C1C" stroke-width="2.5" stroke-linecap="round" style="flex: 0 0 auto; margin-top: 1px" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg>
+              <p style="font-size: 14px; line-height: 1.5; color: #525252; text-wrap: pretty"><strong style="color: #0A0A0A; font-weight: 600">40 Level 400 students have unauthorized eligibility.</strong> Rolling over now carries them into next session unresolved. Ask the HOD to authorize the outstanding lists first.</p>
+            </div>
+          </div>
+          <div style="padding: 18px 24px; background: #FAFAFA; display: flex; gap: 10px; flex-wrap: wrap">
+            <button type="button" style="background: #FF9935; color: #0A0A0A; border: 0; padding: 13px 20px; font-size: 16px; font-weight: 600; cursor: pointer; min-height: 48px; transition: background-color 120ms ease" style-hover="background: #E58419" style-active="background: #C96E10">Review and run</button>
+            <button type="button" style="background: #FFFFFF; color: #0A0A0A; border: 1px solid #0A0A0A; padding: 12px 20px; font-size: 16px; font-weight: 500; cursor: pointer; min-height: 48px" style-hover="background: #F5F5F5">Cancel</button>
+          </div>
+        </div>
+      </figure>
+    </div>
+
+    <p style="font-size: 12px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: #737373; margin-top: 40px">Rollover · confirming, then complete</p>
+    <div style="display: flex; gap: 24px; flex-wrap: wrap; margin-top: 14px; align-items: flex-start">
+      <figure style="flex: 1 1 420px; min-width: 420px">
+        <div style="background: rgba(10,10,10,.45); padding: 32px 20px; display: grid; place-items: center">
+          <div role="dialog" aria-modal="true" aria-labelledby="dlg-roll" style="width: 100%; max-width: 440px; background: #FFFFFF; border: 1px solid #E5E5E5; box-shadow: 0 20px 48px rgba(10,10,10,.22)">
+            <div style="padding: 24px 24px 0">
+              <h3 id="dlg-roll" style="font-size: 20px; font-weight: 600; letter-spacing: -0.015em; text-wrap: balance">Roll 486 students into 2026/2027?</h3>
+              <p style="font-size: 15px; line-height: 1.55; color: #525252; margin-top: 10px; text-wrap: pretty">There is no undo. Reversing this means a manual level correction for every student, one at a time.</p>
+              <div style="background: #FAFAFA; border: 1px solid #E5E5E5; padding: 14px 16px; margin-top: 16px; display: grid; gap: 8px">
+                <div style="display: flex; justify-content: space-between; gap: 16px"><span style="font-size: 14px; color: #525252">Promoted a level</span><span style="font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums">338</span></div>
+                <div style="display: flex; justify-content: space-between; gap: 16px"><span style="font-size: 14px; color: #525252">Marked Graduating</span><span style="font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums">108</span></div>
+                <div style="display: flex; justify-content: space-between; gap: 16px"><span style="font-size: 14px; color: #B91C1C">Held back, unresolved</span><span style="font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; color: #B91C1C">40</span></div>
+              </div>
+              <div style="margin-top: 16px">
+                <label for="rl-type" style="display: block; font-size: 14px; font-weight: 600; margin-bottom: 6px">Type <span style="font-variant-numeric: tabular-nums" translate="no">2026/2027</span> to confirm</label>
+                <input id="rl-type" type="text" placeholder="2026/2027" spellcheck="false" translate="no" style="width: 100%; font-size: 16px; padding: 12px; border: 1px solid #767676; min-height: 48px; font-variant-numeric: tabular-nums" style-focus="outline: 2px solid #A85E0A; outline-offset: 1px; border-color: #0A0A0A">
+              </div>
+            </div>
+            <div style="display: flex; gap: 10px; justify-content: flex-end; padding: 20px 24px 24px; flex-wrap: wrap">
+              <button type="button" style="background: #FFFFFF; color: #0A0A0A; border: 1px solid #0A0A0A; padding: 11px 18px; font-size: 15px; font-weight: 500; cursor: pointer; min-height: 44px" style-hover="background: #F5F5F5">Back</button>
+              <button type="button" disabled="disabled" style="background: #FF9935; color: #0A0A0A; border: 0; padding: 12px 18px; font-size: 15px; font-weight: 600; min-height: 44px; opacity: .45; cursor: not-allowed">Run rollover</button>
+            </div>
+          </div>
+        </div>
+      </figure>
+
+      <figure style="flex: 1 1 340px; min-width: 340px">
+        <div style="display: grid; gap: 16px">
+          <div style="border: 2px solid #15803D; background: #FFFFFF; padding: 22px 20px">
+            <div style="display: flex; gap: 11px; align-items: flex-start">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#15803D" stroke-width="2.5" stroke-linecap="round" style="flex: 0 0 auto; margin-top: 1px" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="m9 12 2 2 4-4"></path></svg>
+              <div style="min-width: 0">
+                <p style="font-size: 18px; font-weight: 600; letter-spacing: -0.015em">Rollover complete</p>
+                <p style="font-size: 14px; line-height: 1.55; color: #525252; margin-top: 6px; font-variant-numeric: tabular-nums; text-wrap: pretty">338 promoted, 108 marked Graduating, 40 held back · 27 July 2026, 09:14 · by S. Okoro</p>
+              </div>
+            </div>
+            <p style="font-size: 14px; line-height: 1.55; color: #525252; margin-top: 14px; text-wrap: pretty">Upload the 2026/2027 register next — new Level 100 students can't register until it's there.</p>
+            <a href="#whitelist" style="display: inline-flex; align-items: center; min-height: 44px; font-size: 15px; font-weight: 600; margin-top: 6px">Go to whitelist</a>
+          </div>
+          <div style="border: 1px solid #E5E5E5; background: #FFFFFF">
+            <div style="padding: 14px 18px; border-bottom: 1px solid #E5E5E5">
+              <p style="font-size: 12px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: #737373">Previous rollovers</p>
+            </div>
+            <div style="padding: 13px 18px; border-bottom: 1px solid #E5E5E5">
+              <p style="font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums">2025/2026 · 14 Sep 2025</p>
+              <p style="font-size: 14px; color: #525252; margin-top: 3px; font-variant-numeric: tabular-nums">402 promoted · 96 graduating · S. Okoro</p>
+            </div>
+            <div style="padding: 13px 18px">
+              <p style="font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums">2024/2025 · 9 Sep 2024</p>
+              <p style="font-size: 14px; color: #525252; margin-top: 3px; font-variant-numeric: tabular-nums">391 promoted · 88 graduating · S. Okoro</p>
+            </div>
+          </div>
+        </div>
+      </figure>
+    </div>
+
+    <sc-if value="{{ showAnnotations }}" hint-placeholder-val="{{ true }}">
+    <div style="background: #FFF4E8; padding: 18px 20px; margin-top: 20px">
+      <p style="font-size: 12px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: #A85E0A">Notes</p>
+      <ul style="margin-top: 10px; display: grid; gap: 7px">
+        <li style="font-size: 14px; line-height: 1.5; color: #525252">Rollover is the only action in the product that asks you to type the session to confirm. It is irreversible in practice, and the confirm button stays disabled until the text matches.</li>
+        <li style="font-size: 14px; line-height: 1.5; color: #525252">The 40 unresolved Level 400 students are broken out as held back rather than folded into the promoted count, because rolling over hides them — they stop appearing in any current-session list.</li>
+        <li style="font-size: 14px; line-height: 1.5; color: #525252">Rejected CSV rows name the row number and the actual fix, so the file can be corrected without guessing.</li>
+        <li style="font-size: 14px; line-height: 1.5; color: #525252">A claimed whitelist row is never overwritten — otherwise a re-upload could silently orphan a live account.</li>
+      </ul>
+    </div>
+    </sc-if>
+  </section>
+
+  <section style="margin-top: 64px; padding-top: 44px; border-top: 1px solid #E5E5E5">
+    <div style="display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap">
+      <p style="font-size: 12px; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; color: #A85E0A">Routes</p>
+      <code style="font-size: 15px; font-weight: 600; font-family: ui-monospace, SFMono-Regular, Menlo, monospace">/admin/disputes · /admin/students</code>
+    </div>
+    <h2 style="font-size: 24px; font-weight: 600; letter-spacing: -0.02em; margin-top: 10px">Registration disputes and student management</h2>
+    <p style="font-size: 16px; line-height: 1.55; color: #525252; max-width: 62ch; margin-top: 10px; text-wrap: pretty">Both actions here are soft: revoke freezes an account and frees the matric number, deactivate disables login and retires the number. Neither deletes a single attendance record.</p>
+
+    <div style="display: flex; gap: 24px; flex-wrap: wrap; margin-top: 24px; align-items: flex-start">
+      <figure style="flex: 1 1 460px; min-width: 460px">
+        <figcaption style="font-size: 12px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: #737373; margin-bottom: 10px">/admin/disputes · impostor claim</figcaption>
+        <div style="border: 1px solid #E5E5E5; background: #FFFFFF">
+          <div style="padding: 18px 20px; border-bottom: 1px solid #E5E5E5">
+            <h3 style="font-size: 20px; font-weight: 600; letter-spacing: -0.015em">Registration disputes</h3>
+            <p style="font-size: 14px; color: #525252; margin-top: 3px; font-variant-numeric: tabular-nums">2 open · 1 auto-flagged</p>
+          </div>
+          <div style="padding: 18px 20px; border-bottom: 1px solid #E5E5E5">
+            <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap">
+              <div style="min-width: 0">
+                <p style="font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums" translate="no">CMP/2021/047</p>
+                <p style="font-size: 14px; color: #525252; margin-top: 3px; font-variant-numeric: tabular-nums">Claimed 14 Sep 2025 · phone 0803 ••• •012</p>
+              </div>
+              <span style="display: inline-flex; align-items: center; gap: 6px; border: 1px solid #B91C1C; color: #B91C1C; padding: 4px 10px; font-size: 13px; font-weight: 600; flex: 0 0 auto"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg>Auto-flagged</span>
+            </div>
+            <div style="border: 1px solid #B91C1C; background: #FEE2E2; padding: 13px 15px; margin-top: 12px">
+              <p style="font-size: 14px; line-height: 1.55; color: #7F1D1D; text-wrap: pretty">This phone number has claimed <strong style="font-weight: 600">3 matric numbers</strong> across two levels. That is what a proxy ring looks like.</p>
+            </div>
+            <div style="background: #FAFAFA; border: 1px solid #E5E5E5; padding: 13px 15px; margin-top: 10px">
+              <p style="font-size: 13px; font-weight: 600; color: #737373">Reported by</p>
+              <p style="font-size: 14px; line-height: 1.55; color: #525252; margin-top: 5px; text-wrap: pretty">A student presented ID at the office claiming this is her matric number. Verified against the register by the office.</p>
+            </div>
+            <div style="display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap">
+              <button type="button" style="background: #B91C1C; color: #FFFFFF; border: 0; padding: 13px 18px; font-size: 15px; font-weight: 600; cursor: pointer; min-height: 44px; transition: background-color 120ms ease" style-hover="background: #991B1B" style-active="background: #7F1D1D">Revoke registration</button>
+              <button type="button" style="background: #FFFFFF; border: 1px solid #0A0A0A; padding: 12px 18px; font-size: 15px; font-weight: 500; cursor: pointer; min-height: 44px" style-hover="background: #F5F5F5">Dismiss</button>
+            </div>
+          </div>
+          <div style="padding: 18px 20px">
+            <p style="font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums" translate="no">MTH/2022/018</p>
+            <p style="font-size: 14px; color: #525252; margin-top: 3px; font-variant-numeric: tabular-nums">Claimed 22 Sep 2025 · phone 0805 ••• •447 · reported 2 days ago</p>
+          </div>
+        </div>
+      </figure>
+
+      <figure style="flex: 1 1 380px; min-width: 380px">
+        <figcaption style="font-size: 12px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: #737373; margin-bottom: 10px">Revoking · both effects stated</figcaption>
+        <div style="background: rgba(10,10,10,.45); padding: 32px 20px; display: grid; place-items: center">
+          <div role="dialog" aria-modal="true" aria-labelledby="dlg-rev" style="width: 100%; max-width: 420px; background: #FFFFFF; border: 1px solid #E5E5E5; box-shadow: 0 20px 48px rgba(10,10,10,.22)">
+            <div style="padding: 24px 24px 0">
+              <h3 id="dlg-rev" style="font-size: 20px; font-weight: 600; letter-spacing: -0.015em; text-wrap: balance">Revoke the registration on CMP/2021/047?</h3>
+              <p style="font-size: 15px; line-height: 1.55; color: #525252; margin-top: 10px; text-wrap: pretty">Two things happen, and neither deletes anything:</p>
+              <ul style="margin-top: 12px; display: grid; gap: 9px">
+                <li style="font-size: 15px; line-height: 1.5; color: #525252; display: flex; gap: 9px"><span style="flex: 0 0 auto; font-weight: 600; color: #0A0A0A">1</span>The existing account is frozen. Its attendance history is kept for investigation.</li>
+                <li style="font-size: 15px; line-height: 1.5; color: #525252; display: flex; gap: 9px"><span style="flex: 0 0 auto; font-weight: 600; color: #0A0A0A">2</span>The whitelist row is unclaimed, so the real student can register.</li>
+              </ul>
+              <div style="margin-top: 16px">
+                <label for="rv-why" style="display: block; font-size: 14px; font-weight: 600; margin-bottom: 6px">Reason <span style="color: #737373; font-weight: 400">· recorded in the audit log</span></label>
+                <textarea id="rv-why" rows="2" placeholder="Student presented ID at the office; phone number linked to 3 claims." style="width: 100%; font-size: 15px; padding: 11px 12px; border: 1px solid #767676; resize: vertical" style-focus="outline: 2px solid #A85E0A; outline-offset: 1px; border-color: #0A0A0A"></textarea>
+              </div>
+            </div>
+            <div style="display: flex; gap: 10px; justify-content: flex-end; padding: 20px 24px 24px; flex-wrap: wrap">
+              <button type="button" style="background: #FFFFFF; color: #0A0A0A; border: 1px solid #0A0A0A; padding: 11px 18px; font-size: 15px; font-weight: 500; cursor: pointer; min-height: 44px" style-hover="background: #F5F5F5">Cancel</button>
+              <button type="button" style="background: #B91C1C; color: #FFFFFF; border: 0; padding: 12px 18px; font-size: 15px; font-weight: 600; cursor: pointer; min-height: 44px; transition: background-color 120ms ease" style-hover="background: #991B1B">Revoke registration</button>
+            </div>
+          </div>
+        </div>
+      </figure>
+    </div>
+
+    <figure style="margin-top: 28px; border: 1px solid #E5E5E5; background: #FFFFFF">
+      <figcaption style="padding: 18px 24px; border-bottom: 1px solid #E5E5E5; display: flex; align-items: center; gap: 14px; flex-wrap: wrap">
+        <div>
+          <h3 style="font-size: 20px; font-weight: 600; letter-spacing: -0.015em">Students</h3>
+          <p style="font-size: 14px; color: #525252; margin-top: 3px; font-variant-numeric: tabular-nums">486 active · {{ selCount }} selected</p>
+        </div>
+        <div style="display: flex; gap: 8px; margin-left: auto; flex-wrap: wrap; align-items: center">
+          <input type="search" placeholder="Matric or surname" spellcheck="false" aria-label="Search students" style="font-size: 14px; padding: 10px 12px; border: 1px solid #767676; min-height: 44px; width: 200px">
+          <select aria-label="Filter by status" style="font-size: 14px; padding: 10px 12px; border: 1px solid #767676; min-height: 44px; background: #FFFFFF"><option>All statuses</option><option>Locked</option><option>Cleared</option></select>
+          <button type="button" style="background: #FFFFFF; border: 1px solid #B91C1C; color: #B91C1C; padding: 10px 16px; font-size: 14px; font-weight: 600; cursor: pointer; min-height: 44px" style-hover="background: #FEE2E2">{{ deactivateLabel }}</button>
+        </div>
+      </figcaption>
+      <table style="width: 100%; border-collapse: collapse; font-size: 14px">
+        <thead>
+          <tr style="background: #FAFAFA">
+            <th scope="col" style="width: 48px; padding: 11px 0 11px 24px; border-bottom: 1px solid #E5E5E5"><input type="checkbox" aria-label="Select all students" style="width: 18px; height: 18px; accent-color: #FF9935"></th>
+            <th scope="col" style="text-align: left; padding: 11px 12px; font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #525252; border-bottom: 1px solid #E5E5E5">Student</th>
+            <th scope="col" style="text-align: left; padding: 11px 12px; font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #525252; border-bottom: 1px solid #E5E5E5">Programme</th>
+            <th scope="col" style="text-align: right; padding: 11px 12px; font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #525252; border-bottom: 1px solid #E5E5E5">Level</th>
+            <th scope="col" style="text-align: left; padding: 11px 12px; font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #525252; border-bottom: 1px solid #E5E5E5">Clearance</th>
+            <th scope="col" style="text-align: left; padding: 11px 24px; font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #525252; border-bottom: 1px solid #E5E5E5">Account</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style="border-bottom: 1px solid #E5E5E5; background: {{ row1Bg }}">
+            <td style="padding: 12px 0 12px 24px"><input type="checkbox" checked="{{ sel1 }}" onChange="{{ onSel1 }}" aria-label="Select Chidera Okonkwo" style="width: 18px; height: 18px; accent-color: #FF9935"></td>
+            <td style="padding: 12px"><p style="font-weight: 500">Chidera Okonkwo</p><p style="font-size: 13px; color: #525252; font-variant-numeric: tabular-nums" translate="no">CMP/2021/047</p></td>
+            <td style="padding: 12px; color: #525252">Computer Science</td>
+            <td style="padding: 12px; text-align: right; font-variant-numeric: tabular-nums">400</td>
+            <td style="padding: 12px"><span style="display: inline-flex; align-items: center; gap: 6px; border: 1px dashed #949494; color: #525252; padding: 3px 9px; font-size: 12px; font-weight: 500">Provisional</span></td>
+            <td style="padding: 12px 24px"><span style="display: inline-flex; align-items: center; gap: 6px; background: #DCFCE7; color: #14532D; padding: 3px 9px; font-size: 12px; font-weight: 600">Active</span></td>
+          </tr>
+          <tr style="border-bottom: 1px solid #E5E5E5; background: {{ row2Bg }}">
+            <td style="padding: 12px 0 12px 24px"><input type="checkbox" checked="{{ sel2 }}" onChange="{{ onSel2 }}" aria-label="Select Halima Sanusi" style="width: 18px; height: 18px; accent-color: #FF9935"></td>
+            <td style="padding: 12px"><p style="font-weight: 500">Halima Sanusi</p><p style="font-size: 13px; color: #525252; font-variant-numeric: tabular-nums" translate="no">CMP/2021/112</p></td>
+            <td style="padding: 12px; color: #525252">Computer Science</td>
+            <td style="padding: 12px; text-align: right; font-variant-numeric: tabular-nums">400</td>
+            <td style="padding: 12px"><span style="display: inline-flex; align-items: center; gap: 6px; background: #B91C1C; color: #FFFFFF; padding: 3px 9px; font-size: 12px; font-weight: 600">Locked</span></td>
+            <td style="padding: 12px 24px"><span style="display: inline-flex; align-items: center; gap: 6px; background: #DCFCE7; color: #14532D; padding: 3px 9px; font-size: 12px; font-weight: 600">Active</span></td>
+          </tr>
+          <tr style="border-bottom: 1px solid #E5E5E5">
+            <td style="padding: 12px 0 12px 24px"><input type="checkbox" aria-label="Select Tunde Adeyemi-Cole" style="width: 18px; height: 18px; accent-color: #FF9935"></td>
+            <td style="padding: 12px"><p style="font-weight: 500">Tunde Adeyemi-Cole</p><p style="font-size: 13px; color: #737373; font-variant-numeric: tabular-nums" translate="no">MTH/2022/018</p></td>
+            <td style="padding: 12px; color: #525252">Mathematics</td>
+            <td style="padding: 12px; text-align: right; font-variant-numeric: tabular-nums">300</td>
+            <td style="padding: 12px"><span style="display: inline-flex; align-items: center; gap: 6px; background: #DCFCE7; color: #14532D; padding: 3px 9px; font-size: 12px; font-weight: 600">Cleared</span></td>
+            <td style="padding: 12px 24px"><span style="display: inline-flex; align-items: center; gap: 6px; background: #DCFCE7; color: #14532D; padding: 3px 9px; font-size: 12px; font-weight: 600">Active</span></td>
+          </tr>
+          <tr>
+            <td style="padding: 12px 0 12px 24px"><input type="checkbox" aria-label="Select Emeka Nwosu" style="width: 18px; height: 18px; accent-color: #FF9935"></td>
+            <td style="padding: 12px"><p style="font-weight: 500; color: #525252">Emeka Nwosu</p><p style="font-size: 13px; color: #737373; font-variant-numeric: tabular-nums" translate="no">CMP/2019/203</p></td>
+            <td style="padding: 12px; color: #525252">Computer Science</td>
+            <td style="padding: 12px; text-align: right; color: #525252; font-variant-numeric: tabular-nums">400</td>
+            <td style="padding: 12px; color: #737373">—</td>
+            <td style="padding: 12px 24px"><span style="display: inline-flex; align-items: center; gap: 6px; border: 1px solid #767676; color: #525252; padding: 3px 9px; font-size: 12px; font-weight: 600">Withdrawn</span></td>
+          </tr>
+        </tbody>
+      </table>
+      <div style="padding: 14px 24px; border-top: 1px solid #E5E5E5; background: #FAFAFA">
+        <p style="font-size: 14px; line-height: 1.55; color: #525252; text-wrap: pretty">Deactivating is a soft delete: login is disabled, attendance history is kept, and the matric number is retired so it can never be reissued. The confirm dialog says all three and requires a category — Expelled, Withdrawn, Graduated or Other — plus a note.</p>
+      </div>
+    </figure>
+  </section>
+
+  <section style="margin-top: 64px; padding-top: 44px; border-top: 1px solid #E5E5E5">
+    <div style="display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap">
+      <p style="font-size: 12px; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; color: #A85E0A">Routes</p>
+      <code style="font-size: 15px; font-weight: 600; font-family: ui-monospace, SFMono-Regular, Menlo, monospace">/admin/config · /admin/payments · /admin/timetable · /admin/courses</code>
+    </div>
+    <h2 style="font-size: 24px; font-weight: 600; letter-spacing: -0.02em; margin-top: 10px">Configuration, payments, timetable and courses</h2>
+    <p style="font-size: 16px; line-height: 1.55; color: #525252; max-width: 62ch; margin-top: 10px; text-wrap: pretty">Configuration holds the geo-fence editor, which is the one admin screen that can silently break attendance for a whole hall — so each venue states its radius in metres and when it was last checked.</p>
+
+    <div style="display: flex; gap: 24px; flex-wrap: wrap; margin-top: 24px; align-items: flex-start">
+      <figure style="flex: 1 1 460px; min-width: 460px">
+        <figcaption style="font-size: 12px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: #737373; margin-bottom: 10px">/admin/config</figcaption>
+        <div style="border: 1px solid #E5E5E5; background: #FFFFFF">
+          <div style="padding: 18px 22px; border-bottom: 1px solid #E5E5E5">
+            <h3 style="font-size: 20px; font-weight: 600; letter-spacing: -0.015em">System configuration</h3>
+            <p style="font-size: 14px; color: #525252; margin-top: 3px; text-wrap: pretty">Every change here is confirmed and written to the audit log.</p>
+          </div>
+          <div style="padding: 18px 22px; border-bottom: 1px solid #E5E5E5; display: grid; gap: 16px">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap">
+              <div style="min-width: 0"><p style="font-size: 15px; font-weight: 600">Dues amount</p><p style="font-size: 13px; color: #737373; margin-top: 2px">Charged once per session</p></div>
+              <div style="display: flex; align-items: center; gap: 8px"><span style="font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums">₦5,000</span><button type="button" style="background: #FFFFFF; border: 1px solid #0A0A0A; padding: 10px 14px; font-size: 14px; font-weight: 500; cursor: pointer; min-height: 44px" style-hover="background: #F5F5F5">Change</button></div>
+            </div>
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; border-top: 1px solid #E5E5E5; padding-top: 16px">
+              <div style="min-width: 0"><p style="font-size: 15px; font-weight: 600">Resumption date</p><p style="font-size: 13px; color: #737373; margin-top: 2px">Starts the provisional window</p></div>
+              <div style="display: flex; align-items: center; gap: 8px"><span style="font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums">14 Sep 2025</span><button type="button" style="background: #FFFFFF; border: 1px solid #0A0A0A; padding: 10px 14px; font-size: 14px; font-weight: 500; cursor: pointer; min-height: 44px" style-hover="background: #F5F5F5">Change</button></div>
+            </div>
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; border-top: 1px solid #E5E5E5; padding-top: 16px">
+              <div style="min-width: 0"><p style="font-size: 15px; font-weight: 600">Provisional window</p><p style="font-size: 13px; color: #737373; margin-top: 2px">Days before attendance locks</p></div>
+              <div style="display: flex; align-items: center; gap: 8px"><span style="font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums">30 days</span><button type="button" style="background: #FFFFFF; border: 1px solid #0A0A0A; padding: 10px 14px; font-size: 14px; font-weight: 500; cursor: pointer; min-height: 44px" style-hover="background: #F5F5F5">Change</button></div>
+            </div>
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; border-top: 1px solid #E5E5E5; padding-top: 16px">
+              <div style="min-width: 0"><p style="font-size: 15px; font-weight: 600">Payment verification buffer</p><p style="font-size: 13px; color: #737373; margin-top: 2px">How long a transfer may sit pending</p></div>
+              <div style="display: flex; align-items: center; gap: 8px"><span style="font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums">8 hours</span><button type="button" style="background: #FFFFFF; border: 1px solid #0A0A0A; padding: 10px 14px; font-size: 14px; font-weight: 500; cursor: pointer; min-height: 44px" style-hover="background: #F5F5F5">Change</button></div>
+            </div>
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; border-top: 1px solid #E5E5E5; padding-top: 16px">
+              <div style="min-width: 0"><p style="font-size: 15px; font-weight: 600">Location retention</p><p style="font-size: 13px; color: #737373; margin-top: 2px; text-wrap: pretty">Before coordinates are purged. The pass-or-fail result is kept.</p></div>
+              <div style="display: flex; align-items: center; gap: 8px"><span style="font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums">30 days</span><button type="button" style="background: #FFFFFF; border: 1px solid #0A0A0A; padding: 10px 14px; font-size: 14px; font-weight: 500; cursor: pointer; min-height: 44px" style-hover="background: #F5F5F5">Change</button></div>
+            </div>
+          </div>
+          <div style="padding: 18px 22px">
+            <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap">
+              <p style="font-size: 15px; font-weight: 600">Lecture hall geo-fences</p>
+              <button type="button" style="background: #FFFFFF; border: 1px solid #0A0A0A; padding: 10px 14px; font-size: 14px; font-weight: 500; cursor: pointer; min-height: 44px" style-hover="background: #F5F5F5">Add a venue</button>
+            </div>
+            <div style="border: 1px solid #E5E5E5; margin-top: 12px">
+              <div style="padding: 13px 15px; border-bottom: 1px solid #E5E5E5; display: flex; align-items: center; gap: 14px; flex-wrap: wrap">
+                <p style="font-size: 15px; font-weight: 600; flex: 0 0 56px" translate="no">LT1</p>
+                <p style="font-size: 14px; color: #525252; font-variant-numeric: tabular-nums">40 m radius</p>
+                <p style="font-size: 13px; color: #737373; margin-left: auto; font-variant-numeric: tabular-nums">Checked 12 Sep</p>
+                <button type="button" style="background: #FFFFFF; border: 1px solid #767676; padding: 9px 13px; font-size: 14px; cursor: pointer; min-height: 44px" style-hover="background: #F5F5F5">Edit</button>
+              </div>
+              <div style="padding: 13px 15px; border-bottom: 1px solid #E5E5E5; display: flex; align-items: center; gap: 14px; flex-wrap: wrap">
+                <p style="font-size: 15px; font-weight: 600; flex: 0 0 56px" translate="no">LT2</p>
+                <p style="font-size: 14px; color: #525252; font-variant-numeric: tabular-nums">35 m radius</p>
+                <p style="font-size: 13px; color: #737373; margin-left: auto; font-variant-numeric: tabular-nums">Checked 12 Sep</p>
+                <button type="button" style="background: #FFFFFF; border: 1px solid #767676; padding: 9px 13px; font-size: 14px; cursor: pointer; min-height: 44px" style-hover="background: #F5F5F5">Edit</button>
+              </div>
+              <div style="padding: 13px 15px; background: #FEE2E2; display: flex; align-items: center; gap: 14px; flex-wrap: wrap">
+                <p style="font-size: 15px; font-weight: 600; flex: 0 0 56px" translate="no">LT4</p>
+                <p style="font-size: 14px; color: #7F1D1D; font-weight: 600; font-variant-numeric: tabular-nums">30 m radius</p>
+                <p style="font-size: 13px; color: #7F1D1D; margin-left: auto; font-variant-numeric: tabular-nums">34 rejections today</p>
+                <button type="button" style="background: #FFFFFF; border: 1px solid #B91C1C; color: #B91C1C; padding: 9px 13px; font-size: 14px; font-weight: 600; cursor: pointer; min-height: 44px" style-hover="background: #FECACA">Edit</button>
+              </div>
+            </div>
+            <p style="font-size: 13px; color: #737373; margin-top: 10px; text-wrap: pretty">The editor shows a map with the fence drawn on it. No student's coordinates are ever plotted on that map.</p>
+          </div>
+        </div>
+      </figure>
+
+      <figure style="flex: 1 1 420px; min-width: 420px">
+        <figcaption style="font-size: 12px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: #737373; margin-bottom: 10px">/admin/payments · needing attention</figcaption>
+        <div style="border: 1px solid #E5E5E5; background: #FFFFFF">
+          <div style="padding: 18px 20px; border-bottom: 1px solid #E5E5E5; display: flex; align-items: center; gap: 14px; flex-wrap: wrap">
+            <div>
+              <h3 style="font-size: 20px; font-weight: 600; letter-spacing: -0.015em">Payments</h3>
+              <p style="font-size: 14px; color: #525252; margin-top: 3px; font-variant-numeric: tabular-nums">7 need attention · 1,842 settled</p>
+            </div>
+            <select aria-label="Filter by status" style="margin-left: auto; font-size: 14px; padding: 10px 12px; border: 1px solid #767676; min-height: 44px; background: #FFFFFF"><option>Needs attention</option><option>All transactions</option></select>
+          </div>
+          <table style="width: 100%; border-collapse: collapse; font-size: 14px">
+            <thead>
+              <tr style="background: #FAFAFA">
+                <th scope="col" style="text-align: left; padding: 11px 20px; font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #525252; border-bottom: 1px solid #E5E5E5">Reference</th>
+                <th scope="col" style="text-align: right; padding: 11px 10px; font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #525252; border-bottom: 1px solid #E5E5E5">Amount</th>
+                <th scope="col" style="text-align: left; padding: 11px 10px; font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #525252; border-bottom: 1px solid #E5E5E5">Status</th>
+                <th scope="col" style="text-align: left; padding: 11px 20px; font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #525252; border-bottom: 1px solid #E5E5E5">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr style="border-bottom: 1px solid #E5E5E5">
+                <td style="padding: 12px 20px"><p style="font-variant-numeric: tabular-nums; font-weight: 500" translate="no">DF-8842190</p><p style="font-size: 13px; color: #737373; font-variant-numeric: tabular-nums" translate="no">CMP/2021/112 · transfer · 19h ago</p></td>
+                <td style="padding: 12px 10px; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums">₦5,000</td>
+                <td style="padding: 12px 10px"><span style="display: inline-flex; align-items: center; gap: 6px; background: #DBEAFE; color: #1E3A8A; padding: 3px 9px; font-size: 12px; font-weight: 600">Unverified</span></td>
+                <td style="padding: 12px 20px"><button type="button" style="background: #FFFFFF; border: 1px solid #0A0A0A; padding: 9px 13px; font-size: 14px; font-weight: 500; cursor: pointer; min-height: 44px" style-hover="background: #F5F5F5">Re-verify</button></td>
+              </tr>
+              <tr style="border-bottom: 1px solid #E5E5E5">
+                <td style="padding: 12px 20px"><p style="font-variant-numeric: tabular-nums; font-weight: 500" translate="no">DF-8841077</p><p style="font-size: 13px; color: #737373; font-variant-numeric: tabular-nums" translate="no">MTH/2022/018 · card · 1d ago</p></td>
+                <td style="padding: 12px 10px; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums">₦5,000</td>
+                <td style="padding: 12px 10px"><span style="display: inline-flex; align-items: center; gap: 6px; background: #B91C1C; color: #FFFFFF; padding: 3px 9px; font-size: 12px; font-weight: 600">Webhook failed</span></td>
+                <td style="padding: 12px 20px"><button type="button" style="background: #FFFFFF; border: 1px solid #0A0A0A; padding: 9px 13px; font-size: 14px; font-weight: 500; cursor: pointer; min-height: 44px" style-hover="background: #F5F5F5">Re-verify</button></td>
+              </tr>
+              <tr>
+                <td style="padding: 12px 20px"><p style="font-variant-numeric: tabular-nums; font-weight: 500" translate="no">DF-8840913</p><p style="font-size: 13px; color: #737373; font-variant-numeric: tabular-nums" translate="no">STA/2023/044 · transfer · 2d ago</p></td>
+                <td style="padding: 12px 10px; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums">₦5,000</td>
+                <td style="padding: 12px 10px"><span style="display: inline-flex; align-items: center; gap: 6px; background: #DBEAFE; color: #1E3A8A; padding: 3px 9px; font-size: 12px; font-weight: 600"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="animation: spin 900ms linear infinite" aria-hidden="true"><path d="M21 12a9 9 0 1 1-6.219-8.56"></path></svg>Checking</span></td>
+                <td style="padding: 12px 20px"><p style="font-size: 13px; color: #737373">Asking the gateway…</p></td>
+              </tr>
+            </tbody>
+          </table>
+          <div style="padding: 14px 20px; border-top: 1px solid #E5E5E5; background: #FAFAFA">
+            <p style="font-size: 14px; line-height: 1.55; color: #525252; text-wrap: pretty">A cleared re-verification counts the student's provisional sessions immediately and notifies them.</p>
+          </div>
+        </div>
+      </figure>
+    </div>
+
+    <div style="display: flex; gap: 24px; flex-wrap: wrap; margin-top: 28px; align-items: flex-start">
+      <figure style="flex: 1 1 460px; min-width: 460px">
+        <figcaption style="font-size: 12px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: #737373; margin-bottom: 10px">/admin/timetable</figcaption>
+        <div style="border: 1px solid #E5E5E5; background: #FFFFFF">
+          <div style="padding: 18px 20px; border-bottom: 1px solid #E5E5E5; display: flex; align-items: center; gap: 14px; flex-wrap: wrap">
+            <div>
+              <h3 style="font-size: 20px; font-weight: 600; letter-spacing: -0.015em">Timetable</h3>
+              <p style="font-size: 14px; color: #525252; margin-top: 3px; font-variant-numeric: tabular-nums">2025/2026 · 34 recurring entries</p>
+            </div>
+            <div style="display: flex; gap: 8px; margin-left: auto; flex-wrap: wrap">
+              <button type="button" style="background: #FFFFFF; border: 1px solid #0A0A0A; padding: 10px 14px; font-size: 14px; font-weight: 500; cursor: pointer; min-height: 44px" style-hover="background: #F5F5F5">Copy from 2024/2025</button>
+              <button type="button" style="background: #FF9935; color: #0A0A0A; border: 0; padding: 11px 14px; font-size: 14px; font-weight: 600; cursor: pointer; min-height: 44px; transition: background-color 120ms ease" style-hover="background: #E58419">Add entry</button>
+            </div>
+          </div>
+          <table style="width: 100%; border-collapse: collapse; font-size: 14px">
+            <thead>
+              <tr style="background: #FAFAFA">
+                <th scope="col" style="text-align: left; padding: 11px 20px; font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #525252; border-bottom: 1px solid #E5E5E5">Course</th>
+                <th scope="col" style="text-align: left; padding: 11px 10px; font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #525252; border-bottom: 1px solid #E5E5E5">Day &amp; time</th>
+                <th scope="col" style="text-align: left; padding: 11px 10px; font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #525252; border-bottom: 1px solid #E5E5E5">Venue</th>
+                <th scope="col" style="text-align: left; padding: 11px 20px; font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #525252; border-bottom: 1px solid #E5E5E5">Lecturer</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr style="border-bottom: 1px solid #E5E5E5">
+                <td style="padding: 12px 20px; font-weight: 500; font-variant-numeric: tabular-nums" translate="no">CMP 301</td>
+                <td style="padding: 12px 10px; font-variant-numeric: tabular-nums">Tue 10:00–12:00</td>
+                <td style="padding: 12px 10px" translate="no">LT2</td>
+                <td style="padding: 12px 20px; color: #525252">Dr K. Adebayo</td>
+              </tr>
+              <tr style="border-bottom: 1px solid #E5E5E5">
+                <td style="padding: 12px 20px; font-weight: 500; font-variant-numeric: tabular-nums" translate="no">CMP 405</td>
+                <td style="padding: 12px 10px; font-variant-numeric: tabular-nums">Tue 14:00–16:00</td>
+                <td style="padding: 12px 10px" translate="no">LT4</td>
+                <td style="padding: 12px 20px; color: #525252">Dr K. Adebayo</td>
+              </tr>
+              <tr style="border-bottom: 1px solid #E5E5E5">
+                <td style="padding: 12px 20px; font-weight: 500; font-variant-numeric: tabular-nums" translate="no">MTH 205</td>
+                <td style="padding: 12px 10px; font-variant-numeric: tabular-nums">Tue 14:00–16:00</td>
+                <td style="padding: 12px 10px" translate="no">LT1</td>
+                <td style="padding: 12px 20px; color: #525252">Prof. M. Balogun</td>
+              </tr>
+              <tr>
+                <td style="padding: 12px 20px; font-weight: 500; font-variant-numeric: tabular-nums" translate="no">STA 202</td>
+                <td style="padding: 12px 10px; font-variant-numeric: tabular-nums">Thu 09:00–11:00</td>
+                <td style="padding: 12px 10px" translate="no">LT3</td>
+                <td style="padding: 12px 20px; color: #525252">Dr O. Ilesanmi</td>
+              </tr>
+            </tbody>
+          </table>
+          <div style="padding: 14px 20px; border-top: 1px solid #E5E5E5; background: #FAFAFA">
+            <p style="font-size: 14px; line-height: 1.55; color: #525252; text-wrap: pretty">Previous sessions stay archived and read-only. Lecturers reschedule individual classes themselves; this is only the recurring baseline.</p>
+          </div>
+        </div>
+      </figure>
+
+      <figure style="flex: 1 1 400px; min-width: 400px">
+        <figcaption style="font-size: 12px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: #737373; margin-bottom: 10px">/admin/courses</figcaption>
+        <div style="border: 1px solid #E5E5E5; background: #FFFFFF">
+          <div style="padding: 18px 20px; border-bottom: 1px solid #E5E5E5; display: flex; align-items: center; gap: 14px; flex-wrap: wrap">
+            <div>
+              <h3 style="font-size: 20px; font-weight: 600; letter-spacing: -0.015em">Courses &amp; lecturers</h3>
+              <p style="font-size: 14px; color: #525252; margin-top: 3px; font-variant-numeric: tabular-nums">22 courses · 9 lecturer accounts</p>
+            </div>
+            <button type="button" style="margin-left: auto; background: #FF9935; color: #0A0A0A; border: 0; padding: 11px 14px; font-size: 14px; font-weight: 600; cursor: pointer; min-height: 44px; transition: background-color 120ms ease" style-hover="background: #E58419">Add course</button>
+          </div>
+          <table style="width: 100%; border-collapse: collapse; font-size: 14px">
+            <thead>
+              <tr style="background: #FAFAFA">
+                <th scope="col" style="text-align: left; padding: 11px 20px; font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #525252; border-bottom: 1px solid #E5E5E5">Course</th>
+                <th scope="col" style="text-align: right; padding: 11px 10px; font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #525252; border-bottom: 1px solid #E5E5E5">Level</th>
+                <th scope="col" style="text-align: right; padding: 11px 10px; font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #525252; border-bottom: 1px solid #E5E5E5">Enrolled</th>
+                <th scope="col" style="text-align: left; padding: 11px 20px; font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #525252; border-bottom: 1px solid #E5E5E5">Lecturer</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr style="border-bottom: 1px solid #E5E5E5">
+                <td style="padding: 12px 20px"><p style="font-weight: 500" translate="no">CMP 301</p><p style="font-size: 13px; color: #737373">Operating Systems</p></td>
+                <td style="padding: 12px 10px; text-align: right; font-variant-numeric: tabular-nums">400</td>
+                <td style="padding: 12px 10px; text-align: right; font-variant-numeric: tabular-nums">68</td>
+                <td style="padding: 12px 20px; color: #525252">Dr K. Adebayo</td>
+              </tr>
+              <tr style="border-bottom: 1px solid #E5E5E5">
+                <td style="padding: 12px 20px"><p style="font-weight: 500" translate="no">MTH 205</p><p style="font-size: 13px; color: #737373">Linear Algebra</p></td>
+                <td style="padding: 12px 10px; text-align: right; font-variant-numeric: tabular-nums">300</td>
+                <td style="padding: 12px 10px; text-align: right; font-variant-numeric: tabular-nums">94</td>
+                <td style="padding: 12px 20px; color: #525252">Prof. M. Balogun</td>
+              </tr>
+              <tr style="border-bottom: 1px solid #E5E5E5">
+                <td style="padding: 12px 20px"><p style="font-weight: 500" translate="no">STA 202</p><p style="font-size: 13px; color: #737373">Probability II</p></td>
+                <td style="padding: 12px 10px; text-align: right; font-variant-numeric: tabular-nums">300</td>
+                <td style="padding: 12px 10px; text-align: right; font-variant-numeric: tabular-nums">77</td>
+                <td style="padding: 12px 20px; color: #525252">Dr O. Ilesanmi</td>
+              </tr>
+              <tr>
+                <td style="padding: 12px 20px"><p style="font-weight: 500" translate="no">CMP 405</p><p style="font-size: 13px; color: #737373">Compilers</p></td>
+                <td style="padding: 12px 10px; text-align: right; font-variant-numeric: tabular-nums">400</td>
+                <td style="padding: 12px 10px; text-align: right; font-variant-numeric: tabular-nums">61</td>
+                <td style="padding: 12px 20px"><span style="color: #B91C1C; font-weight: 600">Unassigned</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </figure>
+    </div>
+  </section>
+
+  <section style="margin-top: 64px; padding-top: 44px; border-top: 1px solid #E5E5E5">
+    <div style="display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap">
+      <p style="font-size: 12px; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; color: #A85E0A">Route</p>
+      <code style="font-size: 15px; font-weight: 600; font-family: ui-monospace, SFMono-Regular, Menlo, monospace">/admin/audit</code>
+      <span style="font-size: 13px; color: #737373">admin · read-only</span>
+    </div>
+    <h2 style="font-size: 24px; font-weight: 600; letter-spacing: -0.02em; margin-top: 10px">Audit log</h2>
+    <p style="font-size: 16px; line-height: 1.55; color: #525252; max-width: 62ch; margin-top: 10px; text-wrap: pretty">Every reason field in the other twenty-five screens ends up here. No edit, no delete, not even for an admin — the log is the reason the authority actions can be trusted.</p>
+
+    <figure style="margin-top: 24px; border: 1px solid #E5E5E5; background: #FFFFFF">
+      <figcaption style="padding: 18px 24px; border-bottom: 1px solid #E5E5E5; display: flex; align-items: center; gap: 12px; flex-wrap: wrap">
+        <div>
+          <h3 style="font-size: 20px; font-weight: 600; letter-spacing: -0.015em">Audit log</h3>
+          <p style="font-size: 14px; color: #525252; margin-top: 3px; font-variant-numeric: tabular-nums">1,284 entries · read-only</p>
+        </div>
+        <div style="display: flex; gap: 8px; margin-left: auto; flex-wrap: wrap">
+          <select aria-label="Filter by actor" style="font-size: 14px; padding: 10px 12px; border: 1px solid #767676; min-height: 44px; background: #FFFFFF"><option>All actors</option><option>Prof. A. Balogun</option><option>S. Okoro</option></select>
+          <select aria-label="Filter by action" style="font-size: 14px; padding: 10px 12px; border: 1px solid #767676; min-height: 44px; background: #FFFFFF"><option>All actions</option><option>Grace period</option><option>Waiver</option></select>
+          <button type="button" style="background: #FFFFFF; border: 1px solid #0A0A0A; padding: 10px 16px; font-size: 14px; font-weight: 500; cursor: pointer; min-height: 44px" style-hover="background: #F5F5F5">Export</button>
+        </div>
+      </figcaption>
+      <table style="width: 100%; border-collapse: collapse; font-size: 14px">
+        <thead>
+          <tr style="background: #FAFAFA">
+            <th scope="col" style="text-align: left; padding: 11px 24px; font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #525252; border-bottom: 1px solid #E5E5E5">When</th>
+            <th scope="col" style="text-align: left; padding: 11px 12px; font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #525252; border-bottom: 1px solid #E5E5E5">Who</th>
+            <th scope="col" style="text-align: left; padding: 11px 12px; font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #525252; border-bottom: 1px solid #E5E5E5">Action</th>
+            <th scope="col" style="text-align: left; padding: 11px 24px; font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #525252; border-bottom: 1px solid #E5E5E5">Reason given</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style="border-bottom: 1px solid #E5E5E5">
+            <td style="padding: 12px 24px; color: #525252; font-variant-numeric: tabular-nums; white-space: nowrap">27 Jul 09:14</td>
+            <td style="padding: 12px 12px"><p style="font-weight: 500">S. Okoro</p><p style="font-size: 13px; color: #737373">Admin</p></td>
+            <td style="padding: 12px 12px"><p style="font-weight: 500">Level rollover</p><p style="font-size: 13px; color: #737373; font-variant-numeric: tabular-nums">486 students → 2026/2027</p></td>
+            <td style="padding: 12px 24px; color: #525252; line-height: 1.5">Start of session</td>
+          </tr>
+          <tr style="border-bottom: 1px solid #E5E5E5">
+            <td style="padding: 12px 24px; color: #525252; font-variant-numeric: tabular-nums; white-space: nowrap">21 Jul 13:47</td>
+            <td style="padding: 12px 12px"><p style="font-weight: 500">Dr K. Adebayo</p><p style="font-size: 13px; color: #737373">Lecturer</p></td>
+            <td style="padding: 12px 12px"><p style="font-weight: 500">Paper attendance batch</p><p style="font-size: 13px; color: #737373; font-variant-numeric: tabular-nums" translate="no">CMP 301 · 5 entries</p></td>
+            <td style="padding: 12px 24px; color: #525252; line-height: 1.5">Campus network was down from 09:50. Signed paper sheet held in the department office.</td>
+          </tr>
+          <tr style="border-bottom: 1px solid #E5E5E5">
+            <td style="padding: 12px 24px; color: #525252; font-variant-numeric: tabular-nums; white-space: nowrap">18 Jul 16:20</td>
+            <td style="padding: 12px 12px"><p style="font-weight: 500">S. Okoro</p><p style="font-size: 13px; color: #737373">Admin</p></td>
+            <td style="padding: 12px 12px"><p style="font-weight: 500">Registration revoked</p><p style="font-size: 13px; color: #737373; font-variant-numeric: tabular-nums" translate="no">CMP/2021/047</p></td>
+            <td style="padding: 12px 24px; color: #525252; line-height: 1.5">Student presented ID at the office; phone number linked to 3 claims.</td>
+          </tr>
+          <tr style="border-bottom: 1px solid #E5E5E5">
+            <td style="padding: 12px 24px; color: #525252; font-variant-numeric: tabular-nums; white-space: nowrap">14 Jul 10:33</td>
+            <td style="padding: 12px 12px"><p style="font-weight: 500">Prof. A. Balogun</p><p style="font-size: 13px; color: #737373">HOD</p></td>
+            <td style="padding: 12px 12px"><p style="font-weight: 500">Eligibility list authorized</p><p style="font-size: 13px; color: #737373; font-variant-numeric: tabular-nums" translate="no">CMP 301 · 46 eligible, 22 not</p></td>
+            <td style="padding: 12px 24px; color: #525252; line-height: 1.5">End of semester, all sessions held.</td>
+          </tr>
+          <tr>
+            <td style="padding: 12px 24px; color: #525252; font-variant-numeric: tabular-nums; white-space: nowrap">12 Jul 11:02</td>
+            <td style="padding: 12px 12px"><p style="font-weight: 500">Prof. A. Balogun</p><p style="font-size: 13px; color: #737373">HOD</p></td>
+            <td style="padding: 12px 12px"><p style="font-weight: 500">Grace period opened</p><p style="font-size: 13px; color: #737373; font-variant-numeric: tabular-nums">Level 400 · 89 students · until 11 Aug</p></td>
+            <td style="padding: 12px 24px; color: #525252; line-height: 1.5">Bank transfer delays reported across Level 400 after the portal outage.</td>
+          </tr>
+        </tbody>
+      </table>
+      <div style="padding: 14px 24px; border-top: 1px solid #E5E5E5; background: #FAFAFA; display: flex; align-items: center; gap: 12px; flex-wrap: wrap">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#525252" stroke-width="2" stroke-linecap="round" style="flex: 0 0 auto" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+        <p style="font-size: 14px; color: #525252; text-wrap: pretty">Append-only. There is no delete control on this page for any role, including admin.</p>
+      </div>
+    </figure>
+
+    <sc-if value="{{ showAnnotations }}" hint-placeholder-val="{{ true }}">
+    <div style="background: #FFF4E8; padding: 18px 20px; margin-top: 20px">
+      <p style="font-size: 12px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: #A85E0A">Carried through the whole system</p>
+      <ul style="margin-top: 12px; display: grid; gap: 9px">
+        <li style="font-size: 14px; line-height: 1.55; color: #525252; text-wrap: pretty"><strong style="color: #0A0A0A; font-weight: 600">Admin never sees a named student in academic trouble.</strong> No at-risk list, no attendance percentages — those live in the HOD's routes. This role gets counts, queues and transactions.</li>
+        <li style="font-size: 14px; line-height: 1.55; color: #525252; text-wrap: pretty"><strong style="color: #0A0A0A; font-weight: 600">Nothing is ever deleted.</strong> Revoke freezes and unclaims; deactivate disables login and retires the matric number. Attendance history survives both.</li>
+        <li style="font-size: 14px; line-height: 1.55; color: #525252; text-wrap: pretty"><strong style="color: #0A0A0A; font-weight: 600">The geo-fence editor plots the fence, never a student.</strong> Coordinates are checked, kept 30 days as a pass-or-fail, and shown to nobody.</li>
+        <li style="font-size: 14px; line-height: 1.55; color: #525252; text-wrap: pretty"><strong style="color: #0A0A0A; font-weight: 600">Six groups, forty-one routes.</strong> Every orange surface carries black text at 9.30:1, provisional is dashed with no fill everywhere it appears, and no state is signalled by colour alone.</li>
+      </ul>
+    </div>
+    </sc-if>
+  </section>
+
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;showAnnotations&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Spec sheet&quot;}}">
+class Component extends DCLogic {
+  state = { sel1: true, sel2: true };
+
+  renderVals() {
+    const n = (this.state.sel1 ? 1 : 0) + (this.state.sel2 ? 1 : 0);
+    return {
+      showAnnotations: this.props.showAnnotations ?? true,
+      sel1: this.state.sel1,
+      sel2: this.state.sel2,
+      onSel1: e => this.setState({ sel1: e.target.checked }),
+      onSel2: e => this.setState({ sel2: e.target.checked }),
+      selCount: n,
+      row1Bg: this.state.sel1 ? '#FFE7CE' : '#FFFFFF',
+      row2Bg: this.state.sel2 ? '#FFE7CE' : '#FFFFFF',
+      deactivateLabel: n ? `Deactivate ${n}` : 'Deactivate'
+    };
+  }
+}
+
+</script>
+</body>
+</html>

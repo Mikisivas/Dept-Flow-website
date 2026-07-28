@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #FAFAFA; color: #0A0A0A; font-family: Inter, system-ui, -apple-system, sans-serif; font-size: 16px; -webkit-font-smoothing: antialiased; }
+  h1, h2, h3, h4, p, ul, ol, figure, table { margin: 0; }
+  ul { padding: 0; list-style: none; }
+  a { color: #A85E0A; text-decoration: underline; text-underline-offset: 2px; }
+  a:hover { color: #C96E10; }
+  button, input, textarea, select { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid #A85E0A; outline-offset: 2px; }
+  @keyframes skel { 0% { opacity: .55; } 50% { opacity: 1; } 100% { opacity: .55; } }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+</style>
+</helmet>
+
+<div style="max-width: 1280px; margin: 0 auto; padding: 0 24px 120px">
+
+  <header style="padding: 64px 0 40px; border-bottom: 1px solid #E5E5E5">
+    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 28px">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 2 4 4.6v7.1c0 4.9 3.3 8.6 8 10.3 4.7-1.7 8-5.4 8-10.3V4.6z" fill="#FF9935" stroke="#0A0A0A" stroke-width="1.5"></path><rect x="8" y="9" width="8" height="5.4" fill="#0A0A0A"></rect><rect x="10.4" y="15" width="3.2" height="1.5" fill="#0A0A0A"></rect></svg>
+      <span style="font-size: 15px; font-weight: 600; letter-spacing: -0.01em">Dept-Flow</span>
+      <span style="font-size: 13px; color: #737373">SAMACOSS</span>
+    </div>
+    <p style="font-size: 12px; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; color: #737373; margin-bottom: 12px">Group 4 of 6 · Lecturer pages</p>
+    <h1 style="font-size: 32px; font-weight: 600; letter-spacing: -0.025em; line-height: 1.15; max-width: 26ch; text-wrap: balance">Six routes, operated standing up in front of a class</h1>
+    <p style="font-size: 16px; line-height: 1.55; color: #525252; max-width: 62ch; margin-top: 16px; text-wrap: pretty">The lecturer holds a phone in one hand and a marker in the other. Session control gets one primary action at a time and a code big enough to copy onto a whiteboard from across the room. The paper fallback is deliberately the heaviest screen in the product.</p>
+  </header>
+
+  <section style="margin-top: 56px">
+    <div style="display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap">
+      <p style="font-size: 12px; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; color: #A85E0A">Route</p>
+      <code style="font-size: 15px; font-weight: 600; font-family: ui-monospace, SFMono-Regular, Menlo, monospace">/lecturer</code>
+      <span style="font-size: 13px; color: #737373">lecturer · 3 states</span>
+    </div>
+    <h2 style="font-size: 24px; font-weight: 600; letter-spacing: -0.02em; margin-top: 10px">Lecturer dashboard</h2>
+    <p style="font-size: 16px; line-height: 1.55; color: #525252; max-width: 62ch; margin-top: 10px; text-wrap: pretty">An open session outranks everything — a lecturer who forgot to close one is the most expensive mistake on this screen, so it sits above today's classes with its own resume action.</p>
+
+    <div style="display: flex; gap: 24px; flex-wrap: wrap; margin-top: 24px; align-items: flex-start">
+
+      <figure style="width: 390px; flex: 0 0 auto">
+        <figcaption style="font-size: 12px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: #737373; margin-bottom: 10px">Session in progress</figcaption>
+        <div style="border: 1px solid #E5E5E5; background: #FFFFFF">
+          <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid #E5E5E5; min-height: 56px">
+            <div style="display: flex; align-items: center; gap: 8px">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 2 4 4.6v7.1c0 4.9 3.3 8.6 8 10.3 4.7-1.7 8-5.4 8-10.3V4.6z" fill="#FF9935" stroke="#0A0A0A" stroke-width="1.5"></path><rect x="8" y="9" width="8" height="5.4" fill="#0A0A0A"></rect><rect x="10.4" y="15" width="3.2" height="1.5" fill="#0A0A0A"></rect></svg>
+              <span style="font-size: 15px; font-weight: 600; letter-spacing: -0.01em">Dept-Flow</span>
+              <span style="font-size: 11px; font-weight: 600; color: #A85E0A; background: #FFF4E8; padding: 2px 6px; letter-spacing: 0.04em">LECTURER</span>
+            </div>
+            <button type="button" aria-label="Your account" style="width: 44px; height: 44px; display: grid; place-items: center; background: none; border: 0; cursor: pointer" style-hover="background: #F5F5F5"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0A0A0A" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg></button>
+          </div>
+
+          <div style="border: 2px solid #0A0A0A; margin: 16px; padding: 16px">
+            <div style="display: flex; align-items: center; gap: 8px">
+              <span style="width: 9px; height: 9px; background: #B91C1C; border-radius: 50%; flex: 0 0 auto; animation: pulse 1.6s ease-in-out infinite" aria-hidden="true"></span>
+              <p style="font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #B91C1C">Session open · 42 min</p>
+            </div>
+            <p style="font-size: 20px; font-weight: 600; margin-top: 10px; letter-spacing: -0.015em" translate="no">CMP 301 · Operating Systems</p>
+            <p style="font-size: 14px; color: #525252; margin-top: 2px; font-variant-numeric: tabular-nums">LT2 · started 10:04</p>
+            <div style="display: flex; align-items: center; gap: 14px; margin-top: 14px">
+              <div style="display: flex; gap: 4px; flex: 0 0 auto" role="img" aria-label="Checkpoint one issued, checkpoint two not yet">
+                <div style="width: 20px; height: 30px; background: #FF9935; border: 1px solid #FF9935"></div>
+                <div style="width: 20px; height: 30px; background: #FFFFFF; border: 1px solid #767676"></div>
+              </div>
+              <p style="font-size: 15px; color: #525252; font-variant-numeric: tabular-nums">34 recorded · checkpoint 2 pending</p>
+            </div>
+            <a href="#session" style="display: block; background: #FF9935; color: #0A0A0A; padding: 15px 16px; font-size: 17px; font-weight: 600; text-decoration: none; margin-top: 16px; min-height: 56px; transition: background-color 120ms ease" style-hover="background: #E58419" style-active="background: #C96E10">Resume session</a>
+          </div>
+
+          <div style="padding: 4px 16px 20px">
+            <p style="font-size: 12px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: #737373">Also today</p>
+            <div style="border: 1px solid #E5E5E5; padding: 14px 16px; margin-top: 12px">
+              <p style="font-size: 17px; font-weight: 600" translate="no">CMP 405 · Compilers</p>
+              <p style="font-size: 14px; color: #525252; margin-top: 2px; font-variant-numeric: tabular-nums">14:00–16:00 · LT4 · 61 enrolled</p>
+              <button type="button" style="width: 100%; background: #FFFFFF; color: #0A0A0A; border: 1px solid #0A0A0A; padding: 13px 16px; font-size: 16px; font-weight: 500; cursor: pointer; min-height: 48px; text-align: left; margin-top: 12px; transition: background-color 120ms ease" style-hover="background: #F5F5F5">Start session</button>
+            </div>
+          </div>
+
+          <div style="border-top: 1px solid #E5E5E5; padding: 18px 16px 8px">
+            <p style="font-size: 12px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: #737373">Recent sessions</p>
+          </div>
+          <a href="#review" style="display: block; padding: 14px 16px; border-bottom: 1px solid #E5E5E5; text-decoration: none; color: #0A0A0A; transition: background-color 120ms ease" style-hover="background: #FFF4E8">
+            <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px">
+              <div style="min-width: 0"><p style="font-size: 16px; font-weight: 600" translate="no">CMP 301</p><p style="font-size: 14px; color: #525252; margin-top: 1px; font-variant-numeric: tabular-nums">Tue 21 Jul</p></div>
+              <p style="font-size: 15px; font-variant-numeric: tabular-nums; color: #525252">52 of 68</p>
+            </div>
+          </a>
+          <a href="#review" style="display: block; padding: 14px 16px; border-bottom: 1px solid #E5E5E5; text-decoration: none; color: #0A0A0A; transition: background-color 120ms ease" style-hover="background: #FFF4E8">
+            <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px">
+              <div style="min-width: 0"><p style="font-size: 16px; font-weight: 600" translate="no">CMP 405</p><p style="font-size: 14px; color: #525252; margin-top: 1px; font-variant-numeric: tabular-nums">Mon 20 Jul · paper register</p></div>
+              <p style="font-size: 15px; font-variant-numeric: tabular-nums; color: #525252">47 of 61</p>
+            </div>
+          </a>
+
+          <div style="border-top: 1px solid #E5E5E5; background: #FFFFFF; padding: 8px 8px 12px; display: grid; grid-template-columns: repeat(4, 1fr)">
+            <a href="#lecturer" aria-current="page" style="display: grid; justify-items: center; gap: 4px; padding: 15px 0 8px; min-height: 44px; text-decoration: none; color: #A85E0A; border-top: 2px solid #FF9935; margin-top: -9px"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"></path><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg><span style="font-size: 12px; font-weight: 600">Today</span></a>
+            <a href="#courses" style="display: grid; justify-items: center; gap: 4px; padding: 8px 0; min-height: 44px; text-decoration: none; color: #525252"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H19a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H6.5a1 1 0 0 1 0-5H20"></path></svg><span style="font-size: 12px">Courses</span></a>
+            <a href="#schedule" style="display: grid; justify-items: center; gap: 4px; padding: 8px 0; min-height: 44px; text-decoration: none; color: #525252"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect width="18" height="18" x="3" y="4" rx="2"></rect><path d="M3 10h18"></path><path d="M8 2v4"></path><path d="M16 2v4"></path></svg><span style="font-size: 12px">Schedule</span></a>
+            <a href="#profile" style="display: grid; justify-items: center; gap: 4px; padding: 8px 0; min-height: 44px; text-decoration: none; color: #525252"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg><span style="font-size: 12px">You</span></a>
+          </div>
+        </div>
+      </figure>
+
+      <figure style="width: 390px; flex: 0 0 auto">
+        <figcaption style="font-size: 12px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: #737373; margin-bottom: 10px">Classes scheduled · nothing open</figcaption>
+        <div style="border: 1px solid #E5E5E5; background: #FFFFFF">
+          <div style="display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid #E5E5E5; min-height: 56px">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 2 4 4.6v7.1c0 4.9 3.3 8.6 8 10.3 4.7-1.7 8-5.4 8-10.3V4.6z" fill="#FF9935" stroke="#0A0A0A" stroke-width="1.5"></path><rect x="8" y="9" width="8" height="5.4" fill="#0A0A0A"></rect><rect x="10.4" y="15" width="3.2" height="1.5" fill="#0A0A0A"></rect></svg>
+            <span style="font-size: 15px; font-weight: 600; letter-spacing: -0.01em">Dept-Flow</span>
+            <span style="font-size: 11px; font-weight: 600; color: #A85E0A; background: #FFF4E8; padding: 2px 6px; letter-spacing: 0.04em">LECTURER</span>
+          </div>
+          <div style="padding: 20px 16px">
+            <p style="font-size: 12px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: #737373">Tuesday 27 July</p>
+            <h3 style="font-size: 24px; font-weight: 600; letter-spacing: -0.02em; margin-top: 8px">Two classes today</h3>
+          </div>
+          <div style="padding: 0 16px 16px">
+            <div style="border: 2px solid #0A0A0A; padding: 16px">
+              <p style="font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #A85E0A">Starts in 12 minutes</p>
+              <p style="font-size: 19px; font-weight: 600; margin-top: 8px; letter-spacing: -0.015em" translate="no">CMP 301 · Operating Systems</p>
+              <p style="font-size: 14px; color: #525252; margin-top: 2px; font-variant-numeric: tabular-nums">10:00–12:00 · LT2 · 68 enrolled</p>
+              <button type="button" style="width: 100%; background: #FF9935; color: #0A0A0A; border: 0; padding: 15px 16px; font-size: 17px; font-weight: 600; cursor: pointer; min-height: 56px; text-align: left; margin-top: 14px; transition: background-color 120ms ease" style-hover="background: #E58419" style-active="background: #C96E10">Start session</button>
+            </div>
+            <div style="border: 1px solid #E5E5E5; padding: 14px 16px; margin-top: 10px">
+              <p style="font-size: 17px; font-weight: 600" translate="no">CMP 405 · Compilers</p>
+              <p style="font-size: 14px; color: #525252; margin-top: 2px; font-variant-numeric: tabular-nums">14:00–16:00 · LT4 · 61 enrolled</p>
+              <p style="font-size: 14px; color: #737373; margin-top: 8px">Starts in 4 hours</p>
+            </div>
+          </div>
+          <div style="border-top: 1px solid #E5E5E5; padding: 18px 16px 22px; background: #FAFAFA">
+            <p style="font-size: 12px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: #737373">Quick actions</p>
+            <div style="display: grid; gap: 8px; margin-top: 12px">
+              <a href="#schedule" style="display: flex; align-items: center; justify-content: space-between; gap: 12px; background: #FFFFFF; border: 1px solid #E5E5E5; padding: 13px 16px; min-height: 48px; font-size: 16px; font-weight: 500; color: #0A0A0A; text-decoration: none; transition: background-color 120ms ease" style-hover="background: #FFF4E8">Schedule a makeup class<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg></a>
+              <a href="#courses" style="display: flex; align-items: center; justify-content: space-between; gap: 12px; background: #FFFFFF; border: 1px solid #E5E5E5; padding: 13px 16px; min-height: 48px; font-size: 16px; font-weight: 500; color: #0A0A0A; text-decoration: none; transition: background-color 120ms ease" style-hover="background: #FFF4E8">My courses<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg></a>
+            </div>
+          </div>
+        </div>
+      </figure>
+
+      <figure style="width: 390px; flex: 0 0 auto">
+        <figcaption style="font-size: 12px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: #737373; margin-bottom: 10px">No classes today</figcaption>
+        <div style="border: 1px solid #E5E5E5; background: #FFFFFF">
+          <div style="display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid #E5E5E5; min-height: 56px">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 2 4 4.6v7.1c0 4.9 3.3 8.6 8 10.3 4.7-1.7 8-5.4 8-10.3V4.6z" fill="#FF9935" stroke="#0A0A0A" stroke-width="1.5"></path><rect x="8" y="9" width="8" height="5.4" fill="#0A0A0A"></rect><rect x="10.4" y="15" width="3.2" height="1.5" fill="#0A0A0A"></rect></svg>
+            <span style="font-size: 15px; font-weight: 600; letter-spacing: -0.01em">Dept-Flow</span>
+            <span style="font-size: 11px; font-weight: 600; color: #A85E0A; background: #FFF4E8; padding: 2px 6px; letter-spacing: 0.04em">LECTURER</span>
+          </div>
+          <div style="padding: 48px 20px 52px">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#737373" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><rect width="18" height="18" x="3" y="4" rx="2"></rect><path d="M3 10h18"></path><path d="M8 2v4"></path><path d="M16 2v4"></path></svg>
+            <h3 style="font-size: 20px; font-weight: 600; margin-top: 16px; letter-spacing: -0.015em; text-wrap: balance">No classes scheduled today</h3>
+            <p style="font-size: 15px; line-height: 1.55; color: #525252; margin-top: 8px; text-wrap: pretty">Your next class is CMP 301 on Thursday at 10:00.</p>
+            <a href="#schedule" style="display: inline-flex; align-items: center; min-height: 44px; font-size: 15px; font-weight: 600; margin-top: 10px">Add a makeup class</a>
+          </div>
+        </div>
+      </figure>
+    </div>
+  </section>
+
+  <section style="margin-top: 64px; padding-top: 44px; border-top: 1px solid #E5E5E5">
+    <div style="display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap">
+      <p style="font-size: 12px; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; color: #A85E0A">Route</p>
+      <code style="font-size: 15px; font-weight: 600; font-family: ui-monospace, SFMono-Regular, Menlo, monospace">/lecturer/session/[id]</code>
+      <span style="font-size: 13px; color: #737373">lecturer · 5 states</span>
+      <span style="display: inline-flex; align-items: center; gap: 6px; background: #FFF4E8; color: #A85E0A; padding: 3px 9px; font-size: 12px; font-weight: 600">Live, in front of a class</span>
+    </div>
+    <h2 style="font-size: 24px; font-weight: 600; letter-spacing: -0.02em; margin-top: 10px">Session control</h2>
+    <p style="font-size: 16px; line-height: 1.55; color: #525252; max-width: 62ch; margin-top: 10px; text-wrap: pretty">The code is set at 88px because it gets copied onto a whiteboard by someone glancing down at a phone on a lectern. Everything else on the screen is subordinate to it.</p>
+
+    <div style="display: flex; gap: 24px; flex-wrap: wrap; margin-top: 24px; align-items: flex-start">
+
+      <figure style="width: 390px; flex: 0 0 auto">
+        <figcaption style="font-size: 12px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: #737373; margin-bottom: 10px">Open · no checkpoint yet</figcaption>
+        <div style="border: 1px solid #E5E5E5; background: #FFFFFF">
+          <div style="padding: 16px; border-bottom: 1px solid #E5E5E5">
+            <div style="display: flex; align-items: center; gap: 8px">
+              <span style="width: 9px; height: 9px; background: #B91C1C; border-radius: 50%; flex: 0 0 auto; animation: pulse 1.6s ease-in-out infinite" aria-hidden="true"></span>
+              <p style="font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #B91C1C; font-variant-numeric: tabular-nums">Session open · 8 min</p>
+            </div>
+            <p style="font-size: 19px; font-weight: 600; margin-top: 8px; letter-spacing: -0.015em" translate="no">CMP 301</p>
+            <p style="font-size: 14px; color: #525252; margin-top: 2px; font-variant-numeric: tabular-nums">LT2 · started 10:04 · 68 enrolled</p>
+          </div>
+          <div style="padding: 28px 16px 24px; text-align: left">
+            <div style="display: flex; gap: 4px; margin-bottom: 18px" role="img" aria-label="Neither checkpoint issued yet">
+              <div style="width: 24px; height: 36px; background: #FFFFFF; border: 1px solid #767676"></div>
+              <div style="width: 24px; height: 36px; background: #FFFFFF; border: 1px solid #767676"></div>
+            </div>
+            <p style="font-size: 17px; font-weight: 600; text-wrap: pretty">No checkpoint called yet</p>
+            <p style="font-size: 15px; line-height: 1.55; color: #525252; margin-top: 6px; text-wrap: pretty">Call the first one when the class has settled. Students get a full mark only if they catch both.</p>
+            <button type="button" style="width: 100%; background: #FF9935; color: #0A0A0A; border: 0; padding: 18px; font-size: 18px; font-weight: 600; cursor: pointer; min-height: 64px; text-align: left; margin-top: 20px; transition: background-color 120ms ease" style-hover="background: #E58419" style-active="background: #C96E10">Generate checkpoint 1 code</button>
+          </div>
+          <div style="border-top: 1px solid #E5E5E5; padding: 16px">
+            <button type="button" style="width: 100%; background: #FFFFFF; color: #B91C1C; border: 1px solid #B91C1C; padding: 13px 16px; font-size: 16px; font-weight: 600; cursor: pointer; min-height: 48px; text-align: left; transition: background-color 120ms ease" style-hover="background: #FEE2E2">End session</button>
+          </div>
+        </div>
+      </figure>
+
+      <figure style="width: 390px; flex: 0 0 auto">
+        <figcaption style="font-size: 12px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: #737373; margin-bottom: 10px">Checkpoint live · the whiteboard moment</figcaption>
+        <div style="border: 1px solid #E5E5E5; background: #FFFFFF">
+          <div style="padding: 14px 16px; border-bottom: 1px solid #E5E5E5; display: flex; align-items: center; justify-content: space-between; gap: 12px">
+            <p style="font-size: 16px; font-weight: 600" translate="no">CMP 301 · LT2</p>
+            <p style="font-size: 14px; color: #525252; font-variant-numeric: tabular-nums">10:12</p>
+          </div>
+
+          <div style="padding: 20px 16px 24px; background: #FFF4E8">
+            <div style="display: flex; align-items: center; gap: 10px">
+              <div style="display: flex; gap: 3px; flex: 0 0 auto" role="img" aria-label="Checkpoint 1 of 2 live">
+                <div style="width: 16px; height: 26px; background: #FF9935; border: 1px solid #C96E10"></div>
+                <div style="width: 16px; height: 26px; background: #FFFFFF; border: 1px solid #767676"></div>
+              </div>
+              <p style="font-size: 15px; font-weight: 600">Checkpoint 1 of 2 · live</p>
+            </div>
+            <p style="font-size: 13px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: #A85E0A; margin-top: 18px">Write this on the board</p>
+            <p style="font-size: 88px; font-weight: 700; letter-spacing: 0.06em; line-height: 1; margin-top: 8px; font-variant-numeric: tabular-nums" translate="no">7391</p>
+            <div style="display: flex; align-items: center; gap: 8px; margin-top: 16px">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#B91C1C" stroke-width="2.5" stroke-linecap="round" style="flex: 0 0 auto" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+              <p aria-live="polite" style="font-size: 16px; font-weight: 600; color: #B91C1C; font-variant-numeric: tabular-nums">Expires in 2:14</p>
+            </div>
+            <div style="height: 6px; background: #FFFFFF; border: 1px solid #E5E5E5; margin-top: 8px; overflow: hidden"><div style="height: 100%; width: 74%; background: #B91C1C"></div></div>
+          </div>
+
+          <div style="padding: 18px 16px; border-bottom: 1px solid #E5E5E5">
+            <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px">
+              <p aria-live="polite" style="font-size: 28px; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -0.025em">34 recorded</p>
+              <p style="font-size: 15px; color: #525252; font-variant-numeric: tabular-nums">of 68</p>
+            </div>
+            <div style="height: 10px; background: #F5F5F5; border: 1px solid #E5E5E5; margin-top: 10px; overflow: hidden"><div style="height: 100%; width: 50%; background: #FF9935"></div></div>
+            <div style="display: flex; align-items: center; gap: 10px; border: 1px solid #B91C1C; padding: 11px 13px; margin-top: 14px">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#B91C1C" stroke-width="2.5" stroke-linecap="round" style="flex: 0 0 auto" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg>
+              <div style="min-width: 0">
+                <p style="font-size: 14px; font-weight: 600; color: #B91C1C; font-variant-numeric: tabular-nums">6 rejected</p>
+                <p style="font-size: 13px; color: #525252; margin-top: 1px">5 outside the hall · 1 expired code</p>
+              </div>
+              <a href="#rejected" style="margin-left: auto; display: inline-flex; align-items: center; min-height: 44px; font-size: 14px; font-weight: 600; flex: 0 0 auto">View</a>
+            </div>
+          </div>
+
+          <div style="padding: 14px 16px 16px">
+            <label for="lc-search" style="display: block; font-size: 14px; font-weight: 600; margin-bottom: 6px">Find a student</label>
+            <input id="lc-search" type="search" placeholder="Name or matric number" spellcheck="false" style="width: 100%; font-size: 16px; padding: 12px; border: 1px solid #767676; min-height: 48px" style-focus="outline: 2px solid #A85E0A; outline-offset: 1px; border-color: #0A0A0A">
+            <ul style="margin-top: 12px; display: grid">
+              <li style="display: flex; align-items: center; gap: 10px; padding: 11px 0; border-bottom: 1px solid #E5E5E5">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#15803D" stroke-width="2.5" stroke-linecap="round" style="flex: 0 0 auto" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="m9 12 2 2 4-4"></path></svg>
+                <div style="min-width: 0"><p style="font-size: 15px; font-weight: 500">Chidera Okonkwo</p><p style="font-size: 13px; color: #737373; font-variant-numeric: tabular-nums" translate="no">CMP/2021/047</p></div>
+                <p style="margin-left: auto; font-size: 13px; color: #525252; font-variant-numeric: tabular-nums; flex: 0 0 auto">10:12</p>
+              </li>
+              <li style="display: flex; align-items: center; gap: 10px; padding: 11px 0; border-bottom: 1px solid #E5E5E5">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#15803D" stroke-width="2.5" stroke-linecap="round" style="flex: 0 0 auto" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="m9 12 2 2 4-4"></path></svg>
+                <div style="min-width: 0"><p style="font-size: 15px; font-weight: 500">Halima Sanusi</p><p style="font-size: 13px; color: #737373; font-variant-numeric: tabular-nums" translate="no">CMP/2021/112</p></div>
+                <p style="margin-left: auto; font-size: 13px; color: #525252; font-variant-numeric: tabular-nums; flex: 0 0 auto">10:11</p>
+              </li>
+              <li style="display: flex; align-items: center; gap: 10px; padding: 11px 0">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#15803D" stroke-width="2.5" stroke-linecap="round" style="flex: 0 0 auto" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="m9 12 2 2 4-4"></path></svg>
+                <div style="min-width: 0"><p style="font-size: 15px; font-weight: 500">Tunde Adeyemi</p><p style="font-size: 13px; color: #737373; font-variant-numeric: tabular-nums" translate="no">CMP/2020/233</p></div>
+                <p style="margin-left: auto; font-size: 13px; color: #525252; font-variant-numeric: tabular-nums; flex: 0 0 auto">10:09</p>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </figure>
+
+      <figure style="width: 390px; flex: 0 0 auto">
+        <figcaption style="font-size: 12px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: #737373; margin-bottom: 10px">Expired, then both done</figcaption>
+        <div style="display: grid; gap: 20px">
+          <div style="border: 1px solid #E5E5E5; background: #FFFFFF">
+            <div style="padding: 14px 16px; border-bottom: 1px solid #E5E5E5"><p style="font-size: 16px; font-weight: 600" translate="no">CMP 301 · LT2</p></div>
+            <div style="padding: 22px 16px">
+              <div style="display: flex; align-items: center; gap: 10px">
+                <div style="display: flex; gap: 3px; flex: 0 0 auto" role="img" aria-label="Checkpoint 1 closed, checkpoint 2 not yet issued">
+                  <div style="width: 16px; height: 26px; background: #FF9935; border: 1px solid #C96E10"></div>
+                  <div style="width: 16px; height: 26px; background: #FFFFFF; border: 1px solid #767676"></div>
+                </div>
+                <p style="font-size: 15px; font-weight: 600">Checkpoint 1 closed</p>
+              </div>
+              <p style="font-size: 32px; font-weight: 600; margin-top: 14px; font-variant-numeric: tabular-nums; letter-spacing: -0.025em">41 recorded</p>
+              <p style="font-size: 15px; color: #525252; margin-top: 2px; font-variant-numeric: tabular-nums">of 68 · code 7391 expired at 10:15</p>
+              <p style="font-size: 15px; line-height: 1.55; color: #525252; margin-top: 14px; text-wrap: pretty">Call the second checkpoint near the end of class — that's what separates a full mark from a half.</p>
+              <button type="button" style="width: 100%; background: #FF9935; color: #0A0A0A; border: 0; padding: 18px; font-size: 18px; font-weight: 600; cursor: pointer; min-height: 64px; text-align: left; margin-top: 18px; transition: background-color 120ms ease" style-hover="background: #E58419" style-active="background: #C96E10">Generate checkpoint 2 code</button>
+            </div>
+          </div>
+
+          <div style="border: 1px solid #E5E5E5; background: #FFFFFF">
+            <div style="padding: 14px 16px; border-bottom: 1px solid #E5E5E5"><p style="font-size: 16px; font-weight: 600" translate="no">CMP 301 · LT2</p></div>
+            <div style="padding: 22px 16px">
+              <div style="display: flex; align-items: center; gap: 10px">
+                <div style="display: flex; gap: 3px; flex: 0 0 auto" role="img" aria-label="Both checkpoints complete">
+                  <div style="width: 16px; height: 26px; background: #FF9935; border: 1px solid #C96E10"></div>
+                  <div style="width: 16px; height: 26px; background: #FF9935; border: 1px solid #C96E10"></div>
+                </div>
+                <p style="font-size: 15px; font-weight: 600">Both checkpoints done</p>
+              </div>
+              <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: #E5E5E5; border: 1px solid #E5E5E5; margin-top: 16px">
+                <div style="background: #FFFFFF; padding: 14px 12px"><p style="font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums">38</p><p style="font-size: 13px; color: #525252; margin-top: 2px">full</p></div>
+                <div style="background: #FFFFFF; padding: 14px 12px"><p style="font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums">14</p><p style="font-size: 13px; color: #525252; margin-top: 2px">half</p></div>
+                <div style="background: #FFFFFF; padding: 14px 12px"><p style="font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums; color: #525252">16</p><p style="font-size: 13px; color: #525252; margin-top: 2px">absent</p></div>
+              </div>
+              <button type="button" style="width: 100%; background: #FF9935; color: #0A0A0A; border: 0; padding: 15px 16px; font-size: 17px; font-weight: 600; cursor: pointer; min-height: 56px; text-align: left; margin-top: 16px; transition: background-color 120ms ease" style-hover="background: #E58419" style-active="background: #C96E10">End session</button>
+              <p style="font-size: 14px; color: #525252; margin-top: 10px; text-wrap: pretty">Ending with both checkpoints needs no confirmation — the scoring is unambiguous.</p>
+            </div>
+          </div>
+        </div>
+      </figure>
+    </div>
+
+    <p style="font-size: 12px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: #737373; margin-top: 40px">Ending with only one checkpoint</p>
+    <div style="margin-top: 14px; background: rgba(10,10,10,.45); padding: 40px 20px; display: grid; place-items: center; min-height: 420px">
+      <div role="dialog" aria-modal="true" aria-labelledby="dlg-one" style="width: 100%; max-width: 440px; background: #FFFFFF; border: 1px solid #E5E5E5; box-shadow: 0 20px 48px rgba(10,10,10,.22)">
+        <div style="padding: 24px 24px 0">
+          <h3 id="dlg-one" style="font-size: 20px; font-weight: 600; letter-spacing: -0.015em; text-wrap: balance">End with only one checkpoint?</h3>
+          <p style="font-size: 15px; line-height: 1.55; color: #525252; margin-top: 10px; text-wrap: pretty">This session will be scored present or absent, not out of two checkpoints. The 41 students who answered get a full mark; nobody can earn a half.</p>
+          <div style="display: flex; align-items: center; gap: 16px; background: #FAFAFA; border: 1px solid #E5E5E5; padding: 14px 16px; margin-top: 16px">
+            <div style="display: flex; gap: 3px; flex: 0 0 auto" role="img" aria-label="Single wide cell, a one-checkpoint session">
+              <div style="width: 39px; height: 30px; background: #FF9935; border: 1px solid #C96E10"></div>
+            </div>
+            <p style="font-size: 14px; line-height: 1.5; color: #525252; text-wrap: pretty">Students see one wide cell, so the session is visibly not a pair.</p>
+          </div>
+        </div>
+        <div style="display: flex; gap: 10px; justify-content: flex-end; padding: 20px 24px 24px; flex-wrap: wrap">
+          <button type="button" style="background: #FFFFFF; color: #0A0A0A; border: 1px solid #0A0A0A; padding: 11px 18px; font-size: 15px; font-weight: 500; cursor: pointer; min-height: 44px; transition: background-color 120ms ease" style-hover="background: #F5F5F5">Call checkpoint 2</button>
+          <button type="button" style="background: #FF9935; color: #0A0A0A; border: 0; padding: 12px 18px; font-size: 15px; font-weight: 600; cursor: pointer; min-height: 44px; transition: background-color 120ms ease" style-hover="background: #E58419" style-active="background: #C96E10">End session anyway</button>
+        </div>
+      </div>
+    </div>
+
+    <sc-if value="{{ showAnnotations }}" hint-placeholder-val="{{ true }}">
+    <div style="background: #FFF4E8; padding: 18px 20px; margin-top: 16px">
+      <p style="font-size: 12px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: #A85E0A">Notes</p>
+      <ul style="margin-top: 10px; display: grid; gap: 7px">
+        <li style="font-size: 14px; line-height: 1.5; color: #525252">Filled checkpoint cells on this screen take a <span style="font-variant-numeric: tabular-nums">#C96E10</span> border, because a bare <span style="font-variant-numeric: tabular-nums">#FF9935</span> cell disappears against the <span style="font-variant-numeric: tabular-nums">#FFF4E8</span> panel.</li>
+        <li style="font-size: 14px; line-height: 1.5; color: #525252">The rejected counter is not decoration — five rejections outside the hall in one class is what a proxy attempt looks like from the lectern.</li>
+        <li style="font-size: 14px; line-height: 1.5; color: #525252">The cancel button in the one-checkpoint dialog is "Call checkpoint 2", not "Cancel" — it names the thing they probably meant to do.</li>
+        <li style="font-size: 14px; line-height: 1.5; color: #525252">Live counters carry <span style="font-family: ui-monospace, monospace">aria-live="polite"</span> so the count is announced without interrupting.</li>
+      </ul>
+    </div>
+    </sc-if>
+  </section>
+
+  <section style="margin-top: 64px; padding-top: 44px; border-top: 1px solid #E5E5E5">
+    <div style="display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap">
+      <p style="font-size: 12px; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; color: #A85E0A">Route</p>
+      <code style="font-size: 15px; font-weight: 600; font-family: ui-monospace, SFMono-Regular, Menlo, monospace">/lecturer/session/[id]/manual</code>
+      <span style="font-size: 13px; color: #737373">lecturer · 3 states</span>
+      <span style="display: inline-flex; align-items: center; gap: 6px; border: 1px solid #B91C1C; color: #B91C1C; padding: 3px 9px; font-size: 12px; font-weight: 600">Bypasses anti-proxy checks</span>
+    </div>
+    <h2 style="font-size: 24px; font-weight: 600; letter-spacing: -0.02em; margin-top: 10px">Manual attendance batch</h2>
+    <p style="font-size: 16px; line-height: 1.55; color: #525252; max-width: 62ch; margin-top: 10px; text-wrap: pretty">Transcribing a paper sign-in sheet after a network outage. This screen is deliberately heavier than the normal flow — a wider layout, a standing warning, and a justification that cannot be skipped.</p>
+
+    <div style="margin-top: 24px; border: 2px solid #B91C1C; background: #FFFFFF">
+      <div style="background: #FEE2E2; padding: 18px 24px">
+        <div style="display: flex; gap: 12px; align-items: flex-start">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#7F1D1D" stroke-width="2.5" stroke-linecap="round" style="flex: 0 0 auto; margin-top: 1px" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg>
+          <div style="min-width: 0">
+            <p style="font-size: 17px; font-weight: 600; color: #7F1D1D">These entries bypass the location check</p>
+            <p style="font-size: 15px; line-height: 1.55; color: #7F1D1D; margin-top: 6px; max-width: 72ch; text-wrap: pretty">Every row you submit is flagged as a paper entry, attributed to you, and reviewable by the HOD. Your department's rate of manual batches is visible on the lecturer oversight page.</p>
+          </div>
+        </div>
+      </div>
+
+      <div style="padding: 20px 24px; border-bottom: 1px solid #E5E5E5">
+        <h3 style="font-size: 20px; font-weight: 600; letter-spacing: -0.015em" translate="no">CMP 301 · Tuesday 21 July</h3>
+        <p style="font-size: 14px; color: #525252; margin-top: 4px; font-variant-numeric: tabular-nums">LT2 · 68 enrolled · no digital capture</p>
+        <div style="display: flex; align-items: center; gap: 20px; margin-top: 14px; flex-wrap: wrap">
+          <p style="font-size: 15px; font-variant-numeric: tabular-nums"><strong style="font-weight: 600">3</strong> full · <strong style="font-weight: 600">1</strong> half · <strong style="font-weight: 600">1</strong> absent</p>
+          <p style="font-size: 14px; color: #737373">Ticks mirror the two columns on your paper sheet.</p>
+        </div>
+      </div>
+
+      <table style="width: 100%; border-collapse: collapse; font-size: 15px">
+        <thead>
+          <tr style="background: #FAFAFA">
+            <th scope="col" style="text-align: left; padding: 11px 24px; font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #525252; border-bottom: 1px solid #E5E5E5">Student</th>
+            <th scope="col" style="text-align: center; padding: 11px 12px; font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #525252; border-bottom: 1px solid #E5E5E5">Checkpoint 1</th>
+            <th scope="col" style="text-align: center; padding: 11px 12px; font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #525252; border-bottom: 1px solid #E5E5E5">Checkpoint 2</th>
+            <th scope="col" style="text-align: left; padding: 11px 12px; font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #525252; border-bottom: 1px solid #E5E5E5">Marks</th>
+            <th scope="col" style="text-align: right; padding: 11px 24px; font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #525252; border-bottom: 1px solid #E5E5E5">Score</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style="border-bottom: 1px solid #E5E5E5">
+            <td style="padding: 12px 24px"><p style="font-weight: 500">Chidera Okonkwo</p><p style="font-size: 13px; color: #737373; font-variant-numeric: tabular-nums" translate="no">CMP/2021/047</p></td>
+            <td style="padding: 12px"><label style="display: grid; place-items: center; min-height: 44px; cursor: pointer"><input type="checkbox" checked="checked" aria-label="Chidera Okonkwo, checkpoint 1" style="width: 22px; height: 22px; accent-color: #FF9935"></label></td>
+            <td style="padding: 12px"><label style="display: grid; place-items: center; min-height: 44px; cursor: pointer"><input type="checkbox" checked="checked" aria-label="Chidera Okonkwo, checkpoint 2" style="width: 22px; height: 22px; accent-color: #FF9935"></label></td>
+            <td style="padding: 12px"><div style="display: flex; gap: 3px" role="img" aria-label="Both checkpoints"><div style="width: 14px; height: 24px; background: #FF9935; border: 1px solid #FF9935"></div><div style="width: 14px; height: 24px; background: #FF9935; border: 1px solid #FF9935"></div></div></td>
+            <td style="padding: 12px 24px; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums">1.0</td>
+          </tr>
+          <tr style="border-bottom: 1px solid #E5E5E5">
+            <td style="padding: 12px 24px"><p style="font-weight: 500">Halima Sanusi</p><p style="font-size: 13px; color: #737373; font-variant-numeric: tabular-nums" translate="no">CMP/2021/112</p></td>
+            <td style="padding: 12px"><label style="display: grid; place-items: center; min-height: 44px; cursor: pointer"><input type="checkbox" checked="checked" aria-label="Halima Sanusi, checkpoint 1" style="width: 22px; height: 22px; accent-color: #FF9935"></label></td>
+            <td style="padding: 12px"><label style="display: grid; place-items: center; min-height: 44px; cursor: pointer"><input type="checkbox" aria-label="Halima Sanusi, checkpoint 2" style="width: 22px; height: 22px; accent-color: #FF9935"></label></td>
+            <td style="padding: 12px"><div style="display: flex; gap: 3px" role="img" aria-label="First checkpoint only"><div style="width: 14px; height: 24px; background: #FF9935; border: 1px solid #FF9935"></div><div style="width: 14px; height: 24px; background: #FFFFFF; border: 1px solid #767676"></div></div></td>
+            <td style="padding: 12px 24px; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums">0.5</td>
+          </tr>
+          <tr style="border-bottom: 1px solid #E5E5E5">
+            <td style="padding: 12px 24px"><p style="font-weight: 500">Tunde Adeyemi</p><p style="font-size: 13px; color: #737373; font-variant-numeric: tabular-nums" translate="no">CMP/2020/233</p></td>
+            <td style="padding: 12px"><label style="display: grid; place-items: center; min-height: 44px; cursor: pointer"><input type="checkbox" aria-label="Tunde Adeyemi, checkpoint 1" style="width: 22px; height: 22px; accent-color: #FF9935"></label></td>
+            <td style="padding: 12px"><label style="display: grid; place-items: center; min-height: 44px; cursor: pointer"><input type="checkbox" aria-label="Tunde Adeyemi, checkpoint 2" style="width: 22px; height: 22px; accent-color: #FF9935"></label></td>
+            <td style="padding: 12px"><div style="display: flex; gap: 3px" role="img" aria-label="Neither checkpoint"><div style="width: 14px; height: 24px; background: #FFFFFF; border: 1px solid #767676"></div><div style="width: 14px; height: 24px; background: #FFFFFF; border: 1px solid #767676"></div></div></td>
+            <td style="padding: 12px 24px; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; color: #737373">0</td>
+          </tr>
+          <tr style="border-bottom: 1px solid #E5E5E5">
+            <td style="padding: 12px 24px"><p style="font-weight: 500">Ngozi Eze</p><p style="font-size: 13px; color: #737373; font-variant-numeric: tabular-nums" translate="no">CMP/2021/088</p></td>
+            <td style="padding: 12px"><label style="display: grid; place-items: center; min-height: 44px; cursor: pointer"><input type="checkbox" checked="checked" aria-label="Ngozi Eze, checkpoint 1" style="width: 22px; height: 22px; accent-color: #FF9935"></label></td>
+            <td style="padding: 12px"><label style="display: grid; place-items: center; min-height: 44px; cursor: pointer"><input type="checkbox" checked="checked" aria-label="Ngozi Eze, checkpoint 2" style="width: 22px; height: 22px; accent-color: #FF9935"></label></td>
+            <td style="padding: 12px"><div style="display: flex; gap: 3px" role="img" aria-label="Both checkpoints"><div style="width: 14px; height: 24px; background: #FF9935; border: 1px solid #FF9935"></div><div style="width: 14px; height: 24px; background: #FF9935; border: 1px solid #FF9935"></div></div></td>
+            <td style="padding: 12px 24px; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums">1.0</td>
+          </tr>
+          <tr>
+            <td style="padding: 12px 24px"><p style="font-weight: 500">Yusuf Bello</p><p style="font-size: 13px; color: #737373; font-variant-numeric: tabular-nums" translate="no">CMP/2021/151</p></td>
+            <td style="padding: 12px"><label style="display: grid; place-items: center; min-height: 44px; cursor: pointer"><input type="checkbox" checked="checked" aria-label="Yusuf Bello, checkpoint 1" style="width: 22px; height: 22px; accent-color: #FF9935"></label></td>
+            <td style="padding: 12px"><label style="display: grid; place-items: center; min-height: 44px; cursor: pointer"><input type="checkbox" checked="checked" aria-label="Yusuf Bello, checkpoint 2" style="width: 22px; height: 22px; accent-color: #FF9935"></label></td>
+            <td style="padding: 12px"><div style="display: flex; gap: 3px" role="img" aria-label="Both checkpoints"><div style="width: 14px; height: 24px; background: #FF9935; border: 1px solid #FF9935"></div><div style="width: 14px; height: 24px; background: #FF9935; border: 1px solid #FF9935"></div></div></td>
+            <td style="padding: 12px 24px; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums">1.0</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div style="padding: 22px 24px; border-top: 1px solid #E5E5E5; background: #FAFAFA">
+        <label for="mn-why" style="display: block; font-size: 15px; font-weight: 600; margin-bottom: 6px">Why was this recorded on paper? <span style="color: #525252; font-weight: 400">· required, stored in the audit log</span></label>
+        <textarea id="mn-why" rows="3" placeholder="Campus network was down from 09:50. Signed paper sheet held in the department office." style="width: 100%; max-width: 72ch; font-size: 15px; padding: 12px; border: 1px solid #767676; background: #FFFFFF; resize: vertical" style-focus="outline: 2px solid #A85E0A; outline-offset: 1px; border-color: #0A0A0A"></textarea>
+        <div style="display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap">
+          <button type="button" style="background: #FF9935; color: #0A0A0A; border: 0; padding: 13px 20px; font-size: 16px; font-weight: 600; cursor: pointer; min-height: 48px; transition: background-color 120ms ease" style-hover="background: #E58419" style-active="background: #C96E10">Submit 5 paper entries</button>
+          <button type="button" style="background: #FFFFFF; color: #0A0A0A; border: 1px solid #0A0A0A; padding: 12px 20px; font-size: 16px; font-weight: 500; cursor: pointer; min-height: 48px; transition: background-color 120ms ease" style-hover="background: #F5F5F5">Discard</button>
+        </div>
+      </div>
+    </div>
+
+    <div style="display: flex; gap: 24px; flex-wrap: wrap; margin-top: 24px; align-items: flex-start">
+      <figure style="flex: 1 1 420px; min-width: 420px">
+        <figcaption style="font-size: 13px; color: #737373; margin-bottom: 10px">Confirming · empty justification blocks submission</figcaption>
+        <div style="background: rgba(10,10,10,.45); padding: 32px 20px; display: grid; place-items: center">
+          <div role="dialog" aria-modal="true" aria-labelledby="dlg-man" style="width: 100%; max-width: 440px; background: #FFFFFF; border: 1px solid #E5E5E5; box-shadow: 0 20px 48px rgba(10,10,10,.22)">
+            <div style="padding: 24px 24px 0">
+              <h3 id="dlg-man" style="font-size: 20px; font-weight: 600; letter-spacing: -0.015em; text-wrap: balance">Submit 5 paper entries for CMP 301?</h3>
+              <p style="font-size: 15px; line-height: 1.55; color: #525252; margin-top: 10px; text-wrap: pretty">These are recorded without a location check and flagged for HOD review. They can't be edited afterwards — a correction has to go through a dispute.</p>
+              <div style="background: #FAFAFA; border: 1px solid #E5E5E5; padding: 14px 16px; margin-top: 16px; display: grid; gap: 8px">
+                <div style="display: flex; justify-content: space-between; gap: 16px"><span style="font-size: 14px; color: #525252">Full marks</span><span style="font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums">3</span></div>
+                <div style="display: flex; justify-content: space-between; gap: 16px"><span style="font-size: 14px; color: #525252">Half marks</span><span style="font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums">1</span></div>
+                <div style="display: flex; justify-content: space-between; gap: 16px"><span style="font-size: 14px; color: #525252">Recorded absent</span><span style="font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums">1</span></div>
+              </div>
+            </div>
+            <div style="display: flex; gap: 10px; justify-content: flex-end; padding: 20px 24px 24px; flex-wrap: wrap">
+              <button type="button" style="background: #FFFFFF; color: #0A0A0A; border: 1px solid #0A0A0A; padding: 11px 18px; font-size: 15px; font-weight: 500; cursor: pointer; min-height: 44px" style-hover="background: #F5F5F5">Back to the sheet</button>
+              <button type="button" style="background: #FF9935; color: #0A0A0A; border: 0; padding: 12px 18px; font-size: 15px; font-weight: 600; cursor: pointer; min-height: 44px; transition: background-color 120ms ease" style-hover="background: #E58419">Submit paper entries</button>
+            </div>
+          </div>
+        </div>
+      </figure>
+
+      <figure style="flex: 1 1 340px; min-width: 340px">
+        <figcaption style="font-size: 13px; color: #737373; margin-bottom: 10px">Justification empty · and submitted</figcaption>
+        <div style="display: grid; gap: 16px">
+          <div style="border: 1px solid #E5E5E5; background: #FFFFFF; padding: 20px">
+            <label for="mn-err" style="display: block; font-size: 15px; font-weight: 600; margin-bottom: 6px">Why was this recorded on paper?</label>
+            <textarea id="mn-err" rows="2" aria-invalid="true" style="width: 100%; font-size: 15px; padding: 12px; border: 2px solid #B91C1C; background: #FFFFFF; resize: vertical; outline: 2px solid #A85E0A; outline-offset: 1px"></textarea>
+            <p role="alert" style="font-size: 14px; font-weight: 600; color: #7F1D1D; margin-top: 8px; text-wrap: pretty">Say what happened. The HOD reads this when reviewing the batch.</p>
+          </div>
+          <div style="border: 1px solid #E5E5E5; background: #FFFFFF; padding: 24px 20px">
+            <div role="status" style="display: flex; gap: 12px; align-items: flex-start">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#15803D" stroke-width="2.5" stroke-linecap="round" style="flex: 0 0 auto" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="m9 12 2 2 4-4"></path></svg>
+              <div style="min-width: 0">
+                <p style="font-size: 18px; font-weight: 600; letter-spacing: -0.015em">5 paper entries recorded</p>
+                <p style="font-size: 15px; line-height: 1.55; color: #525252; margin-top: 6px; text-wrap: pretty">Students can see them on their course page, marked as paper. The HOD has been notified.</p>
+              </div>
+            </div>
+            <a href="#review" style="display: inline-flex; align-items: center; min-height: 44px; font-size: 15px; font-weight: 600; margin-top: 10px">Back to the session</a>
+          </div>
+        </div>
+      </figure>
+    </div>
+  </section>
+
+  <section style="margin-top: 64px; padding-top: 44px; border-top: 1px solid #E5E5E5">
+    <div style="display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap">
+      <p style="font-size: 12px; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; color: #A85E0A">Routes</p>
+      <code style="font-size: 15px; font-weight: 600; font-family: ui-monospace, SFMono-Regular, Menlo, monospace">/lecturer/session/[id]/review · /lecturer/schedule · /lecturer/courses</code>
+    </div>
+    <h2 style="font-size: 24px; font-weight: 600; letter-spacing: -0.02em; margin-top: 10px">Session review, schedule and courses</h2>
+    <p style="font-size: 16px; line-height: 1.55; color: #525252; max-width: 62ch; margin-top: 10px; text-wrap: pretty">Desktop-first, unlike the rest of the group — these are read at a desk after class, not held in one hand.</p>
+
+    <figure style="margin-top: 24px; border: 1px solid #E5E5E5; background: #FFFFFF">
+      <figcaption style="padding: 18px 24px; border-bottom: 1px solid #E5E5E5">
+        <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; flex-wrap: wrap">
+          <div>
+            <p style="font-size: 12px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: #737373">Session review · closed</p>
+            <h3 style="font-size: 22px; font-weight: 600; letter-spacing: -0.02em; margin-top: 6px" translate="no">CMP 301 · Tuesday 21 July</h3>
+            <p style="font-size: 14px; color: #525252; margin-top: 4px; font-variant-numeric: tabular-nums">LT2 · 10:04–12:00 · both checkpoints · 68 enrolled</p>
+          </div>
+          <div style="display: flex; gap: 10px; flex-wrap: wrap">
+            <button type="button" style="background: #FFFFFF; color: #0A0A0A; border: 1px solid #0A0A0A; padding: 11px 16px; font-size: 15px; font-weight: 500; cursor: pointer; min-height: 44px; transition: background-color 120ms ease" style-hover="background: #F5F5F5">Export</button>
+          </div>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 1px; background: #E5E5E5; border: 1px solid #E5E5E5; margin-top: 18px">
+          <div style="background: #FFFFFF; padding: 14px 16px"><p style="font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums">38</p><p style="font-size: 13px; color: #525252; margin-top: 2px">full marks</p></div>
+          <div style="background: #FFFFFF; padding: 14px 16px"><p style="font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums">14</p><p style="font-size: 13px; color: #525252; margin-top: 2px">half marks</p></div>
+          <div style="background: #FFFFFF; padding: 14px 16px"><p style="font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums; color: #525252">16</p><p style="font-size: 13px; color: #525252; margin-top: 2px">absent</p></div>
+          <div style="background: #FFFFFF; padding: 14px 16px"><p style="font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums; color: #B91C1C">6</p><p style="font-size: 13px; color: #525252; margin-top: 2px">flagged</p></div>
+        </div>
+      </figcaption>
+      <table style="width: 100%; border-collapse: collapse; font-size: 14px">
+        <thead>
+          <tr style="background: #FAFAFA">
+            <th scope="col" style="text-align: left; padding: 11px 24px; font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #525252; border-bottom: 1px solid #E5E5E5">Student</th>
+            <th scope="col" style="text-align: left; padding: 11px 12px; font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #525252; border-bottom: 1px solid #E5E5E5">Marks</th>
+            <th scope="col" style="text-align: right; padding: 11px 12px; font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #525252; border-bottom: 1px solid #E5E5E5">Score</th>
+            <th scope="col" style="text-align: left; padding: 11px 12px; font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #525252; border-bottom: 1px solid #E5E5E5">Times</th>
+            <th scope="col" style="text-align: left; padding: 11px 24px; font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #525252; border-bottom: 1px solid #E5E5E5">Note</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style="border-bottom: 1px solid #E5E5E5">
+            <td style="padding: 12px 24px"><p style="font-weight: 500">Chidera Okonkwo</p><p style="font-size: 13px; color: #737373; font-variant-numeric: tabular-nums" translate="no">CMP/2021/047</p></td>
+            <td style="padding: 12px"><div style="display: flex; gap: 3px" role="img" aria-label="Both checkpoints"><div style="width: 13px; height: 22px; background: #FF9935; border: 1px solid #FF9935"></div><div style="width: 13px; height: 22px; background: #FF9935; border: 1px solid #FF9935"></div></div></td>
+            <td style="padding: 12px; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums">1.0</td>
+            <td style="padding: 12px; color: #525252; font-variant-numeric: tabular-nums">10:12 · 11:48</td>
+            <td style="padding: 12px 24px; color: #737373">—</td>
+          </tr>
+          <tr style="border-bottom: 1px solid #E5E5E5">
+            <td style="padding: 12px 24px"><p style="font-weight: 500">Halima Sanusi</p><p style="font-size: 13px; color: #737373; font-variant-numeric: tabular-nums" translate="no">CMP/2021/112</p></td>
+            <td style="padding: 12px"><div style="display: flex; gap: 3px" role="img" aria-label="First checkpoint only"><div style="width: 13px; height: 22px; background: #FF9935; border: 1px solid #FF9935"></div><div style="width: 13px; height: 22px; background: #FFFFFF; border: 1px solid #767676"></div></div></td>
+            <td style="padding: 12px; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums">0.5</td>
+            <td style="padding: 12px; color: #525252; font-variant-numeric: tabular-nums">10:11 · —</td>
+            <td style="padding: 12px 24px; color: #737373">Left early</td>
+          </tr>
+          <tr style="border-bottom: 1px solid #E5E5E5; background: #FEE2E2">
+            <td style="padding: 12px 24px"><p style="font-weight: 500">Emeka Nwosu</p><p style="font-size: 13px; color: #737373; font-variant-numeric: tabular-nums" translate="no">CMP/2021/203</p></td>
+            <td style="padding: 12px"><div style="display: flex; gap: 3px" role="img" aria-label="Neither checkpoint"><div style="width: 13px; height: 22px; background: #FFFFFF; border: 1px solid #767676"></div><div style="width: 13px; height: 22px; background: #FFFFFF; border: 1px solid #767676"></div></div></td>
+            <td style="padding: 12px; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; color: #737373">0</td>
+            <td style="padding: 12px; color: #525252; font-variant-numeric: tabular-nums">—</td>
+            <td style="padding: 12px 24px"><span style="display: inline-flex; align-items: center; gap: 6px; border: 1px solid #B91C1C; color: #B91C1C; padding: 3px 8px; font-size: 12px; font-weight: 600"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg>3 tries, outside hall</span></td>
+          </tr>
+          <tr>
+            <td style="padding: 12px 24px"><p style="font-weight: 500">Ngozi Eze</p><p style="font-size: 13px; color: #737373; font-variant-numeric: tabular-nums" translate="no">CMP/2021/088</p></td>
+            <td style="padding: 12px"><div style="display: flex; gap: 3px" role="img" aria-label="Both checkpoints, from the paper register"><div style="width: 13px; height: 22px; background: #FF9935; border: 1px solid #FF9935"></div><div style="width: 13px; height: 22px; background: #FF9935; border: 1px solid #FF9935; position: relative; overflow: hidden"><div style="position: absolute; top: 0; right: 0; width: 0; height: 0; border-top: 7px solid #0A0A0A; border-left: 7px solid transparent"></div></div></div></td>
+            <td style="padding: 12px; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums">1.0</td>
+            <td style="padding: 12px; color: #525252; font-variant-numeric: tabular-nums">paper</td>
+            <td style="padding: 12px 24px; color: #737373">Entered by you, 21 Jul</td>
+          </tr>
+        </tbody>
+      </table>
+      <div style="padding: 16px 24px; border-top: 1px solid #E5E5E5; background: #FAFAFA">
+        <p style="font-size: 14px; line-height: 1.55; color: #525252; text-wrap: pretty">Digital capture was complete for this session, so "Enter paper register" is not offered. It appears only where capture was missing or partial.</p>
+      </div>
+    </figure>
+
+    <div style="display: flex; gap: 24px; flex-wrap: wrap; margin-top: 28px; align-items: flex-start">
+
+      <figure style="flex: 1 1 460px; min-width: 460px">
+        <figcaption style="font-size: 12px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: #737373; margin-bottom: 10px">/lecturer/schedule</figcaption>
+        <div style="border: 1px solid #E5E5E5; background: #FFFFFF">
+          <div style="padding: 18px 20px; border-bottom: 1px solid #E5E5E5; display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap">
+            <div>
+              <h3 style="font-size: 20px; font-weight: 600; letter-spacing: -0.015em">Your schedule</h3>
+              <p style="font-size: 14px; color: #525252; margin-top: 3px">Week of 27 July</p>
+            </div>
+            <button type="button" style="background: #FF9935; color: #0A0A0A; border: 0; padding: 12px 16px; font-size: 15px; font-weight: 600; cursor: pointer; min-height: 44px; transition: background-color 120ms ease" style-hover="background: #E58419" style-active="background: #C96E10">Add makeup class</button>
+          </div>
+          <div style="padding: 16px 20px; border-bottom: 1px solid #E5E5E5">
+            <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap">
+              <div style="min-width: 0">
+                <p style="font-size: 16px; font-weight: 600" translate="no">CMP 301 · Operating Systems</p>
+                <p style="font-size: 14px; color: #525252; margin-top: 2px; font-variant-numeric: tabular-nums">Tue 27 Jul · 10:00–12:00 · LT2</p>
+              </div>
+              <div style="display: flex; gap: 8px; flex-wrap: wrap">
+                <button type="button" style="background: #FFFFFF; border: 1px solid #0A0A0A; padding: 9px 14px; font-size: 14px; font-weight: 500; cursor: pointer; min-height: 44px" style-hover="background: #F5F5F5">Reschedule</button>
+                <button type="button" style="background: #FFFFFF; border: 1px solid #B91C1C; color: #B91C1C; padding: 9px 14px; font-size: 14px; font-weight: 600; cursor: pointer; min-height: 44px" style-hover="background: #FEE2E2">Cancel</button>
+              </div>
+            </div>
+          </div>
+          <div style="padding: 16px 20px; border-bottom: 1px solid #E5E5E5; background: #FFF4E8">
+            <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap">
+              <div style="min-width: 0">
+                <p style="font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #A85E0A">Makeup class</p>
+                <p style="font-size: 16px; font-weight: 600; margin-top: 5px" translate="no">CMP 301 · Operating Systems</p>
+                <p style="font-size: 14px; color: #525252; margin-top: 2px; font-variant-numeric: tabular-nums">Sat 26 Jul · 09:00–11:00 · LT2 · 68 notified</p>
+              </div>
+              <button type="button" style="background: #FFFFFF; border: 1px solid #B91C1C; color: #B91C1C; padding: 9px 14px; font-size: 14px; font-weight: 600; cursor: pointer; min-height: 44px" style-hover="background: #FEE2E2">Cancel</button>
+            </div>
+          </div>
+          <div style="padding: 16px 20px">
+            <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap">
+              <div style="min-width: 0">
+                <p style="font-size: 16px; font-weight: 600" translate="no">CMP 405 · Compilers</p>
+                <p style="font-size: 14px; color: #525252; margin-top: 2px; font-variant-numeric: tabular-nums">Tue 27 Jul · 14:00–16:00 · LT4</p>
+              </div>
+              <div style="display: flex; gap: 8px; flex-wrap: wrap">
+                <button type="button" style="background: #FFFFFF; border: 1px solid #0A0A0A; padding: 9px 14px; font-size: 14px; font-weight: 500; cursor: pointer; min-height: 44px" style-hover="background: #F5F5F5">Reschedule</button>
+                <button type="button" style="background: #FFFFFF; border: 1px solid #B91C1C; color: #B91C1C; padding: 9px 14px; font-size: 14px; font-weight: 600; cursor: pointer; min-height: 44px" style-hover="background: #FEE2E2">Cancel</button>
+              </div>
+            </div>
+          </div>
+          <div style="padding: 16px 20px; border-top: 1px solid #E5E5E5; background: #FAFAFA">
+            <p style="font-size: 14px; line-height: 1.55; color: #525252; text-wrap: pretty">All three actions notify enrolled students. None can be applied to a session that has already started.</p>
+          </div>
+        </div>
+      </figure>
+
+      <figure style="flex: 1 1 340px; min-width: 340px">
+        <figcaption style="font-size: 12px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: #737373; margin-bottom: 10px">Cancelling · the consequence, stated</figcaption>
+        <div style="background: rgba(10,10,10,.45); padding: 32px 20px; display: grid; place-items: center">
+          <div role="dialog" aria-modal="true" aria-labelledby="dlg-cancel" style="width: 100%; max-width: 420px; background: #FFFFFF; border: 1px solid #E5E5E5; box-shadow: 0 20px 48px rgba(10,10,10,.22)">
+            <div style="padding: 24px 24px 0">
+              <h3 id="dlg-cancel" style="font-size: 20px; font-weight: 600; letter-spacing: -0.015em; text-wrap: balance">Cancel Tuesday's CMP 301?</h3>
+              <p style="font-size: 15px; line-height: 1.55; color: #525252; margin-top: 10px; text-wrap: pretty">This session won't count toward anyone's total — it disappears from the denominator, so nobody is penalised. All 68 students are notified.</p>
+              <div style="margin-top: 16px">
+                <label for="cn-why" style="display: block; font-size: 14px; font-weight: 600; margin-bottom: 6px">Reason <span style="color: #737373; font-weight: 400">· shown to students</span></label>
+                <input id="cn-why" type="text" placeholder="Departmental meeting" style="width: 100%; font-size: 15px; padding: 11px 12px; border: 1px solid #767676; min-height: 44px" style-focus="outline: 2px solid #A85E0A; outline-offset: 1px; border-color: #0A0A0A">
+              </div>
+            </div>
+            <div style="display: flex; gap: 10px; justify-content: flex-end; padding: 20px 24px 24px; flex-wrap: wrap">
+              <button type="button" style="background: #FFFFFF; color: #0A0A0A; border: 1px solid #0A0A0A; padding: 11px 18px; font-size: 15px; font-weight: 500; cursor: pointer; min-height: 44px" style-hover="background: #F5F5F5">Keep it</button>
+              <button type="button" style="background: #B91C1C; color: #FFFFFF; border: 0; padding: 12px 18px; font-size: 15px; font-weight: 600; cursor: pointer; min-height: 44px; transition: background-color 120ms ease" style-hover="background: #991B1B">Cancel the class</button>
+            </div>
+          </div>
+        </div>
+      </figure>
+    </div>
+
+    <figure style="margin-top: 28px; border: 1px solid #E5E5E5; background: #FFFFFF">
+      <figcaption style="padding: 18px 24px; border-bottom: 1px solid #E5E5E5">
+        <p style="font-size: 12px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: #737373">/lecturer/courses</p>
+        <h3 style="font-size: 20px; font-weight: 600; letter-spacing: -0.015em; margin-top: 6px">My courses</h3>
+      </figcaption>
+      <table style="width: 100%; border-collapse: collapse; font-size: 14px">
+        <thead>
+          <tr style="background: #FAFAFA">
+            <th scope="col" style="text-align: left; padding: 11px 24px; font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #525252; border-bottom: 1px solid #E5E5E5">Course</th>
+            <th scope="col" style="text-align: right; padding: 11px 12px; font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #525252; border-bottom: 1px solid #E5E5E5">Enrolled</th>
+            <th scope="col" style="text-align: right; padding: 11px 12px; font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #525252; border-bottom: 1px solid #E5E5E5">Sessions held</th>
+            <th scope="col" style="text-align: right; padding: 11px 12px; font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #525252; border-bottom: 1px solid #E5E5E5">Average</th>
+            <th scope="col" style="text-align: left; padding: 11px 24px; font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #525252; border-bottom: 1px solid #E5E5E5">Below 75%</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style="border-bottom: 1px solid #E5E5E5; transition: background-color 100ms ease" style-hover="background: #FFF4E8">
+            <td style="padding: 13px 24px"><a href="#roster" style="font-weight: 600; color: #0A0A0A; text-decoration: none" style-hover="color: #A85E0A; text-decoration: underline"><span translate="no">CMP 301</span></a><br><span style="font-size: 13px; color: #737373">Operating Systems · Level 400</span></td>
+            <td style="padding: 13px 12px; text-align: right; font-variant-numeric: tabular-nums">68</td>
+            <td style="padding: 13px 12px; text-align: right; font-variant-numeric: tabular-nums">13</td>
+            <td style="padding: 13px 12px; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums">71%</td>
+            <td style="padding: 13px 24px; font-variant-numeric: tabular-nums"><span style="color: #B91C1C; font-weight: 600">22 students</span></td>
+          </tr>
+          <tr style="transition: background-color 100ms ease" style-hover="background: #FFF4E8">
+            <td style="padding: 13px 24px"><a href="#roster" style="font-weight: 600; color: #0A0A0A; text-decoration: none" style-hover="color: #A85E0A; text-decoration: underline"><span translate="no">CMP 405</span></a><br><span style="font-size: 13px; color: #737373">Compilers · Level 400</span></td>
+            <td style="padding: 13px 12px; text-align: right; font-variant-numeric: tabular-nums">61</td>
+            <td style="padding: 13px 12px; text-align: right; font-variant-numeric: tabular-nums">12</td>
+            <td style="padding: 13px 12px; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums">78%</td>
+            <td style="padding: 13px 24px; font-variant-numeric: tabular-nums"><span style="color: #B91C1C; font-weight: 600">9 students</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </figure>
+
+    <sc-if value="{{ showAnnotations }}" hint-placeholder-val="{{ true }}">
+    <div style="background: #FFF4E8; padding: 18px 20px; margin-top: 20px">
+      <p style="font-size: 12px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: #A85E0A">Notes</p>
+      <ul style="margin-top: 10px; display: grid; gap: 7px">
+        <li style="font-size: 14px; line-height: 1.5; color: #525252">The lecturer sees counts below 75%, never a named at-risk list — pastoral follow-up is the HOD's scope, and duplicating it here blurs the separation.</li>
+        <li style="font-size: 14px; line-height: 1.5; color: #525252">Cancelling removes the session from the denominator, so the dialog says nobody is penalised. Without that sentence lecturers avoid cancelling and hold empty classes.</li>
+        <li style="font-size: 14px; line-height: 1.5; color: #525252">"Enter paper register" appears only where digital capture was missing or partial — never as a standing shortcut.</li>
+        <li style="font-size: 14px; line-height: 1.5; color: #525252">Flagged rows are tinted <em>and</em> carry a labelled badge, so the flag survives a greyscale print of the register.</li>
+      </ul>
+    </div>
+    </sc-if>
+  </section>
+
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;showAnnotations&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Spec sheet&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    return { showAnnotations: this.props.showAnnotations ?? true };
+  }
+}
+
+</script>
+</body>
+</html>

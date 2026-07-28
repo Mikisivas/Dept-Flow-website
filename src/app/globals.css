@@ -1,0 +1,172 @@
+@import "tailwindcss";
+
+/* ---------------------------------------------------------------------------
+   Dept-Flow palette — derived from the SAMACOSS crest
+
+   Brand orange is #FF9935, eyedropped from the shield fill. Every ratio here is
+   measured against WCAG 2.1, not estimated.
+
+   The one rule that matters most: orange is a fill that carries BLACK text.
+   White on #FF9935 is 2.13:1 and appears nowhere in this product.
+--------------------------------------------------------------------------- */
+
+:root {
+  --brand: #ff9935;         /* fills, motif, primary button. BLACK text: 9.30:1 AAA */
+  --brand-hover: #e58419;   /* black text 7.21:1 */
+  --brand-pressed: #c96e10; /* black text 5.39:1 */
+  --brand-text: #a85e0a;    /* the only orange usable as text on white: 4.92:1 */
+  --brand-tint: #fff4e8;
+  --brand-tint-2: #ffe7ce;
+
+  /* The foreground for anything sitting ON an orange fill.
+     This is deliberately NOT --ink: --ink flips to near-white in dark mode,
+     and white on #FF9935 is 2.13:1. An orange surface carries black text in
+     both schemes, so this token never changes. */
+  --on-brand: #0a0a0a;
+
+  --ink: #0a0a0a;
+  --slate: #525252;
+  --muted: #737373;
+  --line: #e5e5e5;
+  --surface: #ffffff;
+  --surface-sunken: #fafafa;
+
+  /* Status is kept clear of hue 30° so the brand can never read as a warning. */
+  --ok: #15803d;
+  --ok-tint: #dcfce7;
+  --info: #1d4ed8;
+  --info-tint: #dbeafe;
+  --danger: #b91c1c;
+  --danger-tint: #fee2e2;
+
+  /* The checkpoint motif carries meaning through its border, so the border is
+     held above the 3:1 non-text contrast boundary in both states. */
+  --cell-missed: #767676;      /* 4.54:1 */
+  --cell-provisional: #949494; /* 3.03:1 */
+
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* Brand orange is already 8.52:1 on ink — only the text variant lightens. */
+    --brand-text: #f2a040;
+    --brand-tint: #241a0d;
+    --brand-tint-2: #33240f;
+
+    --ink: #fafafa;
+    --slate: #a3a3a3;
+    --muted: #8a8a8a;
+    --line: #262626;
+    --surface: #0a0a0a;
+    --surface-sunken: #171717;
+
+    --ok: #4ade80;
+    --ok-tint: #14321f;
+    --info: #60a5fa;
+    --info-tint: #16233d;
+    --danger: #f87171;
+    --danger-tint: #3a1717;
+
+    --cell-missed: #8a8a8a;
+    --cell-provisional: #6e6e6e;
+
+    color-scheme: dark;
+  }
+}
+
+@theme inline {
+  --color-brand: var(--brand);
+  --color-brand-hover: var(--brand-hover);
+  --color-brand-pressed: var(--brand-pressed);
+  --color-brand-text: var(--brand-text);
+  --color-brand-tint: var(--brand-tint);
+  --color-brand-tint-2: var(--brand-tint-2);
+  --color-on-brand: var(--on-brand);
+
+  --color-ink: var(--ink);
+  --color-slate: var(--slate);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-surface: var(--surface);
+  --color-surface-sunken: var(--surface-sunken);
+
+  --color-ok: var(--ok);
+  --color-ok-tint: var(--ok-tint);
+  --color-info: var(--info);
+  --color-info-tint: var(--info-tint);
+  --color-danger: var(--danger);
+  --color-danger-tint: var(--danger-tint);
+
+  --color-cell-missed: var(--cell-missed);
+  --color-cell-provisional: var(--cell-provisional);
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, sans-serif;
+}
+
+/* ---------------------------------------------------------------------------
+   Base
+--------------------------------------------------------------------------- */
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  html {
+    /* Never user-scalable: no. Pinch zoom stays available. */
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background: var(--surface-sunken);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    font-size: 16px;
+    -webkit-font-smoothing: antialiased;
+    /* A tap should not flash a default blue box over a 44px target. */
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Numbers stack in this product constantly — attendance percentages, matric
+     numbers, amounts, countdowns. Tabular figures stop them jittering. */
+  :where(table, .tabular) {
+    font-variant-numeric: tabular-nums;
+  }
+
+  :where(h1, h2, h3) {
+    text-wrap: balance;
+  }
+
+  :where(p) {
+    text-wrap: pretty;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--brand-text);
+    outline-offset: 2px;
+  }
+
+  /* Buttons and links are always deliberate taps, never double-tap-to-zoom. */
+  :where(button, a, [role="button"]) {
+    touch-action: manipulation;
+  }
+
+  /* A native select on a dark background needs both set explicitly or it
+     renders unreadable on Android. */
+  :where(select) {
+    background-color: var(--surface);
+    color: var(--ink);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

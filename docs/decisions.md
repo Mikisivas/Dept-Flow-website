@@ -145,3 +145,17 @@ Supabase schema first, then screens. The schema is in `supabase/`.
 `#FF9935`, eyedropped from the crest, superseding the `#F0952B` visual estimate
 in `dept-flow-design-skill.md` §3 and `ui-build-specification.md` §1. Black text
 on orange (9.30:1). White on orange is 2.13:1 and never appears.
+
+### `--on-brand`, and why it is not `--ink`
+
+Added during the build. `--ink` inverts in dark mode — that is its job — so a
+primary button styled `bg-brand text-ink` renders black on orange in light mode
+and **white on orange in dark mode, at 2.13:1**. The bug is invisible in light
+mode and was caught by screenshotting the built page in both schemes.
+
+`--on-brand: #0a0a0a` is the foreground for anything sitting on an orange fill,
+and it never changes between schemes. Any new orange surface uses it.
+
+The crest still shows its white raster box on dark backgrounds, as the design
+docs predicted. It needs a transparent original before launch; nothing in the
+code can fix it.

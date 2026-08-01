@@ -248,6 +248,154 @@ export class RejectedSubmission extends Error {
   }
 }
 
+/* ---------------------------------------------------------------------------
+   Lecturer
+   --------------------------------------------------------------------------- */
+
+export type LecturerClass = {
+  sessionInstanceId: string;
+  courseCode: string;
+  courseTitle: string;
+  venue: string;
+  startsAt: string;
+  endsAt: string;
+  enrolled: number;
+  status: "scheduled" | "open" | "closed";
+};
+
+export type LecturerDashboard = {
+  lecturer: { surname: string; firstName: string };
+  today: LecturerClass[];
+  openSession: LecturerClass | null;
+  recent: Array<{
+    sessionInstanceId: string;
+    courseCode: string;
+    heldOn: string;
+    full: number;
+    half: number;
+    absent: number;
+    /** Set when the lecturer only ever issued one token. */
+    singleCheckpoint: boolean;
+    fromPaper: boolean;
+  }>;
+};
+
+export async function getLecturerDashboard(): Promise<LecturerDashboard> {
+  return {
+    lecturer: { surname: "Bello", firstName: "Amina" },
+    today: [
+      {
+        sessionInstanceId: "cmp301-today",
+        courseCode: "CMP 301",
+        courseTitle: "Operating Systems",
+        venue: "Lecture Theatre A",
+        startsAt: "10:00",
+        endsAt: "12:00",
+        enrolled: 86,
+        status: "open",
+      },
+      {
+        sessionInstanceId: "sta202-today",
+        courseCode: "STA 202",
+        courseTitle: "Probability II",
+        venue: "Maths Block 2",
+        startsAt: "14:00",
+        endsAt: "16:00",
+        enrolled: 74,
+        status: "scheduled",
+      },
+    ],
+    openSession: {
+      sessionInstanceId: "cmp301-today",
+      courseCode: "CMP 301",
+      courseTitle: "Operating Systems",
+      venue: "Lecture Theatre A",
+      startsAt: "10:00",
+      endsAt: "12:00",
+      enrolled: 86,
+      status: "open",
+    },
+    recent: [
+      {
+        sessionInstanceId: "cmp301-w12",
+        courseCode: "CMP 301",
+        heldOn: new Date(Date.now() - 7 * 86_400_000).toISOString(),
+        full: 61,
+        half: 14,
+        absent: 11,
+        singleCheckpoint: false,
+        fromPaper: false,
+      },
+      {
+        sessionInstanceId: "mth205-w12",
+        courseCode: "MTH 205",
+        heldOn: new Date(Date.now() - 9 * 86_400_000).toISOString(),
+        full: 40,
+        half: 6,
+        absent: 8,
+        singleCheckpoint: true,
+        fromPaper: false,
+      },
+      {
+        sessionInstanceId: "sta202-w11",
+        courseCode: "STA 202",
+        heldOn: new Date(Date.now() - 14 * 86_400_000).toISOString(),
+        full: 52,
+        half: 9,
+        absent: 13,
+        singleCheckpoint: false,
+        fromPaper: true,
+      },
+    ],
+  };
+}
+
+export type SessionControl = {
+  sessionInstanceId: string;
+  courseCode: string;
+  courseTitle: string;
+  venue: string;
+  openedAt: string;
+  enrolled: number;
+  /**
+   * Which checkpoint is still open, decided by the server. The client must not
+   * work this out from its own clock: a phone with a skewed clock would either
+   * keep a dead code on the board or retire a live one early.
+   */
+  liveCheckpointIndex: 1 | 2 | null;
+  checkpoints: Array<{
+    index: 1 | 2;
+    token: string;
+    expiresAt: string;
+    submissions: number;
+    rejections: Array<{ reason: SubmitRejection; count: number }>;
+  }>;
+};
+
+export async function getSessionControl(id: string): Promise<SessionControl> {
+  return {
+    sessionInstanceId: id,
+    courseCode: "CMP 301",
+    courseTitle: "Operating Systems",
+    venue: "Lecture Theatre A",
+    openedAt: new Date(Date.now() - 34 * 60_000).toISOString(),
+    enrolled: 86,
+    liveCheckpointIndex: null,
+    checkpoints: [
+      {
+        index: 1,
+        token: "4821",
+        expiresAt: new Date(Date.now() - 28 * 60_000).toISOString(),
+        submissions: 74,
+        rejections: [
+          { reason: "outside_geofence", count: 3 },
+          { reason: "invalid_or_expired_token", count: 1 },
+        ],
+      },
+    ],
+  };
+}
+
 export async function verifyOtp(code: string): Promise<{ ok: boolean; reason?: string }> {
   await pause(700);
   if (code === "000000") return { ok: false, reason: "That code has expired. Send a new one." };

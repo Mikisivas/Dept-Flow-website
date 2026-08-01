@@ -86,9 +86,19 @@ const ROLE_LABEL: Record<AppRole, string> = {
   admin: "Admin",
 };
 
-function useIsActive() {
+/**
+ * Exactly one tab is active at a time.
+ *
+ * A plain prefix test marks two: on /lecturer/session/123 both "/lecturer" and
+ * "/lecturer/session" match, and the shell lights up two tabs at once. The
+ * longest matching href is the real destination.
+ */
+function useActiveHref(items: NavItem[]) {
   const pathname = usePathname();
-  return (href: string) => pathname === href || pathname.startsWith(`${href}/`);
+
+  return items
+    .filter((item) => pathname === item.href || pathname.startsWith(`${item.href}/`))
+    .sort((a, b) => b.href.length - a.href.length)[0]?.href;
 }
 
 export function AppShell({
@@ -138,7 +148,7 @@ function BottomBarLayout({
   items: NavItem[];
   children: React.ReactNode;
 }) {
-  const isActive = useIsActive();
+  const activeHref = useActiveHref(items);
 
   return (
     <>
@@ -166,7 +176,7 @@ function BottomBarLayout({
       >
         <ul className="mx-auto flex max-w-3xl">
           {items.map(({ href, label, icon: Icon }) => {
-            const active = isActive(href);
+            const active = href === activeHref;
             return (
               <li key={href} className="flex-1">
                 <Link
@@ -207,7 +217,7 @@ function SidebarLayout({
   items: NavItem[];
   children: React.ReactNode;
 }) {
-  const isActive = useIsActive();
+  const activeHref = useActiveHref(items);
 
   return (
     <div className="lg:grid lg:grid-cols-[16rem_1fr]">
@@ -221,7 +231,7 @@ function SidebarLayout({
         <nav aria-label="Primary" className="px-2 pb-3 lg:pb-0">
           <ul className="flex gap-1 overflow-x-auto lg:flex-col lg:overflow-visible">
             {items.map(({ href, label, icon: Icon, count }) => {
-              const active = isActive(href);
+              const active = href === activeHref;
               return (
                 <li key={href}>
                   <Link

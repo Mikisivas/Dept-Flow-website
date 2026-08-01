@@ -372,6 +372,142 @@ export type SessionControl = {
   }>;
 };
 
+export type RosterEntry = {
+  studentId: string;
+  matricNo: string;
+  surname: string;
+  firstName: string;
+  otherNames: string | null;
+  checkpointOne: boolean;
+  checkpointTwo: boolean;
+  flagged: boolean;
+};
+
+export type SessionRoster = {
+  sessionInstanceId: string;
+  courseCode: string;
+  heldOn: string;
+  roster: RosterEntry[];
+};
+
+/**
+ * The session's date comes from here, not from the screen. A component that
+ * derives "yesterday" from its own clock will disagree with the record it is
+ * displaying the moment either one is cached.
+ */
+export async function getSessionRoster(sessionInstanceId: string): Promise<SessionRoster> {
+  return {
+    sessionInstanceId,
+    courseCode: "CMP 301",
+    heldOn: new Date(Date.now() - 86_400_000).toISOString(),
+    roster: await getRoster(),
+  };
+}
+
+export async function getRoster(): Promise<RosterEntry[]> {
+  const people: Array<[string, string, string, string | null, boolean, boolean, boolean]> = [
+    ["CMP/2021/047", "Okonkwo", "Chidera", "Emeka", true, true, false],
+    ["CMP/2021/112", "Sanusi", "Halima", null, true, false, false],
+    ["CMP/2021/158", "Adebayo", "Folake", "Ronke", true, true, false],
+    ["CMP/2021/203", "Nwachukwu", "Emeka", null, false, false, false],
+    ["CMP/2021/241", "Ibrahim", "Zainab", "Aisha", true, true, true],
+    ["CMP/2022/018", "Eze", "Chukwudi", null, true, false, false],
+    ["CMP/2022/077", "Ogundipe", "Tolu", "Ayomide", false, true, false],
+  ];
+
+  return people.map(([matricNo, surname, firstName, otherNames, one, two, flagged], index) => ({
+    studentId: `student-${index}`,
+    matricNo,
+    surname,
+    firstName,
+    otherNames,
+    checkpointOne: one,
+    checkpointTwo: two,
+    flagged,
+  }));
+}
+
+export type ScheduledSession = {
+  sessionInstanceId: string;
+  courseCode: string;
+  heldOn: string;
+  startsAt: string;
+  endsAt: string;
+  venue: string;
+  type: "recurring" | "makeup" | "reschedule";
+};
+
+export async function getLecturerSchedule(): Promise<ScheduledSession[]> {
+  const day = 86_400_000;
+  return [
+    {
+      sessionInstanceId: "s1",
+      courseCode: "CMP 301",
+      heldOn: new Date(Date.now() + day).toISOString(),
+      startsAt: "10:00",
+      endsAt: "12:00",
+      venue: "Lecture Theatre A",
+      type: "recurring",
+    },
+    {
+      sessionInstanceId: "s2",
+      courseCode: "MTH 205",
+      heldOn: new Date(Date.now() + 3 * day).toISOString(),
+      startsAt: "08:00",
+      endsAt: "10:00",
+      venue: "Maths Block 2",
+      type: "recurring",
+    },
+    {
+      sessionInstanceId: "s3",
+      courseCode: "STA 202",
+      heldOn: new Date(Date.now() + 5 * day).toISOString(),
+      startsAt: "15:00",
+      endsAt: "17:00",
+      venue: "Maths Block 2",
+      type: "makeup",
+    },
+  ];
+}
+
+export type LecturerCourse = {
+  courseId: string;
+  code: string;
+  title: string;
+  enrolled: number;
+  sessionsHeld: number;
+  averagePct: number;
+};
+
+export async function getLecturerCourses(): Promise<LecturerCourse[]> {
+  return [
+    {
+      courseId: "c1",
+      code: "CMP 301",
+      title: "Operating Systems",
+      enrolled: 86,
+      sessionsHeld: 13,
+      averagePct: 71,
+    },
+    {
+      courseId: "c2",
+      code: "MTH 205",
+      title: "Linear Algebra",
+      enrolled: 54,
+      sessionsHeld: 10,
+      averagePct: 78,
+    },
+    {
+      courseId: "c3",
+      code: "STA 202",
+      title: "Probability II",
+      enrolled: 74,
+      sessionsHeld: 13,
+      averagePct: 64,
+    },
+  ];
+}
+
 export async function getSessionControl(id: string): Promise<SessionControl> {
   return {
     sessionInstanceId: id,

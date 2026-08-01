@@ -1,5 +1,3 @@
-"use client";
-
 import * as React from "react";
 import { cn } from "@/lib/utils";
 
@@ -9,6 +7,12 @@ import { cn } from "@/lib/utils";
  * A data table is never horizontally scrolled as the primary mobile
  * experience — below `md` every row renders as a card built from the same
  * column definitions, so the two never drift apart.
+ *
+ * Deliberately NOT a client component. Columns carry `cell` render functions,
+ * and a function cannot cross the server/client boundary — marking this
+ * "use client" makes every server-rendered table throw. It holds no state
+ * either: sorting and pagination belong in the URL, which makes them links
+ * rather than handlers, and keeps deep links working.
  */
 
 export type Column<Row> = {

@@ -89,6 +89,87 @@ export async function sendOtp(phone: string): Promise<{ expiresAt: string }> {
   return { expiresAt: new Date(Date.now() + 300_000).toISOString() };
 }
 
+export type CourseDetail = {
+  course: CourseAttendance;
+  lecturer: string;
+  schedule: string;
+  venue: string;
+  /** Advisory. Never the eligibility determination. */
+  projectedPct: number;
+};
+
+export async function getCourseDetail(code: string): Promise<CourseDetail | null> {
+  const course = COURSES.find(
+    (entry) => entry.code.replace(/\s+/g, "-").toLowerCase() === code.toLowerCase(),
+  );
+  if (!course) return null;
+
+  const schedules: Record<string, { lecturer: string; schedule: string; venue: string }> = {
+    "CMP 301": {
+      lecturer: "Dr Amina Bello",
+      schedule: "Tuesdays, 10:00–12:00",
+      venue: "Lecture Theatre A",
+    },
+    "MTH 205": {
+      lecturer: "Dr Amina Bello",
+      schedule: "Thursdays, 08:00–10:00",
+      venue: "Maths Block 2",
+    },
+    "STA 202": {
+      lecturer: "Dr Amina Bello",
+      schedule: "Mondays, 14:00–16:00",
+      venue: "Maths Block 2",
+    },
+  };
+
+  const recorded = course.confirmedScore + course.provisionalScore;
+
+  return {
+    course,
+    ...schedules[course.code],
+    projectedPct: Math.round((recorded / course.sessionsHeld) * 100),
+  };
+}
+
+export type NotificationItem = {
+  id: string;
+  kind: "payment_reminder" | "risk_nudge" | "grace_period" | "schedule_change";
+  title: string;
+  body: string;
+  createdAt: string;
+  readAt: string | null;
+};
+
+export async function getNotifications(): Promise<NotificationItem[]> {
+  const now = Date.now();
+  return [
+    {
+      id: "n1",
+      kind: "payment_reminder",
+      title: "6 days left to clear your dues",
+      body: "21.5 sessions are recorded but not yet counted. Clearing counts all of them at once.",
+      createdAt: new Date(now - 2 * 3_600_000).toISOString(),
+      readAt: null,
+    },
+    {
+      id: "n2",
+      kind: "schedule_change",
+      title: "CMP 301 moved to Lecture Theatre A",
+      body: "Tuesday's lecture is in Lecture Theatre A instead of Maths Block 2.",
+      createdAt: new Date(now - 26 * 3_600_000).toISOString(),
+      readAt: null,
+    },
+    {
+      id: "n3",
+      kind: "risk_nudge",
+      title: "You're catching only one checkpoint in STA 202",
+      body: "Staying until the second checkpoint would put you back on track for 75%.",
+      createdAt: new Date(now - 4 * 86_400_000).toISOString(),
+      readAt: new Date(now - 3 * 86_400_000).toISOString(),
+    },
+  ];
+}
+
 /* ---------------------------------------------------------------------------
    Attendance
    --------------------------------------------------------------------------- */

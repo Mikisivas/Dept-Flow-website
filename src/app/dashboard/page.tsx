@@ -115,8 +115,13 @@ export default async function DashboardPage() {
                       sessions recorded" mid-phrase on a 390px screen. */}
                   <div className="flex items-start justify-between gap-3">
                     <h3 className="min-w-0 text-[15px] font-semibold text-ink">
-                      <span translate="no">{course.code}</span>
-                      <span className="block font-normal text-slate">{course.title}</span>
+                      <Link
+                        href={`/courses/${course.code.replace(/\s+/g, "-").toLowerCase()}`}
+                        className="rounded focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand-text)]"
+                      >
+                        <span translate="no">{course.code}</span>
+                        <span className="block font-normal text-slate">{course.title}</span>
+                      </Link>
                     </h3>
                     <StatusBadge
                       className="shrink-0"

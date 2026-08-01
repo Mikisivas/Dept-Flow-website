@@ -91,7 +91,7 @@ export function daysUntil(value: Date | string, from: Date = new Date()): number
 /** "6 days left" / "1 day left" / "today". */
 export function formatDaysLeft(value: Date | string, from: Date = new Date()): string {
   const days = daysUntil(value, from);
-  if (days < 0) return "past";
+  if (days < 0) return "overdue";
   if (days === 0) return "today";
   if (days === 1) return "1 day left";
   return `${days} days left`;

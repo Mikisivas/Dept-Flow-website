@@ -53,10 +53,15 @@ export const STUDENT: StudentProfile = {
 
 export const COMPLIANCE: ComplianceState = "uncleared";
 
+/**
+ * The deadline is relative to today so the provisional window stays coherent
+ * as a demonstration. A fixed date silently becomes "overdue" and the screen
+ * stops showing the state it is meant to show.
+ */
 export const DUES: DuesPeriod = {
   duesAmountKobo: 500_000,
   resumptionDate: "2025-09-15",
-  deadline: "2025-10-15",
+  deadline: new Date(Date.now() + 6 * 86_400_000).toISOString(),
   gracePeriodEnd: null,
 };
 

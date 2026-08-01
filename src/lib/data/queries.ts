@@ -83,9 +83,88 @@ export async function checkRegisterMatch(identity: RegisterIdentity): Promise<Re
  * `send_otp()`. Nothing is returned here but an expiry — the plaintext code is
  * never in an HTTP response, in any environment.
  */
-export async function sendOtp(_phone: string): Promise<{ expiresAt: string }> {
+export async function sendOtp(phone: string): Promise<{ expiresAt: string }> {
   await pause(700);
+  void phone;
   return { expiresAt: new Date(Date.now() + 300_000).toISOString() };
+}
+
+/* ---------------------------------------------------------------------------
+   Attendance
+   --------------------------------------------------------------------------- */
+
+export type LiveCheckpoint = {
+  sessionInstanceId: string;
+  checkpointId: string;
+  courseCode: string;
+  courseTitle: string;
+  lecturer: string;
+  venue: string;
+  index: 1 | 2;
+  expiresAt: string;
+  /** What the session is already worth to this student. */
+  firstCheckpointCaptured: boolean;
+};
+
+export type CheckpointOutcome = {
+  index: 1 | 2;
+  sessionScore: number;
+  bothCaptured: boolean;
+};
+
+/**
+ * Every rejection a student can meet has its own reason, because every one of
+ * them gets its own message on screen. A generic failure here generates
+ * disputes the HOD then has to resolve by hand.
+ */
+export type SubmitRejection =
+  | "outside_geofence"
+  | "invalid_or_expired_token"
+  | "wrong_code"
+  | "account_locked"
+  | "already_submitted"
+  | "location_blocked";
+
+export async function getLiveCheckpoint(): Promise<LiveCheckpoint | null> {
+  return {
+    sessionInstanceId: "cmp301-2026-01-13",
+    checkpointId: "cmp301-2026-01-13-cp2",
+    courseCode: "CMP 301",
+    courseTitle: "Operating Systems",
+    lecturer: "Dr Amina Bello",
+    venue: "Lecture Theatre A",
+    index: 2,
+    expiresAt: new Date(Date.now() + 224_000).toISOString(),
+    firstCheckpointCaptured: true,
+  };
+}
+
+export async function submitCheckpoint(payload: {
+  checkpointId: string;
+  token: string;
+  coords: { latitude: number; longitude: number; accuracy: number };
+}): Promise<CheckpointOutcome> {
+  await pause(900);
+
+  // Stand-in for the server's decision. The real endpoint checks the token,
+  // the geo-fence, the anti-spoof heuristics and the lock state, in that
+  // order, and the client never second-guesses any of them.
+  if (payload.token === "0000") throw new RejectedSubmission("wrong_code");
+  if (payload.token === "1111") throw new RejectedSubmission("outside_geofence");
+  if (payload.token === "2222") throw new RejectedSubmission("invalid_or_expired_token");
+  if (payload.token === "3333") throw new RejectedSubmission("account_locked");
+  if (payload.token === "4444") throw new RejectedSubmission("already_submitted");
+  if (payload.token === "9999") throw new Error("Network request failed");
+
+  return { index: 2, sessionScore: 1, bothCaptured: true };
+}
+
+/** A definitive answer from the server. Retrying it wastes the token window. */
+export class RejectedSubmission extends Error {
+  constructor(public readonly reason: SubmitRejection) {
+    super(reason);
+    this.name = "RejectedSubmission";
+  }
 }
 
 export async function verifyOtp(code: string): Promise<{ ok: boolean; reason?: string }> {

@@ -3,8 +3,15 @@
 -- Mirrors the people and courses in the design mockups, with the department's
 -- real prefix: Computer Science is CMP.
 --
--- Local development only. It writes to auth.users directly, which is fine
--- against a local Supabase stack and must never run anywhere else.
+-- Local development only.
+--
+-- Note there is no auth.users here. Dept-Flow does not use Supabase Auth: a
+-- student is identified by their matric number and staff by a staff ID, and
+-- neither fits GoTrue's email-or-phone account model. Credentials live on
+-- `profiles` and the API issues its own JWT. See docs/decisions.md.
+--
+-- Every seeded account logs in with the password "demo-password", hashed here
+-- by pgcrypto. A development convenience that must never reach a deployment.
 
 begin;
 
@@ -27,14 +34,8 @@ insert into dues_periods (academic_session_id, resumption_date, dues_amount_kobo
 -- People
 -- ---------------------------------------------------------------------------
 
-insert into auth.users (id) values
-  ('33333333-3333-3333-3333-333333333301'),  -- lecturer
-  ('33333333-3333-3333-3333-333333333302'),  -- HOD
-  ('33333333-3333-3333-3333-333333333303'),  -- admin
-  ('44444444-4444-4444-4444-444444444401'),  -- Chidera Okonkwo
-  ('44444444-4444-4444-4444-444444444402'),  -- Halima Sanusi
-  ('44444444-4444-4444-4444-444444444403');  -- Tunde Adeyemi
-
+-- Passwords are hashed here by pgcrypto so the seed needs no external tooling.
+-- The API hashes with Argon2id; the credential constraint accepts both.
 insert into profiles (id, role, surname, first_name, other_names, phone, staff_id) values
   ('33333333-3333-3333-3333-333333333301', 'lecturer', 'Bello',   'Amina',   'Kemi',  '+2348030000001', 'STF/CMP/014'),
   ('33333333-3333-3333-3333-333333333302', 'hod',      'Eze',     'Nnamdi',   null,   '+2348030000002', 'STF/CMP/001'),
@@ -42,6 +43,11 @@ insert into profiles (id, role, surname, first_name, other_names, phone, staff_i
   ('44444444-4444-4444-4444-444444444401', 'student',  'Okonkwo', 'Chidera', 'Emeka', '+2348050000001', null),
   ('44444444-4444-4444-4444-444444444402', 'student',  'Sanusi',  'Halima',   null,   '+2348050000002', null),
   ('44444444-4444-4444-4444-444444444403', 'student',  'Adeyemi', 'Tunde',   'Ola',   '+2348050000003', null);
+
+-- Every seeded account logs in with "demo-password". Development only.
+update profiles
+   set password_hash = crypt('demo-password', gen_salt('bf', 10)),
+       password_updated_at = now();
 
 insert into whitelist_entries (id, academic_session_id, matric_no, surname, level, claimed, claimed_by, claimed_at) values
   ('55555555-5555-5555-5555-555555555501', '11111111-1111-1111-1111-111111111111', 'CMP/2021/047', 'Okonkwo', 400, false, null, null),

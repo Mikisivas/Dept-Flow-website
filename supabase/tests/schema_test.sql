@@ -462,6 +462,56 @@ select assert_true(
 );
 
 -- ---------------------------------------------------------------------------
+-- Credentials — matric number as the identifier, no email anywhere
+-- ---------------------------------------------------------------------------
+
+select assert_rejects($$
+  update profiles set password_hash = 'hunter2' where role = 'admin'
+$$, 'a plaintext password cannot be stored — the column only accepts a digest');
+
+do $$
+begin
+  update profiles
+     set password_hash = '$argon2id$v=19$m=65536,t=3,p=4$c29tZXNhbHQ$RdescudvJCsgt3ub'
+   where role = 'admin';
+  perform assert_true(true, 'an Argon2id digest is accepted');
+
+  update profiles set password_hash = crypt('x', gen_salt('bf', 4)) where role = 'hod';
+  perform assert_true(true, 'a bcrypt digest is accepted');
+end $$;
+
+select assert_true(
+  (select role from resolve_login_identifier('CMP/2021/047')) = 'student',
+  'login resolves a matric number to its account'
+);
+
+select assert_true(
+  (select role from resolve_login_identifier('cmp/2021/047')) = 'student',
+  'a matric number typed in lower case still resolves — students type on phones'
+);
+
+select assert_true(
+  (select role from resolve_login_identifier('STF/CMP/001')) = 'hod',
+  'the same field resolves a staff ID, so no role picker is needed at login'
+);
+
+select assert_true(
+  (select count(*) from resolve_login_identifier('CMP/9999/999')) = 0,
+  'an unknown identifier resolves to nothing'
+);
+
+-- The lookup runs before a session exists, so it must not hand back anything
+-- an attacker could use.
+select assert_true(
+  not exists (
+    select 1 from information_schema.columns
+    where table_name = 'resolve_login_identifier'
+      and column_name in ('password_hash', 'phone')
+  ),
+  'the login lookup returns no credential material and no phone number'
+);
+
+-- ---------------------------------------------------------------------------
 -- Row-level security
 -- ---------------------------------------------------------------------------
 

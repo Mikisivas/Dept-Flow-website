@@ -45,6 +45,57 @@ Don't add Statistics to the department; don't remove it from the crest.
 Implemented as `display_name_register()` and `display_name_familiar()` in the
 database, and mirrored in `lib/format.ts` on the frontend.
 
+## Authentication — no email, anywhere
+
+**The login identifier is the matric number** (or a staff ID for staff). There
+is no email field in the product, in the schema, or in the account model.
+
+**Supabase Auth is not used.** GoTrue is built around an email or a phone
+number as the account identifier, and Dept-Flow has neither. The two ways of
+bending it to fit are both worse than not using it:
+
+- A *synthetic email* (`cmp2021047@dept-flow.local`) puts a fake value at the
+  centre of the identity model, and it leaks the first time an error message
+  or a support screen quotes it back.
+- The *phone as the hidden identifier* makes a private number into a login
+  credential, and any lookup that maps matric to phone becomes a way to
+  harvest numbers.
+
+So credentials live on `profiles` and the API issues its own JWT. The token
+carries `sub` = `profiles.id`, which is exactly what `auth.uid()` reads, so
+**every RLS policy already written keeps working unchanged**.
+
+### What a login actually consists of
+
+| Role | Identifier | Secret |
+|---|---|---|
+| Student | Matric number — `CMP/2021/047` | Password |
+| Lecturer, HOD, Admin | Staff ID — `STF/CMP/001` | Password |
+
+One field accepts either, so there is no role picker at login: the system can
+work out which you are from what you typed.
+
+The matric number is the **username, not the whole credential**. A password is
+always required.
+
+### Where the phone number still matters
+
+The phone is collected at registration and OTP-verified, and it remains the
+channel for password reset. It is simply not the login identifier, and it is
+never shown unmasked to anyone but its owner.
+
+### Password storage
+
+Argon2id, hashed by the API. `profiles.password_hash` carries a check
+constraint that only accepts a modular crypt string — anything that is not a
+digest, including a plaintext password that has escaped a code path, cannot be
+stored. Development seeds hash with pgcrypto so the seed needs no external
+tooling; the constraint accepts both.
+
+`resolve_login_identifier()` maps either identifier to an account and returns
+no credential material and no phone number, because it runs before a session
+exists.
+
 ## Money
 
 **Amounts are held in kobo as `double precision`.** This was decided

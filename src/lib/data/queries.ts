@@ -537,6 +537,337 @@ export async function getGracePeriods(): Promise<{
   };
 }
 
+/* ---------------------------------------------------------------------------
+   Admin
+
+   Aggregate signals only. Individual student risk is HOD scope, and surfacing
+   it here would break separation of duties — the database refuses admin the
+   risk_predictions table for the same reason.
+   --------------------------------------------------------------------------- */
+
+export type AdminOverview = {
+  byLevel: Array<{ level: number; cleared: number; provisional: number; locked: number }>;
+  reconciliation: { failedWebhooks: number; unverified: number };
+  gpsRejectionRate: { current: number; baseline: number };
+  registration: { openDisputes: number; unclaimed: number };
+  duesWindow: { daysRemaining: number; deadline: string };
+};
+
+export async function getAdminOverview(): Promise<AdminOverview> {
+  return {
+    byLevel: [
+      { level: 100, cleared: 82, provisional: 24, locked: 18 },
+      { level: 200, cleared: 71, provisional: 22, locked: 27 },
+      { level: 300, cleared: 78, provisional: 26, locked: 34 },
+      { level: 400, cleared: 70, provisional: 24, locked: 64 },
+    ],
+    reconciliation: { failedWebhooks: 2, unverified: 5 },
+    // A spike is the signal that matters here — a steady rate is just GPS.
+    gpsRejectionRate: { current: 11.4, baseline: 3.2 },
+    registration: { openDisputes: 3, unclaimed: 41 },
+    duesWindow: { daysRemaining: 6, deadline: new Date(Date.now() + 6 * 86_400_000).toISOString() },
+  };
+}
+
+export type AdminStudent = {
+  studentId: string;
+  matricNo: string;
+  surname: string;
+  firstName: string;
+  otherNames: string | null;
+  level: number;
+  status: "active" | "graduating" | "deactivated";
+  compliance: ComplianceState;
+};
+
+export async function getAdminStudents(): Promise<AdminStudent[]> {
+  const rows: Array<[string, string, string, string | null, number, AdminStudent["status"], ComplianceState]> = [
+    ["CMP/2021/047", "Okonkwo", "Chidera", "Emeka", 400, "active", "uncleared"],
+    ["CMP/2021/112", "Sanusi", "Halima", null, 400, "active", "cleared"],
+    ["CMP/2021/158", "Adebayo", "Folake", "Ronke", 400, "active", "cleared"],
+    ["CMP/2021/203", "Nwachukwu", "Emeka", null, 400, "active", "locked"],
+    ["MTH/2022/018", "Adeyemi", "Tunde", "Ola", 300, "active", "locked"],
+    ["STA/2022/091", "Bassey", "Idara", "Grace", 300, "active", "pending_verification"],
+    ["CMP/2019/004", "Lawal", "Bilikisu", null, 400, "graduating", "cleared"],
+  ];
+
+  return rows.map(([matricNo, surname, firstName, otherNames, level, status, compliance], index) => ({
+    studentId: `a${index}`,
+    matricNo,
+    surname,
+    firstName,
+    otherNames,
+    level,
+    status,
+    compliance,
+  }));
+}
+
+export type PaymentRow = {
+  id: string;
+  matricNo: string;
+  surname: string;
+  amountKobo: number;
+  channel: "card" | "transfer";
+  status: "pending" | "success" | "failed" | "abandoned";
+  reference: string;
+  createdAt: string;
+};
+
+export async function getPayments(): Promise<PaymentRow[]> {
+  const now = Date.now();
+  const rows: Array<[string, string, PaymentRow["channel"], PaymentRow["status"], string, number]> = [
+    ["CMP/2021/112", "Sanusi", "transfer", "success", "DF-TEST-000112", 2],
+    ["CMP/2021/158", "Adebayo", "card", "success", "DF-TEST-000158", 6],
+    ["STA/2022/091", "Bassey", "transfer", "pending", "DF-TEST-000091", 9],
+    ["CMP/2021/203", "Nwachukwu", "card", "failed", "DF-TEST-000203", 26],
+    ["MTH/2022/018", "Adeyemi", "transfer", "abandoned", "DF-TEST-000018", 50],
+  ];
+  return rows.map(([matricNo, surname, channel, status, reference, hoursAgo], index) => ({
+    id: `p${index}`,
+    matricNo,
+    surname,
+    amountKobo: 500_000,
+    channel,
+    status,
+    reference,
+    createdAt: new Date(now - hoursAgo * 3_600_000).toISOString(),
+  }));
+}
+
+export type WhitelistRow = {
+  id: string;
+  matricNo: string;
+  surname: string;
+  level: number;
+  claimed: boolean;
+};
+
+export async function getWhitelist(): Promise<WhitelistRow[]> {
+  const rows: Array<[string, string, number, boolean]> = [
+    ["CMP/2021/047", "Okonkwo", 400, true],
+    ["CMP/2021/112", "Sanusi", 400, true],
+    ["CMP/2021/158", "Adebayo", 400, true],
+    ["CMP/2021/203", "Nwachukwu", 400, true],
+    ["CMP/2021/241", "Ibrahim", 400, false],
+    ["MTH/2022/018", "Adeyemi", 300, true],
+    ["STA/2022/091", "Bassey", 300, false],
+  ];
+  return rows.map(([matricNo, surname, level, claimed], index) => ({
+    id: `wl${index}`,
+    matricNo,
+    surname,
+    level,
+    claimed,
+  }));
+}
+
+export type RolloverPreview = {
+  fromSession: string;
+  toSession: string;
+  byLevel: Array<{ from: number; to: number; students: number }>;
+  graduating: number;
+};
+
+export async function getRolloverPreview(): Promise<RolloverPreview> {
+  return {
+    fromSession: "2025/2026",
+    toSession: "2026/2027",
+    byLevel: [
+      { from: 100, to: 200, students: 124 },
+      { from: 200, to: 300, students: 120 },
+      { from: 300, to: 400, students: 138 },
+    ],
+    graduating: 104,
+  };
+}
+
+export type SystemConfig = {
+  duesAmountKobo: number;
+  resumptionDate: string;
+  provisionalWindowDays: number;
+  graceWindowDays: number;
+  pendingBufferHours: number;
+  gpsRetentionDays: number;
+  defaultRadiusM: number;
+  venues: Array<{ id: string; name: string; radiusM: number }>;
+};
+
+export async function getSystemConfig(): Promise<SystemConfig> {
+  return {
+    duesAmountKobo: 500_000,
+    resumptionDate: "2025-09-15",
+    provisionalWindowDays: 30,
+    graceWindowDays: 30,
+    pendingBufferHours: 12,
+    gpsRetentionDays: 14,
+    defaultRadiusM: 40,
+    venues: [
+      { id: "v1", name: "Lecture Theatre A", radiusM: 40 },
+      { id: "v2", name: "Maths Block 2", radiusM: 35 },
+    ],
+  };
+}
+
+export type AuditEntry = {
+  id: string;
+  actor: string;
+  actorRole: "hod" | "admin" | "lecturer";
+  action: string;
+  target: string;
+  reason: string | null;
+  createdAt: string;
+};
+
+export async function getAuditLog(): Promise<AuditEntry[]> {
+  const now = Date.now();
+  return [
+    {
+      id: "1",
+      actor: "Dr Nnamdi Eze",
+      actorRole: "hod",
+      action: "grace_period.open",
+      target: "Level 400",
+      reason: "Payment portal was unreachable for four days during the deadline week.",
+      createdAt: new Date(now - 3 * 3_600_000).toISOString(),
+    },
+    {
+      id: "2",
+      actor: "Dr Amina Bello",
+      actorRole: "lecturer",
+      action: "manual_batch.submit",
+      target: "CMP 301 · 21 July",
+      reason: "Network was down in Lecture Theatre A for the whole hour.",
+      createdAt: new Date(now - 26 * 3_600_000).toISOString(),
+    },
+    {
+      id: "3",
+      actor: "Ibrahim Yusuf",
+      actorRole: "admin",
+      action: "registration.revoke",
+      target: "CMP/2021/047",
+      reason: "Impostor claim confirmed at the department office with student ID.",
+      createdAt: new Date(now - 3 * 86_400_000).toISOString(),
+    },
+    {
+      id: "4",
+      actor: "Dr Nnamdi Eze",
+      actorRole: "hod",
+      action: "eligibility.authorize",
+      target: "CMP 301",
+      reason: "Final list for the 2025/2026 first semester.",
+      createdAt: new Date(now - 5 * 86_400_000).toISOString(),
+    },
+  ];
+}
+
+export type WaiverRequest = {
+  id: string;
+  matricNo: string;
+  surname: string;
+  firstName: string;
+  otherNames: string | null;
+  level: number;
+  requestNote: string;
+  requestedAt: string;
+  provisionalScore: number;
+  status: "pending" | "granted" | "declined";
+};
+
+export async function getWaivers(): Promise<WaiverRequest[]> {
+  const now = Date.now();
+  return [
+    {
+      id: "w1",
+      matricNo: "CMP/2021/203",
+      surname: "Nwachukwu",
+      firstName: "Emeka",
+      otherNames: null,
+      level: 400,
+      requestNote:
+        "My father was hospitalised in October and the family covered the bills. I can pay in January.",
+      requestedAt: new Date(now - 2 * 86_400_000).toISOString(),
+      provisionalScore: 9,
+      status: "pending",
+    },
+    {
+      id: "w2",
+      matricNo: "STA/2022/091",
+      surname: "Bassey",
+      firstName: "Idara",
+      otherNames: "Grace",
+      level: 300,
+      requestNote: "I am on the departmental hardship list for this session.",
+      requestedAt: new Date(now - 5 * 86_400_000).toISOString(),
+      provisionalScore: 6.5,
+      status: "pending",
+    },
+  ];
+}
+
+export type AttendanceDispute = {
+  id: string;
+  matricNo: string;
+  surname: string;
+  firstName: string;
+  otherNames: string | null;
+  courseCode: string;
+  heldOn: string;
+  studentNote: string;
+  recordedReason: SubmitRejection;
+  source: "digital" | "manually_entered";
+  status: "open" | "upheld" | "corrected";
+};
+
+export async function getDisputes(): Promise<AttendanceDispute[]> {
+  const now = Date.now();
+  return [
+    {
+      id: "d1",
+      matricNo: "CMP/2021/158",
+      surname: "Adebayo",
+      firstName: "Folake",
+      otherNames: "Ronke",
+      courseCode: "CMP 301",
+      heldOn: new Date(now - 6 * 86_400_000).toISOString(),
+      studentNote: "I was in the back row of the hall the whole lecture but it said I was outside.",
+      recordedReason: "outside_geofence",
+      source: "digital",
+      status: "open",
+    },
+    {
+      id: "d2",
+      matricNo: "CMP/2022/018",
+      surname: "Eze",
+      firstName: "Chukwudi",
+      otherNames: null,
+      courseCode: "MTH 205",
+      heldOn: new Date(now - 9 * 86_400_000).toISOString(),
+      studentNote: "I signed the paper sheet but my name is not on the record.",
+      recordedReason: "already_submitted",
+      source: "manually_entered",
+      status: "open",
+    },
+  ];
+}
+
+export type LecturerOversight = {
+  lecturerId: string;
+  name: string;
+  sessionsHeld: number;
+  paperBatches: number;
+  singleCheckpoint: number;
+  cancelled: number;
+};
+
+export async function getLecturerOversight(): Promise<LecturerOversight[]> {
+  return [
+    { lecturerId: "l1", name: "Dr Amina Bello", sessionsHeld: 36, paperBatches: 2, singleCheckpoint: 3, cancelled: 1 },
+    { lecturerId: "l2", name: "Dr Segun Afolabi", sessionsHeld: 24, paperBatches: 9, singleCheckpoint: 7, cancelled: 4 },
+    { lecturerId: "l3", name: "Mrs Ngozi Obi", sessionsHeld: 30, paperBatches: 0, singleCheckpoint: 1, cancelled: 0 },
+  ];
+}
+
 export type EligibilityEntry = {
   studentId: string;
   matricNo: string;

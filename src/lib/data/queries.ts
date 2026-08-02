@@ -603,6 +603,35 @@ export async function getAdminStudents(): Promise<AdminStudent[]> {
   }));
 }
 
+export type RegistrationDispute = {
+  id: string;
+  matricNo: string;
+  claimedAt: string;
+  /** Enough to recognise your own number, not enough to learn someone else's. */
+  maskedPhone: string;
+  autoFlagged: boolean;
+};
+
+export async function getRegistrationDisputes(): Promise<RegistrationDispute[]> {
+  const now = Date.now();
+  return [
+    {
+      id: "rd1",
+      matricNo: "CMP/2021/047",
+      claimedAt: new Date(now - 12 * 86_400_000).toISOString(),
+      maskedPhone: "+234 803 *** 1188",
+      autoFlagged: true,
+    },
+    {
+      id: "rd2",
+      matricNo: "STA/2022/091",
+      claimedAt: new Date(now - 30 * 86_400_000).toISOString(),
+      maskedPhone: "+234 806 *** 4402",
+      autoFlagged: false,
+    },
+  ];
+}
+
 export type PaymentRow = {
   id: string;
   matricNo: string;

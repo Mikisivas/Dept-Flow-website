@@ -84,25 +84,34 @@ export async function startDuesPayment(
 
   if (error) throw new Error(`Could not record the payment: ${error.message}`);
 
-  const { authorizationUrl } = await initializeTransaction({
-    reference,
-    amountKobo: Number(dues.dues_amount_kobo),
-    email: placeholderEmail(student.matric_no),
-    callbackUrl: callbackUrlFor(reference),
-    channel,
-    metadata: {
-      matric_no: student.matric_no,
-      academic_session_id: session.id,
-      // Shown on the Paystack dashboard's transaction list.
-      custom_fields: [
-        {
-          display_name: "Matric number",
-          variable_name: "matric_no",
-          value: student.matric_no,
-        },
-      ],
-    },
-  });
+  let authorizationUrl: string;
+  try {
+    ({ authorizationUrl } = await initializeTransaction({
+      reference,
+      amountKobo: Number(dues.dues_amount_kobo),
+      email: placeholderEmail(student.matric_no),
+      callbackUrl: callbackUrlFor(reference),
+      channel,
+      metadata: {
+        matric_no: student.matric_no,
+        academic_session_id: session.id,
+        // Shown on the Paystack dashboard's transaction list.
+        custom_fields: [
+          {
+            display_name: "Matric number",
+            variable_name: "matric_no",
+            value: student.matric_no,
+          },
+        ],
+      },
+    }));
+  } catch (error) {
+    // Paystack refused, so no transaction exists under this reference and the
+    // row we optimistically wrote can never resolve. Left behind it becomes a
+    // payment stuck on "Checking" in the student's history for ever.
+    await db.from("payments").delete().eq("paystack_reference", reference);
+    throw error;
+  }
 
   return { outcome: "redirect", authorizationUrl, reference };
 }
@@ -255,6 +264,52 @@ export async function settlePayment(
     amountKobo: verified.amountKobo,
     sessionsCounted: typeof counted === "number" ? counted : null,
   };
+}
+
+/**
+ * Re-ask Paystack about anything still pending.
+ *
+ * A card settles in seconds and a transfer in minutes, so a row that is still
+ * pending well after it was started is not "in flight" — it is a checkout that
+ * was abandoned, a transfer that never landed, or a payment whose webhook we
+ * never received. Left alone it spins on "Checking payment…" for ever, which
+ * is a screen that generates support requests rather than answering questions.
+ *
+ * This is the nightly reconciliation job, run on read instead. It is bounded:
+ * only rows older than the grace below, only a handful at a time, and
+ * `last_checked_at` keeps a reload from re-asking about the same row.
+ */
+const RECONCILE_AFTER_SECONDS = 90;
+const RECONCILE_BATCH = 3;
+
+export async function reconcilePendingPayments(studentId: string): Promise<void> {
+  const db = createServiceClient();
+  const cutoff = new Date(Date.now() - RECONCILE_AFTER_SECONDS * 1000).toISOString();
+
+  const { data: stale } = await db
+    .from("payments")
+    .select("paystack_reference, last_checked_at")
+    .eq("student_id", studentId)
+    .eq("status", "pending")
+    .lt("initialized_at", cutoff)
+    .order("initialized_at", { ascending: false })
+    .limit(RECONCILE_BATCH);
+
+  const due = (stale ?? []).filter(
+    (row) => !row.last_checked_at || Date.parse(row.last_checked_at) < Date.parse(cutoff),
+  );
+
+  await Promise.all(
+    due.map(async (row) => {
+      try {
+        await settlePayment(row.paystack_reference, studentId);
+      } catch (error) {
+        // One unreachable reference must not blank the dues screen. The row
+        // stays pending and the next load tries again.
+        console.error("reconcile failed", row.paystack_reference, error);
+      }
+    }),
+  );
 }
 
 /**

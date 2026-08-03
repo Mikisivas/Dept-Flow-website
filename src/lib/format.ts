@@ -221,6 +221,30 @@ export function normaliseMatric(matric: string): string {
   return matric.trim().toUpperCase();
 }
 
+/**
+ * Nigerian mobile numbers, in the one form the schema accepts.
+ *
+ * Students type `0805 123 4567`; the database check constraint wants
+ * `+2348051234567`. Normalising in one place stops the browser and the server
+ * disagreeing about whether a number is valid — the failure that produces is a
+ * code sent to a number the account can never be matched against.
+ */
+export function normalisePhone(phone: string): string | null {
+  const digits = phone.replace(/[^\d+]/g, "");
+
+  if (/^\+234\d{10}$/.test(digits)) return digits;
+  if (/^234\d{10}$/.test(digits)) return `+${digits}`;
+  if (/^0\d{10}$/.test(digits)) return `+234${digits.slice(1)}`;
+
+  return null;
+}
+
+/** `+2348051234567` → `0805 123 4567`, for showing a number back to its owner. */
+export function formatPhone(phone: string): string {
+  const local = phone.startsWith("+234") ? `0${phone.slice(4)}` : phone;
+  return local.replace(/^(\d{4})(\d{3})(\d{4})$/, "$1 $2 $3");
+}
+
 export function programmeFromMatric(matric: string): string | null {
   const prefix = normaliseMatric(matric).split("/")[0];
   return PROGRAMME_NAMES[prefix] ?? null;

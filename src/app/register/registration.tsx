@@ -8,8 +8,8 @@ import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { CodeInput } from "@/components/code-input";
 import { Countdown } from "@/components/countdown";
-import { checkRegisterMatch, sendOtp, verifyOtp } from "@/lib/data/queries";
-import type { RegisterMatch } from "@/lib/data/queries";
+import { normalisePhone } from "@/lib/format";
+
 import { isValidMatric, normaliseMatric } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -27,11 +27,21 @@ import { cn } from "@/lib/utils";
  * account.
  */
 
-type Matched = Extract<RegisterMatch, { outcome: "matched" }>;
+type Matched = {
+  outcome: "matched";
+  matricNo: string;
+  surname: string;
+  level: number;
+  programme: string;
+};
+
+/** Collected on step 2, sent with the password on step 3. */
+type Contact = { firstName: string; otherNames: string; phone: string };
 
 export function Registration() {
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [matched, setMatched] = useState<Matched | null>(null);
+  const [contact, setContact] = useState<Contact | null>(null);
 
   if (step === 1 || !matched) {
     return (
@@ -44,11 +54,33 @@ export function Registration() {
     );
   }
 
-  if (step === 2) {
-    return <ContactStep matched={matched} onVerified={() => setStep(3)} />;
+  if (step === 2 || !contact) {
+    return (
+      <ContactStep
+        matched={matched}
+        onVerified={(details) => {
+          setContact(details);
+          setStep(3);
+        }}
+      />
+    );
   }
 
-  return <PasswordStep matched={matched} />;
+  return <PasswordStep matched={matched} contact={contact} />;
+}
+
+/**
+ * The client's half of the flow. Nothing it sends is trusted: the server
+ * rechecks the register match and requires a consumed code for this matric
+ * number and phone before it will create anything.
+ */
+async function post(payload: Record<string, unknown>) {
+  const response = await fetch("/api/register", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  return { ok: response.ok, body: await response.json().catch(() => ({})) };
 }
 
 /* ---------------------------------------------------------------------------
@@ -87,7 +119,8 @@ function IdentityStep({ onMatched }: { onMatched: (match: Matched) => void }) {
 
     setError(null);
     setChecking(true);
-    const result = await checkRegisterMatch({
+    const { body: result } = await post({
+      step: "check",
       matricNo: normaliseMatric(matric),
       surname,
       level: Number(level),
@@ -213,7 +246,13 @@ function IdentityStep({ onMatched }: { onMatched: (match: Matched) => void }) {
    Step 2 — full name, phone, and the code
    --------------------------------------------------------------------------- */
 
-function ContactStep({ matched, onVerified }: { matched: Matched; onVerified: () => void }) {
+function ContactStep({
+  matched,
+  onVerified,
+}: {
+  matched: Matched;
+  onVerified: (contact: Contact) => void;
+}) {
   const [phase, setPhase] = useState<"details" | "code">("details");
   const [firstName, setFirstName] = useState("");
   const [otherNames, setOtherNames] = useState("");
@@ -231,26 +270,42 @@ function ContactStep({ matched, onVerified }: { matched: Matched; onVerified: ()
       setError("Enter your first name.");
       return;
     }
-    if (!/^(\+234|0)[0-9]{10}$/.test(phone.replace(/\s/g, ""))) {
+    if (!normalisePhone(phone)) {
       setError("Enter a Nigerian mobile number, like 0805 123 4567.");
       return;
     }
 
     setError(null);
     setWorking(true);
-    const { expiresAt: expiry } = await sendOtp(phone);
+    const { ok, body } = await post({
+      step: "send-otp",
+      matricNo: matched.matricNo,
+      phone,
+    });
     setWorking(false);
-    setExpiresAt(expiry);
+
+    if (!ok) {
+      setError(body.error ?? "We couldn't send a code. Try again.");
+      return;
+    }
+
+    // Only an expiry comes back. The code itself is never in a response, in
+    // any environment — in development it is written to the server log.
+    setExpiresAt(body.expiresAt);
     setPhase("code");
   }
 
   async function handleVerify(value: string) {
     setCodeError(null);
     setWorking(true);
-    const result = await verifyOtp(value);
+    const { body: result } = await post({ step: "verify-otp", phone, code: value });
     setWorking(false);
-    if (result.ok) onVerified();
-    else setCodeError(result.reason ?? "That code isn't right.");
+
+    if (result.ok) {
+      onVerified({ firstName: firstName.trim(), otherNames: otherNames.trim(), phone });
+      return;
+    }
+    setCodeError(result.reason ?? "That code isn't right.");
   }
 
   return (
@@ -391,7 +446,7 @@ function Detail({
    Step 3 — password and consent
    --------------------------------------------------------------------------- */
 
-function PasswordStep({ matched }: { matched: Matched }) {
+function PasswordStep({ matched, contact }: { matched: Matched; contact: Contact }) {
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [consent, setConsent] = useState(false);
@@ -418,9 +473,31 @@ function PasswordStep({ matched }: { matched: Matched }) {
 
     setError(null);
     setWorking(true);
-    await new Promise((resolve) => setTimeout(resolve, 800));
-    setWorking(false);
-    window.location.href = "/dashboard";
+
+    // Everything at once, and every field of it re-checked server-side. The
+    // account is created and the session issued in the same request — making
+    // someone who just chose a password type it again is a step that exists
+    // for no one's benefit.
+    const { ok, body } = await post({
+      step: "create",
+      matricNo: matched.matricNo,
+      surname: matched.surname,
+      level: matched.level,
+      firstName: contact.firstName,
+      otherNames: contact.otherNames,
+      phone: contact.phone,
+      password,
+    });
+
+    if (!ok) {
+      setError(body.error ?? "We couldn't create your account. Try again.");
+      setWorking(false);
+      return;
+    }
+
+    // A full navigation, so the new session cookie is on the very first
+    // request for the dashboard.
+    window.location.href = body.redirectTo ?? "/dashboard";
   }
 
   return (

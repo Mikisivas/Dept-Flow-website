@@ -221,13 +221,7 @@ export function DuesPayment({
                   {/* Never colour alone: the badge carries a word. */}
                   <StatusBadge
                     className="shrink-0"
-                    variant={
-                      payment.status === "success"
-                        ? "confirmed"
-                        : payment.status === "pending"
-                          ? "pending"
-                          : "locked"
-                    }
+                    variant={historyVariant(payment.status)}
                     label={HISTORY_LABEL[payment.status]}
                   />
                 </div>
@@ -277,3 +271,14 @@ const HISTORY_LABEL: Record<PaymentRecord["status"], string> = {
   abandoned: "Not finished",
   reversed: "Reversed",
 };
+
+/**
+ * A spinner promises that something is happening. Only `pending` earns one,
+ * and by the time this renders the server has already re-verified anything
+ * stale — so a row still saying "Checking" really is still in flight.
+ */
+function historyVariant(status: PaymentRecord["status"]) {
+  if (status === "success") return "confirmed" as const;
+  if (status === "pending") return "pending" as const;
+  return "locked" as const;
+}

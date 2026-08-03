@@ -186,6 +186,13 @@ export async function verifyTransaction(reference: string): Promise<VerifiedTran
 
   const body = await response.json().catch(() => null);
 
+  // Paystack has never heard of it. That is an answer, not a failure: the
+  // reference was minted here and the student never reached checkout, so the
+  // row is dead rather than in flight.
+  if (response.status === 404) {
+    return { status: "abandoned", amountKobo: 0, channel: null, paidAt: null, raw: body };
+  }
+
   if (!response.ok || !body?.status) {
     throw new Error(body?.message ?? `Could not verify ${reference} (${response.status})`);
   }

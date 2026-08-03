@@ -17,8 +17,12 @@ supabase/
     ..._governance.sql               grace, waivers, disputes, eligibility, audit
     ..._functions.sql                the attendance formula and transitions
     ..._rls.sql                      row-level security
+    ..._credentials.sql              password digests on profiles, login lookup
+    ..._function_grants.sql          stop PostgREST publishing the functions
+    ..._venue_directory.sql          venue names without venue coordinates
   seed.sql                           development data
-  tests/schema_test.sql              61 assertions
+  seed_today.sql                     a class on today's weekday, for testing
+  tests/schema_test.sql              79 assertions
 ```
 
 ## Running it

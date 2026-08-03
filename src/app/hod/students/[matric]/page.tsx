@@ -4,7 +4,7 @@ import { AttendanceMeter } from "@/components/attendance-meter";
 import { CheckpointStrip } from "@/components/checkpoint-strip";
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
-import { getAuditLog, getStudentDashboard } from "@/lib/data/queries";
+import { getAuditLog, getStudentRecord } from "@/lib/data/queries";
 import { displayNameRegister, formatDateTime, formatScore } from "@/lib/format";
 
 export const metadata: Metadata = { title: "Student" };
@@ -22,7 +22,7 @@ export default async function StudentDetailPage({
   params: Promise<{ matric: string }>;
 }) {
   const { matric } = await params;
-  const { student, compliance, courses } = await getStudentDashboard();
+  const { student, compliance, courses } = await getStudentRecord(matric);
   const audit = await getAuditLog();
 
   const trail = audit.filter((entry) => entry.target === decodeURIComponent(matric));

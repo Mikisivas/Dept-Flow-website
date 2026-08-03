@@ -6,39 +6,51 @@ import { CheckpointStrip } from "@/components/checkpoint-strip";
 import { DataTable, type Column } from "@/components/data-table";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
-import { getSessionRoster, type RosterEntry } from "@/lib/data/queries";
+import { notFound } from "next/navigation";
+import { loadSessionRoster } from "@/lib/data/lecturer";
 import { displayNameRegister, formatDateShort, formatScore } from "@/lib/format";
-import type { SessionCell } from "@/lib/types";
+import type { RosterEntry, SessionCell } from "@/lib/types";
 
 export const metadata: Metadata = {
   title: "Session review",
 };
 
-function scoreOf(entry: RosterEntry) {
-  return entry.checkpointOne && entry.checkpointTwo ? 1 : entry.checkpointOne || entry.checkpointTwo ? 0.5 : 0;
+/**
+ * Mirrors `resolve_session_score()`. A single-checkpoint lecture is scored
+ * present or absent — there is no half mark to award when there was only one
+ * checkpoint to catch.
+ */
+function scoreOf(entry: RosterEntry, mode: "pair" | "single") {
+  const caught = Number(entry.checkpointOne) + Number(entry.checkpointTwo);
+  if (mode === "single") return caught > 0 ? 1 : 0;
+  return caught === 2 ? 1 : caught === 1 ? 0.5 : 0;
 }
 
-function cellOf(entry: RosterEntry, heldOn: string): SessionCell {
+function cellOf(entry: RosterEntry, heldOn: string, mode: "pair" | "single"): SessionCell {
   return {
     id: entry.studentId,
     label: "This session",
     heldOn,
-    mode: "pair",
+    mode,
     checkpointOne: entry.checkpointOne,
     checkpointTwo: entry.checkpointTwo,
     status: "confirmed",
     source: "digital",
-    score: scoreOf(entry),
+    score: scoreOf(entry, mode),
   };
 }
 
 export default async function SessionReviewPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const { roster, courseCode, heldOn } = await getSessionRoster(id);
+  const session = await loadSessionRoster(id);
 
-  const full = roster.filter((entry) => scoreOf(entry) === 1).length;
-  const half = roster.filter((entry) => scoreOf(entry) === 0.5).length;
-  const absent = roster.filter((entry) => scoreOf(entry) === 0).length;
+  if (!session) notFound();
+
+  const { roster, courseCode, heldOn, mode } = session;
+
+  const full = roster.filter((entry) => scoreOf(entry, mode) === 1).length;
+  const half = roster.filter((entry) => scoreOf(entry, mode) === 0.5).length;
+  const absent = roster.filter((entry) => scoreOf(entry, mode) === 0).length;
   const flagged = roster.filter((entry) => entry.flagged);
 
   const columns: Column<RosterEntry>[] = [
@@ -59,14 +71,14 @@ export default async function SessionReviewPage({ params }: { params: Promise<{ 
       key: "checkpoints",
       header: "Checkpoints",
       mobile: "meta",
-      cell: (entry) => <CheckpointStrip sessions={[cellOf(entry, heldOn)]} size="sm" />,
+      cell: (entry) => <CheckpointStrip sessions={[cellOf(entry, heldOn, mode)]} size="sm" />,
     },
     {
       key: "score",
       header: "Score",
       align: "right",
       mobile: "trailing",
-      cell: (entry) => <span className="tabular">{formatScore(scoreOf(entry))}</span>,
+      cell: (entry) => <span className="tabular">{formatScore(scoreOf(entry, mode))}</span>,
     },
     {
       key: "flag",

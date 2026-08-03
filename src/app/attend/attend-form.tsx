@@ -8,8 +8,8 @@ import { Countdown } from "@/components/countdown";
 import { EmptyState } from "@/components/empty-state";
 import { StickyActionBar } from "@/components/sticky-action-bar";
 import { Button } from "@/components/ui/button";
-import { RejectedSubmission, submitCheckpoint } from "@/lib/data/queries";
-import type { LiveCheckpoint, SubmitRejection } from "@/lib/data/queries";
+import { RejectedSubmission, submitCheckpoint } from "@/lib/api/attendance";
+import type { LiveCheckpoint, SubmitRejection } from "@/lib/types";
 import { SubmissionRejected, usePendingSubmission } from "@/hooks/use-pending-submission";
 import { cn } from "@/lib/utils";
 

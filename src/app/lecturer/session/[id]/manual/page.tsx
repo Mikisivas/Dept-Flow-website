@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { AppShell } from "@/components/app-shell";
 import { PageHeader } from "@/components/page-header";
-import { getSessionRoster } from "@/lib/data/queries";
+import { notFound } from "next/navigation";
+import { loadSessionRoster } from "@/lib/data/lecturer";
 import { formatDateShort } from "@/lib/format";
 import { ManualBatch } from "./manual-batch";
 
@@ -11,7 +12,11 @@ export const metadata: Metadata = {
 
 export default async function ManualBatchPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const { roster, courseCode, heldOn } = await getSessionRoster(id);
+  const session = await loadSessionRoster(id);
+
+  if (!session) notFound();
+
+  const { roster, courseCode, heldOn } = session;
 
   return (
     <AppShell role="lecturer">

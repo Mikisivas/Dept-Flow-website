@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Radio, TriangleAlert, Users } from "lucide-react";
 import { Countdown } from "@/components/countdown";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { Button } from "@/components/ui/button";
-import type { SessionControl } from "@/lib/data/queries";
+import type { SessionControl } from "@/lib/types";
 import { formatTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -28,9 +29,17 @@ const REJECTION_LABELS: Record<string, string> = {
 };
 
 export function SessionControlPanel({ session }: { session: SessionControl }) {
-  const [checkpoints, setCheckpoints] = useState(session.checkpoints);
+  const router = useRouter();
+  /**
+   * The code the server has just minted, held until a refresh brings it back
+   * in `session`. Without it the board goes blank for the length of a round
+   * trip, in front of the class.
+   */
+  const [justIssued, setJustIssued] = useState<SessionControl["checkpoints"][number] | null>(null);
   const [generating, setGenerating] = useState(false);
+  const [ending, setEnding] = useState(false);
   const [confirmEnd, setConfirmEnd] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   /**
    * Expiry is an event, not something read from the clock during render.
@@ -47,26 +56,96 @@ export function SessionControlPanel({ session }: { session: SessionControl }) {
       .map((cp) => cp.index),
   );
 
+  // The server's list is the truth; the optimistic one only fills the gap
+  // before the first refresh that contains it.
+  const checkpoints =
+    justIssued && !session.checkpoints.some((cp) => cp.index === justIssued.index)
+      ? [...session.checkpoints, justIssued]
+      : session.checkpoints;
+
   const lastIssued = checkpoints.at(-1) ?? null;
   const live = lastIssued && !retired.includes(lastIssued.index) ? lastIssued : null;
   const nextIndex = (checkpoints.length + 1) as 1 | 2;
   const canGenerate = !live && checkpoints.length < 2;
   const issuedCount = checkpoints.length;
 
+  /**
+   * While a code is on the board the count of who has answered is the only
+   * thing a lecturer is watching, so the page refetches it. Ten seconds is slow
+   * enough to be invisible on a hall's worth of phones and fast enough that the
+   * number is never stale by more than a breath. It stops the moment the code
+   * does — nothing polls a session that isn't taking submissions.
+   */
+  useEffect(() => {
+    if (!live) return;
+    const timer = setInterval(() => router.refresh(), 10_000);
+    return () => clearInterval(timer);
+  }, [live, router]);
+
   async function generate() {
     setGenerating(true);
-    await new Promise((resolve) => setTimeout(resolve, 600));
-    setCheckpoints((current) => [
-      ...current,
-      {
-        index: nextIndex,
-        token: String(Math.floor(1000 + Math.random() * 9000)),
-        expiresAt: new Date(Date.now() + 300_000).toISOString(),
+    setError(null);
+
+    try {
+      const response = await fetch(
+        `/api/lecturer/sessions/${session.sessionInstanceId}/checkpoints`,
+        { method: "POST" },
+      );
+      const body = await response.json();
+
+      if (!response.ok || !body.token) {
+        setError(body.error ?? "Couldn't issue the code.");
+        setGenerating(false);
+        return;
+      }
+
+      // Only now is a code shown. Putting a locally generated number on the
+      // board before the server had stored it would send a hall of students to
+      // submit against a checkpoint that does not exist.
+      setJustIssued({
+        index: body.index as 1 | 2,
+        token: body.token as string,
+        expiresAt: body.expiresAt as string,
         submissions: 0,
         rejections: [],
-      },
-    ]);
+      });
+      router.refresh();
+    } catch {
+      setError("No connection. The code was not issued — try again.");
+    }
+
     setGenerating(false);
+  }
+
+  async function endSession(reason: string) {
+    setEnding(true);
+    setError(null);
+
+    try {
+      const response = await fetch(
+        `/api/lecturer/sessions/${session.sessionInstanceId}/close`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ reason }),
+        },
+      );
+      const body = await response.json();
+
+      if (!response.ok) {
+        setError(body.error ?? "Couldn't end the session.");
+        setEnding(false);
+        setConfirmEnd(false);
+        return;
+      }
+
+      setConfirmEnd(false);
+      router.replace(`/lecturer/session/${session.sessionInstanceId}/review`);
+    } catch {
+      setError("No connection. The session is still open — try again.");
+      setEnding(false);
+      setConfirmEnd(false);
+    }
   }
 
   return (
@@ -126,6 +205,12 @@ export function SessionControlPanel({ session }: { session: SessionControl }) {
         </Button>
       ) : null}
 
+      {error ? (
+        <p role="alert" className="rounded-lg border border-danger bg-danger-tint p-4 text-[15px] text-ink">
+          {error}
+        </p>
+      ) : null}
+
       {!live && issuedCount >= 2 ? (
         <p className="rounded-lg border border-line bg-surface p-4 text-[15px] text-slate">
           Both checkpoints are done. End the session to score it.
@@ -177,9 +262,16 @@ export function SessionControlPanel({ session }: { session: SessionControl }) {
         size="lg"
         className={cn("w-full", checkpoints.length === 0 && "mt-2")}
         onClick={() => setConfirmEnd(true)}
+        aria-disabled={ending || issuedCount === 0}
       >
-        End session
+        {ending ? "Ending…" : "End session"}
       </Button>
+
+      {issuedCount === 0 ? (
+        <p className="-mt-3 text-center text-[13px] text-muted">
+          Issue at least one checkpoint before ending — there would be nothing to score.
+        </p>
+      ) : null}
 
       <ConfirmDialog
         open={confirmEnd}
@@ -216,7 +308,8 @@ export function SessionControlPanel({ session }: { session: SessionControl }) {
         reasonLabel="Why only one checkpoint?"
         reasonHint="Recorded for the HOD, who reviews single-checkpoint sessions."
         confirmLabel="End session"
-        onConfirm={() => setConfirmEnd(false)}
+        working={ending}
+        onConfirm={endSession}
       />
     </div>
   );

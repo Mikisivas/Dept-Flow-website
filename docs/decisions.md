@@ -191,6 +191,60 @@ manifest.
 
 Supabase schema first, then screens. The schema is in `supabase/`.
 
+## The attendance path
+
+Decided while wiring lecturer → checkpoint → student → score. The database
+functions were already authoritative; these are the choices the API makes
+around them.
+
+**A lecture row is created when the lecturer starts the class, not by a
+scheduler.** A `timetable_entries` row says a class is *meant* to happen; a
+`session_instances` row says one *did*. Pre-creating instances would put
+lectures that never ran into the attendance denominator, which is the one
+number the whole product is about. Consequence: "Start session" is a POST that
+creates the row, not a link — there is nothing to link to yet. Tapping it twice
+returns the same instance rather than creating a second.
+
+**`checkpoint_mode` is decided at close, from what was issued.** Two tokens →
+`pair`, one → `single`. This is why the column is null until then. Closing with
+one checkpoint requires a written reason and writes an audit row, because it
+changes how every student in the hall is scored.
+
+**Closing scores every enrolled student, including the absent ones.** A missing
+`session_scores` row would silently forgive an absence. `resolve_session_score`
+is called once per enrolment and is never reimplemented in TypeScript.
+
+**A rejected mark can be corrected; an accepted one cannot.** The unique
+constraint on `(student_id, checkpoint_id)` is the duplicate defence and stays,
+but the API upserts: a student who mistypes writes a rejected row, and their
+correct retry updates it in place. Inserting a second row would be blocked by
+the constraint, so the first typo would cost them the checkpoint. Once a row is
+accepted, further submissions are `already_submitted`.
+
+**`mark_reject_reason` is coarser than the message on screen, deliberately.** A
+mistyped code and a lapsed code are one event to the HOD and two different
+instructions in the hall, so `wrong_code` is stored as
+`invalid_or_expired_token` and only the UI distinguishes them.
+
+**The geo-fence allows the phone's own error, capped at 35 m.** A reading of
+±60 m inside a 40 m fence cannot prove the student is outside; rejecting it
+punishes a cloudy day and looks identical to cheating in the audit trail. The
+cap exists because a ±500 m reading carries no information about which building
+you are in. Distance is stored on every mark, accepted or not — it survives the
+coordinate purge and is the only evidence a disputed rejection leaves.
+
+**Venue names split from venue coordinates — `venue_directory`.** `venues` is
+admin-only under RLS, and correctly so: a student who can read the fence centre
+and radius knows exactly how far they can stray. But the venue *name* is on the
+timetable and has to appear on both the lecturer's session screen and the
+student's checkpoint screen. `venue_directory` is a view of `id, name` and
+nothing else, on the same reasoning as `my_attendance_marks` — the coordinates
+are not hidden there, they are absent.
+
+**The token never reaches a student's browser.** Students have no read policy on
+`checkpoints` at all. The server returns every field of a live checkpoint except
+the code; being in the room to read it off the board is the mechanism.
+
 ## Palette
 
 `#FF9935`, eyedropped from the crest, superseding the `#F0952B` visual estimate

@@ -2,6 +2,8 @@ import "server-only";
 
 import { createUserClient } from "@/lib/supabase/client";
 import { currentAccessToken, currentUser } from "@/lib/auth/current-user";
+import { loadLiveCheckpoint } from "@/lib/data/attendance";
+import { lagosToday } from "@/lib/format";
 import type { ComplianceState, CourseAttendance, RiskPattern, SessionCell } from "@/lib/types";
 import type { DuesPeriod, StudentProfile, TodayClass } from "@/lib/data/fixtures";
 
@@ -39,6 +41,63 @@ export class DashboardUnavailable extends Error {
     super(cause ? `${what}: ${cause}` : what);
     this.name = "DashboardUnavailable";
   }
+}
+
+/**
+ * Today's timetable, with a live checkpoint attached to the class it belongs
+ * to.
+ *
+ * The checkpoint has to be read with the service role: students have no read
+ * policy on `checkpoints`, deliberately, because the code is what makes being
+ * in the hall necessary. Only the fact that one is open crosses back — never
+ * the code itself.
+ */
+async function loadToday(
+  db: ReturnType<typeof createUserClient>,
+  studentId: string,
+  courses: CourseAttendance[],
+): Promise<TodayClass[]> {
+  if (courses.length === 0) return [];
+
+  const { dayOfWeek } = lagosToday();
+
+  const { data: entries } = await db
+    .from("timetable_entries")
+    .select("course_id, start_time, end_time, venue_id")
+    .in(
+      "course_id",
+      courses.map((course) => course.courseId),
+    )
+    .eq("day_of_week", dayOfWeek);
+
+  if (!entries || entries.length === 0) return [];
+
+  const { data: venues } = await db
+    .from("venue_directory")
+    .select("id, name")
+    .in("id", [...new Set(entries.map((entry) => entry.venue_id))]);
+
+  const venueName = new Map((venues ?? []).map((row) => [row.id as string, row.name as string]));
+  const live = await loadLiveCheckpoint(studentId);
+  const byId = new Map(courses.map((course) => [course.courseId, course]));
+
+  return entries
+    .map((entry) => {
+      const course = byId.get(entry.course_id);
+      return {
+        courseId: entry.course_id,
+        code: course?.code ?? "",
+        title: course?.title ?? "",
+        venue: venueName.get(entry.venue_id) ?? "",
+        startsAt: (entry.start_time ?? "").slice(0, 5),
+        endsAt: (entry.end_time ?? "").slice(0, 5),
+        liveCheckpoint:
+          live && live.courseCode === course?.code
+            ? { index: live.index, expiresAt: live.expiresAt }
+            : null,
+      };
+    })
+    .sort((a, b) => a.startsAt.localeCompare(b.startsAt));
 }
 
 export async function loadStudentDashboard(): Promise<StudentDashboard> {
@@ -156,6 +215,8 @@ export async function loadStudentDashboard(): Promise<StudentDashboard> {
     };
   });
 
+  const today = await loadToday(db, session.profileId, courses);
+
   const { data: risk } = await db
     .from("risk_predictions")
     .select("pattern, courses(code)")
@@ -185,7 +246,7 @@ export async function loadStudentDashboard(): Promise<StudentDashboard> {
       gracePeriodEnd: dues?.grace_period_end ?? null,
     },
     courses,
-    today: [],
+    today,
     risk: risk
       ? {
           pattern: risk.pattern as RiskPattern,

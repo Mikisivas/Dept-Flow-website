@@ -17,9 +17,15 @@ Then, optionally, paste [`supabase/seed.sql`](../supabase/seed.sql) and run that
 too. It creates the people and courses from the design mockups —
 `CMP/2021/047` and the rest — all with the password `demo-password`.
 
+The seeded timetable puts CMP 301 on Tuesdays, which is faithful and unhelpful
+on a Monday. [`supabase/seed_today.sql`](../supabase/seed_today.sql) adds a slot
+on whatever weekday you run it, so the lecturer's "Today's classes" has
+something in it. It is safe to run repeatedly, and its trailing comments explain
+how to point the geo-fence at wherever you are actually testing from.
+
 To confirm it worked, paste
 [`supabase/tests/schema_test.sql`](../supabase/tests/schema_test.sql) and run
-it. It returns a grid of 69 assertions — one row each, in plain English — then
+it. It returns a grid of 79 assertions — one row each, in plain English — then
 rolls back, changing nothing. A failure aborts with the assertion that broke.
 
 The SQL Editor may warn that a transaction is already in progress. That is

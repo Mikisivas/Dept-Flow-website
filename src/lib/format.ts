@@ -97,6 +97,27 @@ export function formatDaysLeft(value: Date | string, from: Date = new Date()): s
   return `${days} days left`;
 }
 
+/**
+ * Today, in the calendar the department actually lives in.
+ *
+ * A lecture held at 09:00 in Lagos is still "yesterday" to a server running in
+ * UTC for the first hour of the day, which is enough to make "today's classes"
+ * empty for a lecturer standing in the hall. The date and the weekday are read
+ * from the same formatted instant so they can never disagree.
+ */
+export function lagosToday(from: Date = new Date()): { date: string; dayOfWeek: number } {
+  const date = new Intl.DateTimeFormat("en-CA", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    timeZone: TIME_ZONE,
+  }).format(from);
+
+  // Parsed as UTC midnight, so getUTCDay() reads the Lagos weekday, not the
+  // server's. 0 = Sunday, matching timetable_entries.day_of_week.
+  return { date, dayOfWeek: new Date(`${date}T00:00:00Z`).getUTCDay() };
+}
+
 /** mm:ss for a token expiry or resend cooldown. */
 export function formatCountdown(secondsRemaining: number): string {
   const clamped = Math.max(0, Math.floor(secondsRemaining));

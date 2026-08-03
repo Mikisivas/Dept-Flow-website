@@ -677,6 +677,30 @@ select assert_true(
 );
 
 reset role;
+set local role authenticated;
+set local request.jwt.claim.sub = '33333333-3333-3333-3333-333333333301';  -- lecturer
+
+-- A venue name is on the timetable and has to appear on the session screen;
+-- the fence centre and radius are what the admin-only policy exists to hide.
+-- Splitting them means neither rule has to bend.
+select assert_true(
+  (select count(*) from venue_directory) = 2,
+  'a lecturer can read venue names'
+);
+
+select assert_true(
+  (select count(*) from venues) = 0,
+  'a lecturer still cannot read geo-fence coordinates'
+);
+
+reset role;
+
+select assert_true(
+  (select count(*) from information_schema.columns
+    where table_name = 'venue_directory'
+      and column_name in ('centre_lat', 'centre_lng', 'radius_m', 'boundary')) = 0,
+  'venue_directory has no coordinate columns at all, not merely hidden ones'
+);
 
 -- The readable result. Every row here is an assertion that held; a failure
 -- would have aborted before reaching this point.

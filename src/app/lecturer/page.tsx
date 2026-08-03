@@ -5,15 +5,20 @@ import { AppShell } from "@/components/app-shell";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
-import { getLecturerDashboard } from "@/lib/data/queries";
+import { loadLecturerDashboard } from "@/lib/data/lecturer";
 import { formatDateShort } from "@/lib/format";
+import { StartSessionButton } from "./start-session-button";
 
 export const metadata: Metadata = {
   title: "Today",
 };
 
+// Whether a session is open changes minute to minute and is the first thing on
+// this screen, so it is never served from a cache.
+export const dynamic = "force-dynamic";
+
 export default async function LecturerDashboardPage() {
-  const { today, openSession, recent } = await getLecturerDashboard();
+  const { today, openSession, recent } = await loadLecturerDashboard();
 
   return (
     <AppShell role="lecturer">
@@ -65,7 +70,7 @@ export default async function LecturerDashboardPage() {
           <ul className="mt-3 flex flex-col gap-2">
             {today.map((entry) => (
               <li
-                key={entry.sessionInstanceId}
+                key={entry.sessionInstanceId ?? entry.timetableEntryId}
                 className="rounded-lg border border-line bg-surface p-4"
               >
                 <p className="text-[15px] font-semibold text-ink">
@@ -86,15 +91,23 @@ export default async function LecturerDashboardPage() {
                   </span>
                 </p>
 
-                <Button
-                  asChild
-                  className="mt-3 w-full"
-                  variant={entry.status === "open" ? "primary" : "secondary"}
-                >
-                  <Link href={`/lecturer/session/${entry.sessionInstanceId}`}>
-                    {entry.status === "open" ? "Resume session" : "Start session"}
-                  </Link>
-                </Button>
+                {entry.sessionInstanceId ? (
+                  <Button
+                    asChild
+                    className="mt-3 w-full"
+                    variant={entry.status === "open" ? "primary" : "secondary"}
+                  >
+                    <Link href={`/lecturer/session/${entry.sessionInstanceId}`}>
+                      {entry.status === "open"
+                        ? "Resume session"
+                        : entry.status === "closed"
+                          ? "See what was recorded"
+                          : "Start session"}
+                    </Link>
+                  </Button>
+                ) : entry.timetableEntryId ? (
+                  <StartSessionButton timetableEntryId={entry.timetableEntryId} />
+                ) : null}
               </li>
             ))}
           </ul>

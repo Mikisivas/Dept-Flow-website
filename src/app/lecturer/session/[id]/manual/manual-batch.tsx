@@ -6,7 +6,7 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import { StickyActionBar } from "@/components/sticky-action-bar";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
-import type { RosterEntry } from "@/lib/data/queries";
+import type { RosterEntry } from "@/lib/types";
 import { displayNameRegister, formatScore } from "@/lib/format";
 import { cn } from "@/lib/utils";
 

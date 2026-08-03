@@ -5,11 +5,13 @@ import { Radio } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
-import { getLecturerDashboard } from "@/lib/data/queries";
+import { loadLecturerDashboard } from "@/lib/data/lecturer";
 
 export const metadata: Metadata = {
   title: "Session",
 };
+
+export const dynamic = "force-dynamic";
 
 /**
  * The "Session" tab needs somewhere to land whether or not a lecture is open.
@@ -20,7 +22,7 @@ export const metadata: Metadata = {
  * offers.
  */
 export default async function SessionIndexPage() {
-  const { openSession } = await getLecturerDashboard();
+  const { openSession } = await loadLecturerDashboard();
 
   if (openSession) {
     redirect(`/lecturer/session/${openSession.sessionInstanceId}`);

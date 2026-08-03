@@ -1,40 +1,44 @@
 /**
- * The screens' only door to data.
+ * Fixtures for the screens that are not wired to Supabase yet.
  *
- * Every function here is the signature the real client will keep — the same
- * arguments, the same return shapes, the same async. Today they resolve
- * fixtures; tomorrow they call Supabase for reads and FastAPI for anything
- * that changes a student's standing. No screen changes either way.
+ * Every function here keeps the signature its real replacement will have — the
+ * same arguments, the same return shapes, the same async — so wiring one is a
+ * change of import and nothing else.
+ *
+ * Anything that HAS been wired is gone from this file rather than left behind
+ * as a fallback. Two sources for the same screen is how a demo ends up showing
+ * fixture data and nobody notices: the student path now lives in
+ * `student.ts`, the lecturer path in `lecturer.ts`, and attendance in
+ * `attendance.ts`.
  *
  * Reads may go straight to Supabase under RLS. Writes must not: role
  * separation and the audit log live in the API, and a client that can write
  * `compliance_statuses` has defeated both.
  */
 
-import { COMPLIANCE, COURSES, DUES, STUDENT, TODAY } from "@/lib/data/fixtures";
-import type { DuesPeriod, StudentProfile, TodayClass } from "@/lib/data/fixtures";
-import type { ComplianceState, CourseAttendance, RiskPattern, SessionCell } from "@/lib/types";
+import { COMPLIANCE, COURSES, STUDENT } from "@/lib/data/fixtures";
+import type { StudentProfile } from "@/lib/data/fixtures";
+import type {
+  ComplianceState,
+  CourseAttendance,
+  RiskPattern,
+  SessionCell,
+  SubmitRejection,
+} from "@/lib/types";
 
-export type StudentDashboard = {
+/**
+ * One student's record as the HOD reads it. Still a fixture: the HOD screens
+ * are not wired yet. Named for the HOD's use rather than reusing the student's
+ * own dashboard loader, because the two answer different questions and will not
+ * share an implementation once this is real.
+ */
+export async function getStudentRecord(matricNo: string): Promise<{
   student: StudentProfile;
   compliance: ComplianceState;
-  dues: DuesPeriod;
   courses: CourseAttendance[];
-  today: TodayClass[];
-  risk: { pattern: RiskPattern; courseCode: string } | null;
-};
-
-export async function getStudentDashboard(): Promise<StudentDashboard> {
-  return {
-    student: STUDENT,
-    compliance: COMPLIANCE,
-    dues: DUES,
-    courses: COURSES,
-    today: TODAY,
-    // Advisory only. The authoritative 75% determination is always computed
-    // from confirmed scores, never from this.
-    risk: { pattern: "partial_attendance", courseCode: "STA 202" },
-  };
+}> {
+  void matricNo;
+  return { student: STUDENT, compliance: COMPLIANCE, courses: COURSES };
 }
 
 export type RegisterIdentity = {
@@ -172,219 +176,6 @@ export async function getNotifications(): Promise<NotificationItem[]> {
 
 /* ---------------------------------------------------------------------------
    Attendance
-   --------------------------------------------------------------------------- */
-
-export type LiveCheckpoint = {
-  sessionInstanceId: string;
-  checkpointId: string;
-  courseCode: string;
-  courseTitle: string;
-  lecturer: string;
-  venue: string;
-  index: 1 | 2;
-  expiresAt: string;
-  /** What the session is already worth to this student. */
-  firstCheckpointCaptured: boolean;
-};
-
-export type CheckpointOutcome = {
-  index: 1 | 2;
-  sessionScore: number;
-  bothCaptured: boolean;
-};
-
-/**
- * Every rejection a student can meet has its own reason, because every one of
- * them gets its own message on screen. A generic failure here generates
- * disputes the HOD then has to resolve by hand.
- */
-export type SubmitRejection =
-  | "outside_geofence"
-  | "invalid_or_expired_token"
-  | "wrong_code"
-  | "account_locked"
-  | "already_submitted"
-  | "location_blocked";
-
-export async function getLiveCheckpoint(): Promise<LiveCheckpoint | null> {
-  return {
-    sessionInstanceId: "cmp301-2026-01-13",
-    checkpointId: "cmp301-2026-01-13-cp2",
-    courseCode: "CMP 301",
-    courseTitle: "Operating Systems",
-    lecturer: "Dr Amina Bello",
-    venue: "Lecture Theatre A",
-    index: 2,
-    expiresAt: new Date(Date.now() + 224_000).toISOString(),
-    firstCheckpointCaptured: true,
-  };
-}
-
-export async function submitCheckpoint(payload: {
-  checkpointId: string;
-  token: string;
-  coords: { latitude: number; longitude: number; accuracy: number };
-}): Promise<CheckpointOutcome> {
-  await pause(900);
-
-  // Stand-in for the server's decision. The real endpoint checks the token,
-  // the geo-fence, the anti-spoof heuristics and the lock state, in that
-  // order, and the client never second-guesses any of them.
-  if (payload.token === "0000") throw new RejectedSubmission("wrong_code");
-  if (payload.token === "1111") throw new RejectedSubmission("outside_geofence");
-  if (payload.token === "2222") throw new RejectedSubmission("invalid_or_expired_token");
-  if (payload.token === "3333") throw new RejectedSubmission("account_locked");
-  if (payload.token === "4444") throw new RejectedSubmission("already_submitted");
-  if (payload.token === "9999") throw new Error("Network request failed");
-
-  return { index: 2, sessionScore: 1, bothCaptured: true };
-}
-
-/** A definitive answer from the server. Retrying it wastes the token window. */
-export class RejectedSubmission extends Error {
-  constructor(public readonly reason: SubmitRejection) {
-    super(reason);
-    this.name = "RejectedSubmission";
-  }
-}
-
-/* ---------------------------------------------------------------------------
-   Lecturer
-   --------------------------------------------------------------------------- */
-
-export type LecturerClass = {
-  sessionInstanceId: string;
-  courseCode: string;
-  courseTitle: string;
-  venue: string;
-  startsAt: string;
-  endsAt: string;
-  enrolled: number;
-  status: "scheduled" | "open" | "closed";
-};
-
-export type LecturerDashboard = {
-  lecturer: { surname: string; firstName: string };
-  today: LecturerClass[];
-  openSession: LecturerClass | null;
-  recent: Array<{
-    sessionInstanceId: string;
-    courseCode: string;
-    heldOn: string;
-    full: number;
-    half: number;
-    absent: number;
-    /** Set when the lecturer only ever issued one token. */
-    singleCheckpoint: boolean;
-    fromPaper: boolean;
-  }>;
-};
-
-export async function getLecturerDashboard(): Promise<LecturerDashboard> {
-  return {
-    lecturer: { surname: "Bello", firstName: "Amina" },
-    today: [
-      {
-        sessionInstanceId: "cmp301-today",
-        courseCode: "CMP 301",
-        courseTitle: "Operating Systems",
-        venue: "Lecture Theatre A",
-        startsAt: "10:00",
-        endsAt: "12:00",
-        enrolled: 86,
-        status: "open",
-      },
-      {
-        sessionInstanceId: "sta202-today",
-        courseCode: "STA 202",
-        courseTitle: "Probability II",
-        venue: "Maths Block 2",
-        startsAt: "14:00",
-        endsAt: "16:00",
-        enrolled: 74,
-        status: "scheduled",
-      },
-    ],
-    openSession: {
-      sessionInstanceId: "cmp301-today",
-      courseCode: "CMP 301",
-      courseTitle: "Operating Systems",
-      venue: "Lecture Theatre A",
-      startsAt: "10:00",
-      endsAt: "12:00",
-      enrolled: 86,
-      status: "open",
-    },
-    recent: [
-      {
-        sessionInstanceId: "cmp301-w12",
-        courseCode: "CMP 301",
-        heldOn: new Date(Date.now() - 7 * 86_400_000).toISOString(),
-        full: 61,
-        half: 14,
-        absent: 11,
-        singleCheckpoint: false,
-        fromPaper: false,
-      },
-      {
-        sessionInstanceId: "mth205-w12",
-        courseCode: "MTH 205",
-        heldOn: new Date(Date.now() - 9 * 86_400_000).toISOString(),
-        full: 40,
-        half: 6,
-        absent: 8,
-        singleCheckpoint: true,
-        fromPaper: false,
-      },
-      {
-        sessionInstanceId: "sta202-w11",
-        courseCode: "STA 202",
-        heldOn: new Date(Date.now() - 14 * 86_400_000).toISOString(),
-        full: 52,
-        half: 9,
-        absent: 13,
-        singleCheckpoint: false,
-        fromPaper: true,
-      },
-    ],
-  };
-}
-
-export type SessionControl = {
-  sessionInstanceId: string;
-  courseCode: string;
-  courseTitle: string;
-  venue: string;
-  openedAt: string;
-  enrolled: number;
-  /**
-   * Which checkpoint is still open, decided by the server. The client must not
-   * work this out from its own clock: a phone with a skewed clock would either
-   * keep a dead code on the board or retire a live one early.
-   */
-  liveCheckpointIndex: 1 | 2 | null;
-  checkpoints: Array<{
-    index: 1 | 2;
-    token: string;
-    expiresAt: string;
-    submissions: number;
-    rejections: Array<{ reason: SubmitRejection; count: number }>;
-  }>;
-};
-
-export type RosterEntry = {
-  studentId: string;
-  matricNo: string;
-  surname: string;
-  firstName: string;
-  otherNames: string | null;
-  checkpointOne: boolean;
-  checkpointTwo: boolean;
-  flagged: boolean;
-};
-
-/* ---------------------------------------------------------------------------
-   HOD
    --------------------------------------------------------------------------- */
 
 export type HodOverview = {
@@ -950,50 +741,6 @@ export async function getEligibilityList(): Promise<{
   };
 }
 
-export type SessionRoster = {
-  sessionInstanceId: string;
-  courseCode: string;
-  heldOn: string;
-  roster: RosterEntry[];
-};
-
-/**
- * The session's date comes from here, not from the screen. A component that
- * derives "yesterday" from its own clock will disagree with the record it is
- * displaying the moment either one is cached.
- */
-export async function getSessionRoster(sessionInstanceId: string): Promise<SessionRoster> {
-  return {
-    sessionInstanceId,
-    courseCode: "CMP 301",
-    heldOn: new Date(Date.now() - 86_400_000).toISOString(),
-    roster: await getRoster(),
-  };
-}
-
-export async function getRoster(): Promise<RosterEntry[]> {
-  const people: Array<[string, string, string, string | null, boolean, boolean, boolean]> = [
-    ["CMP/2021/047", "Okonkwo", "Chidera", "Emeka", true, true, false],
-    ["CMP/2021/112", "Sanusi", "Halima", null, true, false, false],
-    ["CMP/2021/158", "Adebayo", "Folake", "Ronke", true, true, false],
-    ["CMP/2021/203", "Nwachukwu", "Emeka", null, false, false, false],
-    ["CMP/2021/241", "Ibrahim", "Zainab", "Aisha", true, true, true],
-    ["CMP/2022/018", "Eze", "Chukwudi", null, true, false, false],
-    ["CMP/2022/077", "Ogundipe", "Tolu", "Ayomide", false, true, false],
-  ];
-
-  return people.map(([matricNo, surname, firstName, otherNames, one, two, flagged], index) => ({
-    studentId: `student-${index}`,
-    matricNo,
-    surname,
-    firstName,
-    otherNames,
-    checkpointOne: one,
-    checkpointTwo: two,
-    flagged,
-  }));
-}
-
 export type ScheduledSession = {
   sessionInstanceId: string;
   courseCode: string;
@@ -1073,30 +820,6 @@ export async function getLecturerCourses(): Promise<LecturerCourse[]> {
       averagePct: 64,
     },
   ];
-}
-
-export async function getSessionControl(id: string): Promise<SessionControl> {
-  return {
-    sessionInstanceId: id,
-    courseCode: "CMP 301",
-    courseTitle: "Operating Systems",
-    venue: "Lecture Theatre A",
-    openedAt: new Date(Date.now() - 34 * 60_000).toISOString(),
-    enrolled: 86,
-    liveCheckpointIndex: null,
-    checkpoints: [
-      {
-        index: 1,
-        token: "4821",
-        expiresAt: new Date(Date.now() - 28 * 60_000).toISOString(),
-        submissions: 74,
-        rejections: [
-          { reason: "outside_geofence", count: 3 },
-          { reason: "invalid_or_expired_token", count: 1 },
-        ],
-      },
-    ],
-  };
 }
 
 export async function verifyOtp(code: string): Promise<{ ok: boolean; reason?: string }> {

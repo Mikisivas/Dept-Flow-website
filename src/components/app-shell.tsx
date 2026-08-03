@@ -21,6 +21,7 @@ import {
   Users,
 } from "lucide-react";
 import type { AppRole } from "@/lib/types";
+import { LogOutButton } from "@/components/log-out-button";
 import { SiteMark } from "@/components/site-mark";
 import { cn } from "@/lib/utils";
 
@@ -156,7 +157,11 @@ function BottomBarLayout({
         <div className="mx-auto flex h-14 max-w-3xl items-center gap-2 px-4">
           <SiteMark size={24} />
           <span className="text-[15px] font-semibold tracking-[-0.01em]">Dept-Flow</span>
+          {/* Every role needs a way out of the session, on every screen. The
+              student also has one on /profile; lecturers had nowhere at all,
+              which meant a shared staff laptop could not be handed over. */}
           <span className="ml-auto text-[13px] text-muted">{ROLE_LABEL[role]}</span>
+          <LogOutButton className="-mr-2 h-9 px-2 text-[13px]" />
         </div>
       </header>
 
@@ -226,6 +231,7 @@ function SidebarLayout({
           <SiteMark size={24} />
           <span className="text-[15px] font-semibold tracking-[-0.01em]">Dept-Flow</span>
           <span className="ml-auto text-[13px] text-muted lg:ml-2">{ROLE_LABEL[role]}</span>
+          <LogOutButton className="-mr-2 h-9 px-2 text-[13px] lg:ml-auto lg:-mr-1" />
         </div>
 
         <nav aria-label="Primary" className="px-2 pb-3 lg:pb-0">

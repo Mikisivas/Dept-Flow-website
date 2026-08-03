@@ -3,6 +3,7 @@ import Link from "next/link";
 import { AppShell } from "@/components/app-shell";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
+import { LogOutButton } from "@/components/log-out-button";
 import { requireStudent } from "@/lib/data/require-student";
 import { displayNameRegister, programmeFromMatric } from "@/lib/format";
 
@@ -69,9 +70,7 @@ export default async function ProfilePage() {
       </section>
 
       <div className="mt-8">
-        <Button variant="destructive" className="w-full">
-          Log out
-        </Button>
+        <LogOutButton variant="destructive" className="w-full" />
       </div>
     </AppShell>
   );

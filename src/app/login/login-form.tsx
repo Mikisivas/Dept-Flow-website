@@ -47,13 +47,35 @@ export function LoginForm() {
 
     setState({ status: "submitting" });
 
-    // Wired to the API in the next step. Until then the form exercises its own
-    // states rather than pretending to succeed.
-    await new Promise((resolve) => setTimeout(resolve, 600));
-    setState({
-      status: "error",
-      message: "That matric number and password don't match. Check both and try again.",
-    });
+    try {
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ identifier, password }),
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        // A full navigation rather than a client-side push: the session cookie
+        // was just set, and every server component needs to render with it.
+        window.location.href = result.redirectTo ?? "/dashboard";
+        return;
+      }
+
+      if (result.deactivated) {
+        setState({ status: "deactivated" });
+        return;
+      }
+
+      setState({ status: "error", message: result.error ?? "Something went wrong." });
+      identifierRef.current?.focus();
+    } catch {
+      setState({
+        status: "error",
+        message: "We couldn't reach the server. Check your connection and try again.",
+      });
+    }
   }
 
   const submitting = state.status === "submitting";

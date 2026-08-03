@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createUserClient } from "@/lib/supabase/client";
 import { currentAccessToken, currentUser } from "@/lib/auth/current-user";
+import { paystackReachability } from "@/lib/paystack";
 
 /**
  * Reports what the signed-in user can actually reach, one table at a time.
@@ -50,12 +51,19 @@ export async function GET() {
     NEXT_PUBLIC_SUPABASE_ANON_KEY: Boolean(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY),
     SUPABASE_SERVICE_ROLE_KEY: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY),
     SUPABASE_JWT_SECRET: Boolean(process.env.SUPABASE_JWT_SECRET),
+    PAYSTACK_SECRET_KEY: Boolean(process.env.PAYSTACK_SECRET_KEY),
+    // Paystack sends the student back here after checkout. Pointing it at
+    // localhost while testing on a phone lands them on their own loopback.
+    NEXT_PUBLIC_SITE_URL: process.env.NEXT_PUBLIC_SITE_URL ?? "(unset — defaults to localhost:3000)",
   };
 
   return NextResponse.json({
     signedIn: true,
     role: session.role,
     identifier: session.identifier,
+    // Distinguishes a missing key from a rejected one from a blocked network,
+    // which are three different fixes.
+    paystack: await paystackReachability(),
     // If this is false, the token is not being accepted and every table below
     // will read zero — that is the first thing to check.
     env,

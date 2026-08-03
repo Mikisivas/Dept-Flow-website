@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { currentUser } from "@/lib/auth/current-user";
 import { startDuesPayment } from "@/lib/data/payments";
+import { PaystackNotConfigured } from "@/lib/paystack";
 import type { PaymentChannel } from "@/lib/types";
 
 /**
@@ -46,11 +47,25 @@ export async function POST(request: Request) {
       reference: result.reference,
     });
   } catch (error) {
-    // The message may name a missing key, which belongs in the server log and
-    // not on a student's phone.
     console.error("payment initialise failed", error);
+
+    // Nothing the student does will fix this, so they are not told to retry.
+    if (error instanceof PaystackNotConfigured) {
+      return NextResponse.json(
+        {
+          error: "Payments aren't switched on yet. Tell the department office.",
+          // Read by whoever is running the server, not shown on the phone.
+          hint: "PAYSTACK_SECRET_KEY is missing from .env.local. See /api/health.",
+        },
+        { status: 500 },
+      );
+    }
+
     return NextResponse.json(
-      { error: "We couldn't reach Paystack. Try again in a moment." },
+      {
+        error: "We couldn't reach Paystack. Try again in a moment.",
+        hint: (error as Error).message,
+      },
       { status: 503 },
     );
   }

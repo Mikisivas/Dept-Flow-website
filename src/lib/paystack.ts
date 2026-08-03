@@ -13,14 +13,68 @@ import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 
 const BASE = "https://api.paystack.co";
 
+/**
+ * A missing key is a configuration fault, not a transient one, and the two need
+ * different words on screen. "Try again in a moment" is a lie when nothing will
+ * ever work until someone edits a file.
+ */
+export class PaystackNotConfigured extends Error {
+  constructor() {
+    super("PAYSTACK_SECRET_KEY is not set. Copy .env.example to .env.local and fill it in.");
+    this.name = "PaystackNotConfigured";
+  }
+}
+
 function secretKey(): string {
   const key = process.env.PAYSTACK_SECRET_KEY;
-  if (!key) {
-    throw new Error(
-      "PAYSTACK_SECRET_KEY is not set. Copy .env.example to .env.local and fill it in.",
-    );
-  }
+  if (!key) throw new PaystackNotConfigured();
   return key;
+}
+
+/**
+ * Is the key present, and does Paystack accept it?
+ *
+ * Verifying a reference that cannot exist is the cheapest authenticated call
+ * there is: a good key comes back 404 with a JSON body, a bad one comes back
+ * 401, and no answer at all means the network is in the way. Those are three
+ * different problems and this tells them apart in one request. Diagnostic only
+ * — never called on the payment path.
+ */
+export async function paystackReachability(): Promise<{
+  keyPresent: boolean;
+  status: "ok" | "bad_key" | "unreachable" | "not_configured";
+  detail: string;
+}> {
+  if (!process.env.PAYSTACK_SECRET_KEY) {
+    return {
+      keyPresent: false,
+      status: "not_configured",
+      detail: "PAYSTACK_SECRET_KEY is missing from .env.local.",
+    };
+  }
+
+  try {
+    const response = await fetch(`${BASE}/transaction/verify/dept-flow-health-probe`, {
+      headers: { Authorization: `Bearer ${secretKey()}` },
+      cache: "no-store",
+    });
+
+    if (response.status === 401) {
+      return { keyPresent: true, status: "bad_key", detail: "Paystack rejected the key (401)." };
+    }
+
+    return {
+      keyPresent: true,
+      status: "ok",
+      detail: `Paystack answered ${response.status} — the key works.`,
+    };
+  } catch (error) {
+    return {
+      keyPresent: true,
+      status: "unreachable",
+      detail: `Could not reach api.paystack.co: ${(error as Error).message}`,
+    };
+  }
 }
 
 /**

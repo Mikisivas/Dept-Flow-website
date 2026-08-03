@@ -53,10 +53,20 @@ export function DuesPayment({
   const [channel, setChannel] = useState<Channel>("card");
   const [working, setWorking] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /**
+   * Paystack's own words, shown only while developing.
+   *
+   * "We couldn't reach Paystack" is the right sentence for a student and
+   * useless to whoever is fixing it — "Invalid key" and "Invalid email address"
+   * are entirely different problems behind the same friendly line. Next inlines
+   * NODE_ENV, so this whole branch is dropped from a production build.
+   */
+  const [hint, setHint] = useState<string | null>(null);
 
   async function pay() {
     setWorking(true);
     setError(null);
+    setHint(null);
 
     try {
       // Initialised server-side: the browser never holds the secret key, and
@@ -70,6 +80,7 @@ export function DuesPayment({
 
       if (!response.ok || !body.authorizationUrl) {
         setError(body.error ?? "We couldn't start that payment.");
+        setHint(body.hint ?? null);
         setWorking(false);
         return;
       }
@@ -80,6 +91,7 @@ export function DuesPayment({
       window.location.href = body.authorizationUrl;
     } catch {
       setError("No connection. Nothing has been charged — try again.");
+      setHint(null);
       setWorking(false);
     }
   }
@@ -241,6 +253,11 @@ export function DuesPayment({
             {error ? (
               <p role="alert" className="mb-2 text-center text-[13px] text-danger">
                 {error}
+              </p>
+            ) : null}
+            {hint && process.env.NODE_ENV === "development" ? (
+              <p className="mb-2 text-center text-[12px] break-words text-muted">
+                Paystack said: {hint}
               </p>
             ) : null}
             <Button size="lg" className="w-full" aria-disabled={working} onClick={pay}>

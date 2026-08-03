@@ -3,7 +3,7 @@ import Link from "next/link";
 import { AppShell } from "@/components/app-shell";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
-import { getStudentDashboard } from "@/lib/data/queries";
+import { requireStudent } from "@/lib/data/require-student";
 import { displayNameRegister, programmeFromMatric } from "@/lib/format";
 
 export const metadata: Metadata = {
@@ -19,7 +19,7 @@ export const metadata: Metadata = {
  * position is read at submission and purged on a schedule.
  */
 export default async function ProfilePage() {
-  const { student } = await getStudentDashboard();
+  const { student } = await requireStudent();
 
   return (
     <AppShell role="student">

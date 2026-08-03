@@ -8,7 +8,7 @@ import { ComplianceBanner } from "@/components/compliance-banner";
 import { EmptyState } from "@/components/empty-state";
 import { StatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
-import { getStudentDashboard } from "@/lib/data/queries";
+import { requireStudent } from "@/lib/data/require-student";
 import { displayNameFamiliar, formatScore } from "@/lib/format";
 
 export const metadata: Metadata = {
@@ -27,7 +27,7 @@ export const metadata: Metadata = {
  *   5. today's classes
  */
 export default async function DashboardPage() {
-  const { student, compliance, dues, courses, today, risk } = await getStudentDashboard();
+  const { student, compliance, dues, courses, today, risk } = await requireStudent();
 
   const totalConfirmed = courses.reduce((sum, course) => sum + course.confirmedScore, 0);
   const totalProvisional = courses.reduce((sum, course) => sum + course.provisionalScore, 0);

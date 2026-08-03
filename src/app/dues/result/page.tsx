@@ -3,7 +3,7 @@ import Link from "next/link";
 import { CheckCircle2, Loader2, TriangleAlert } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
-import { getStudentDashboard } from "@/lib/data/queries";
+import { requireStudent } from "@/lib/data/require-student";
 import { attendancePct, formatPercent, formatScore, naira } from "@/lib/format";
 
 export const metadata: Metadata = {
@@ -34,7 +34,7 @@ export default async function PaymentResultPage({
     params.status === "pending" ? "pending" : params.status === "failed" ? "failed" : "success";
   const reference = params.ref ?? "DF-TEST-000112";
 
-  const { courses, dues } = await getStudentDashboard();
+  const { courses, dues } = await requireStudent();
   const provisionalScore = courses.reduce((sum, course) => sum + course.provisionalScore, 0);
   const sessionsHeld = courses.reduce((sum, course) => sum + course.sessionsHeld, 0);
   const newPct = attendancePct(provisionalScore, sessionsHeld);

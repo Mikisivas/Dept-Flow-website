@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { AppShell } from "@/components/app-shell";
 import { PageHeader } from "@/components/page-header";
-import { getStudentDashboard } from "@/lib/data/queries";
+import { requireStudent } from "@/lib/data/require-student";
 import { DuesPayment } from "./dues-payment";
 
 export const metadata: Metadata = {
@@ -9,7 +9,7 @@ export const metadata: Metadata = {
 };
 
 export default async function DuesPage() {
-  const { compliance, dues, courses } = await getStudentDashboard();
+  const { compliance, dues, courses } = await requireStudent();
   const provisionalScore = courses.reduce((sum, course) => sum + course.provisionalScore, 0);
 
   return (

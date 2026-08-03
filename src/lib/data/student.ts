@@ -141,8 +141,12 @@ export async function loadStudentDashboard(): Promise<StudentDashboard> {
         .maybeSingle(),
       db
         .from("enrolments")
-        .select("course_id, courses(id, code, title)")
-        .eq("student_id", session.profileId),
+        // Dropped courses are excluded here but not deleted in the database:
+        // the row survives so the join date does, which is what stops a
+        // drop-and-re-add erasing an absence record.
+        .select("course_id, enrolled_on, dropped_at, courses(id, code, title)")
+        .eq("student_id", session.profileId)
+        .is("dropped_at", null),
     ]);
 
   if (enrolmentError) throw new DashboardUnavailable("enrolments", enrolmentError.message);
@@ -174,7 +178,15 @@ export async function loadStudentDashboard(): Promise<StudentDashboard> {
   const courses: CourseAttendance[] = (enrolments ?? []).map((enrolment) => {
     const course = one(enrolment.courses as unknown as { id: string; code: string; title: string });
     if (!course) throw new DashboardUnavailable("enrolments.courses", "no course behind an enrolment");
-    const held = (instances ?? []).filter((instance) => instance.course_id === course.id);
+    // The denominator is lectures held while this student was on the course,
+    // mirroring attendance_pct() in the database. A carry-over added in week 8
+    // must not inherit the absences from weeks 1 to 7 — and if this filter and
+    // the SQL ever disagree, a student sees one number here and is judged by
+    // another.
+    const held = (instances ?? []).filter(
+      (instance) =>
+        instance.course_id === course.id && instance.held_on >= enrolment.enrolled_on,
+    );
 
     const sessions: SessionCell[] = held.map((instance, index) => {
       const score = scoreByInstance.get(instance.id);

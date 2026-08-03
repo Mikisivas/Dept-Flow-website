@@ -300,6 +300,22 @@ export async function createStudentAccount(input: {
       academic_session_id: entry.academic_session_id,
       state: "uncleared",
     });
+
+    // Core courses for their level, immediately. Without this a new account
+    // is enrolled in nothing, so no lecture can ever count for or against
+    // them — they are invisible to the system they just joined. Electives and
+    // carry-overs they choose themselves.
+    const { error: enrolError } = await db.rpc("enrol_in_core_courses", {
+      p_student_id: profile.id,
+      p_academic_session_id: entry.academic_session_id,
+    });
+
+    if (enrolError) {
+      // Not fatal: the account exists and the admin can re-run enrolment. But
+      // a student sitting in lectures that count for nothing is exactly the
+      // failure this system exists to prevent, so it is never silent.
+      console.error("core enrolment failed for", matric, enrolError.message);
+    }
   }
 
   return { outcome: "created", profileId: profile.id, matricNo: matric };

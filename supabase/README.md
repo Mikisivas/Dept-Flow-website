@@ -20,9 +20,10 @@ supabase/
     ..._credentials.sql              password digests on profiles, login lookup
     ..._function_grants.sql          stop PostgREST publishing the functions
     ..._venue_directory.sql          venue names without venue coordinates
+    ..._course_registration.sql      core/elective/carry-over, and the credit cap
   seed.sql                           development data
   seed_today.sql                     a class on today's weekday, for testing
-  tests/schema_test.sql              79 assertions
+  tests/schema_test.sql              96 assertions
 ```
 
 ## Running it

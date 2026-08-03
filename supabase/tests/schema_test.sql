@@ -702,6 +702,157 @@ select assert_true(
   'venue_directory has no coordinate columns at all, not merely hidden ones'
 );
 
+-- ---------------------------------------------------------------------------
+-- Course registration
+-- ---------------------------------------------------------------------------
+
+-- Enrolment is the DENOMINATOR of the attendance formula, so none of this is
+-- administrative tidiness: it decides which lectures count against a student,
+-- and therefore who sits an exam.
+
+do $$
+declare
+  v_session uuid := '11111111-1111-1111-1111-111111111111';
+  v_cmp301  uuid := '66666666-6666-6666-6666-666666666601'; -- core 300, 3 units
+  v_mth205  uuid := '66666666-6666-6666-6666-666666666602'; -- core 200, 3 units
+  v_sta202  uuid := '66666666-6666-6666-6666-666666666603'; -- elective 200, 2 units
+  v_tunde   uuid := '44444444-4444-4444-4444-444444444403'; -- 300 level
+  v_late    uuid := gen_random_uuid();
+  v_extra   uuid := gen_random_uuid();
+  v_mine    integer;
+  v_all     integer;
+begin
+  -- The one that matters most: a course joined in week 8 does not inherit the
+  -- absences from the lectures held before the student was on it.
+  insert into profiles (id, role, surname, first_name, phone)
+  values (v_late, 'student', 'Late', 'Joiner', '+2348059999999');
+  insert into students (id, matric_no, level) values (v_late, 'CMP/2021/999', 300);
+  insert into enrolments (student_id, course_id, source, enrolled_on)
+  values (v_late, v_cmp301, 'carry_over', date '2025-11-18');
+
+  -- Counted rather than hardcoded: an earlier assertion in this suite cancels
+  -- a lecture, and a fixed number here would break on that rather than on
+  -- anything to do with enrolment.
+  select count(*) into v_mine
+  from session_instances si
+  where si.course_id = v_cmp301 and si.status = 'closed'
+    and si.held_on >= date '2025-11-18';
+
+  select count(*) into v_all
+  from session_instances si
+  where si.course_id = v_cmp301 and si.status = 'closed';
+
+  perform assert_true(
+    v_mine < v_all and v_mine > 0,
+    'a student joining part-way through has fewer lectures in their denominator than the course held'
+  );
+
+  perform assert_true(
+    attendance_pct(v_late, v_cmp301) = 0,
+    'a late joiner with no marks is at 0% over their own denominator, not the course''s'
+  );
+
+  -- One full mark, and the percentage is that mark over the lectures held
+  -- since they joined. Against the whole course it would read far lower — this
+  -- is the difference between a fair number and one that bars someone from an
+  -- exam over classes they could not have attended.
+  insert into session_scores (student_id, session_instance_id, score, status, confirmed_at)
+  select v_late, si.id, 1.0, 'confirmed', now()
+  from session_instances si
+  where si.course_id = v_cmp301 and si.status = 'closed'
+    and si.held_on >= date '2025-11-18'
+  order by si.held_on
+  limit 1;
+
+  perform assert_true(
+    attendance_pct(v_late, v_cmp301) = round(1.0 / v_mine * 100, 2),
+    'the denominator is the lectures held since joining, not every lecture the course held'
+  );
+
+  perform assert_true(
+    enrol_in_core_courses(v_tunde, v_session) = 1,
+    'core enrolment adds every core course at the student''s level'
+  );
+
+  perform assert_true(
+    enrol_in_core_courses(v_tunde, v_session) = 0,
+    'core enrolment is idempotent, so re-running it after an upload resets no join date'
+  );
+
+  perform assert_true(
+    add_optional_course(v_tunde, v_cmp301) = 'core_not_optional',
+    'a core course at the student''s own level cannot be opted into'
+  );
+
+  perform assert_true(
+    add_optional_course(v_tunde, v_mth205) = 'already_enrolled',
+    'an optional course already held says so rather than duplicating'
+  );
+
+  perform assert_true(
+    (select source from enrolments where student_id = v_tunde and course_id = v_mth205)
+      = 'carry_over',
+    'a course below the student''s level is recorded as a carry-over'
+  );
+
+  perform assert_true(
+    add_optional_course(v_tunde, v_sta202) = 'added',
+    'a lower-level elective can be added'
+  );
+
+  perform assert_true(
+    student_credit_units(v_tunde, v_session, 1::smallint) = 8,
+    'credit units count core, electives and carry-overs alike'
+  );
+
+  -- The cap, exercised at 12 so the seeded courses can reach it.
+  update app_config set max_credit_units_per_semester = 12 where id = 1;
+  insert into courses (id, academic_session_id, code, title, level, kind, credit_units, semester)
+  values (v_extra, v_session, 'CMP 302', 'Compilers', 300, 'elective', 6, 1);
+
+  perform assert_true(
+    add_optional_course(v_tunde, v_extra) = 'over_credit_limit',
+    'the credit cap refuses a course that would take the student over it'
+  );
+
+  update app_config set max_credit_units_per_semester = 24 where id = 1;
+  perform assert_true(
+    add_optional_course(v_tunde, v_extra) = 'added',
+    'the same course fits once the cap is raised, so the cap is the only thing refusing it'
+  );
+
+  perform assert_true(
+    drop_optional_course(v_tunde, v_cmp301) = 'core_not_optional',
+    'a core course cannot be dropped — a student could otherwise stop being tracked'
+  );
+
+  perform assert_true(
+    drop_optional_course(v_tunde, v_sta202) = 'dropped',
+    'an elective can be dropped'
+  );
+
+  perform assert_true(
+    student_credit_units(v_tunde, v_session, 1::smallint) = 12,
+    'dropping releases its credit units'
+  );
+
+  perform assert_true(
+    (select dropped_at from enrolments
+      where student_id = v_tunde and course_id = v_sta202) is not null,
+    'dropping records rather than deletes, so the join date survives'
+  );
+
+  update enrolments set enrolled_on = date '2025-09-15'
+   where student_id = v_tunde and course_id = v_sta202;
+  perform add_optional_course(v_tunde, v_sta202);
+
+  perform assert_true(
+    (select enrolled_on from enrolments
+      where student_id = v_tunde and course_id = v_sta202) = date '2025-09-15',
+    're-adding a dropped course keeps its join date, so drop-and-re-add cannot erase absences'
+  );
+end $$;
+
 -- The readable result. Every row here is an assertion that held; a failure
 -- would have aborted before reaching this point.
 select seq as "#", 'ok' as result, what as assertion from assertion_log order by seq;

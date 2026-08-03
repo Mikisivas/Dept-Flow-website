@@ -73,23 +73,30 @@ update whitelist_entries w
 -- Courses and enrolment
 -- ---------------------------------------------------------------------------
 
-insert into courses (id, academic_session_id, code, title, level, lecturer_id) values
-  ('66666666-6666-6666-6666-666666666601', '11111111-1111-1111-1111-111111111111', 'CMP 301', 'Operating Systems', 300, '33333333-3333-3333-3333-333333333301'),
-  ('66666666-6666-6666-6666-666666666602', '11111111-1111-1111-1111-111111111111', 'MTH 205', 'Linear Algebra',    200, '33333333-3333-3333-3333-333333333301'),
-  ('66666666-6666-6666-6666-666666666603', '11111111-1111-1111-1111-111111111111', 'STA 202', 'Probability II',    200, '33333333-3333-3333-3333-333333333301');
+-- CMP 301 is core at 300 level; STA 202 is an elective at 200; MTH 205 is core
+-- at 200 and so is a carry-over for anyone above that level.
+insert into courses (id, academic_session_id, code, title, level, kind, credit_units, semester, lecturer_id) values
+  ('66666666-6666-6666-6666-666666666601', '11111111-1111-1111-1111-111111111111', 'CMP 301', 'Operating Systems', 300, 'core',     3, 1, '33333333-3333-3333-3333-333333333301'),
+  ('66666666-6666-6666-6666-666666666602', '11111111-1111-1111-1111-111111111111', 'MTH 205', 'Linear Algebra',    200, 'core',     3, 1, '33333333-3333-3333-3333-333333333301'),
+  ('66666666-6666-6666-6666-666666666603', '11111111-1111-1111-1111-111111111111', 'STA 202', 'Probability II',    200, 'elective', 2, 1, '33333333-3333-3333-3333-333333333301');
 
-insert into enrolments (student_id, course_id)
-select s.id, c.id
+-- enrolled_on is the session start, not today. The attendance denominator
+-- counts lectures held from the join date, so leaving this at the default
+-- would put all thirteen seeded CMP 301 lectures before every student's
+-- enrolment and give the whole cohort a denominator of zero.
+insert into enrolments (student_id, course_id, source, enrolled_on)
+select s.id, c.id, m.source::enrolment_source, date '2025-09-15'
 from students s
 cross join courses c
-where (s.matric_no, c.code) in (
-  ('CMP/2021/047', 'CMP 301'),
-  ('CMP/2021/047', 'MTH 205'),
-  ('CMP/2021/047', 'STA 202'),
-  ('CMP/2021/112', 'CMP 301'),
-  ('CMP/2021/112', 'STA 202'),
-  ('MTH/2022/018', 'MTH 205')
-);
+join (values
+  ('CMP/2021/047', 'CMP 301', 'core'),
+  ('CMP/2021/047', 'MTH 205', 'carry_over'),
+  ('CMP/2021/047', 'STA 202', 'elective'),
+  ('CMP/2021/112', 'CMP 301', 'core'),
+  ('CMP/2021/112', 'STA 202', 'elective'),
+  ('MTH/2022/018', 'MTH 205', 'carry_over')
+) as m(matric_no, code, source)
+  on m.matric_no = s.matric_no and m.code = c.code;
 
 insert into timetable_entries (id, academic_session_id, course_id, day_of_week, start_time, end_time, venue_id) values
   ('77777777-7777-7777-7777-777777777701', '11111111-1111-1111-1111-111111111111', '66666666-6666-6666-6666-666666666601', 2, '10:00', '12:00', '22222222-2222-2222-2222-222222222201'),

@@ -4,13 +4,16 @@ import { CheckCircle2, Loader2, TriangleAlert } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { requireStudent } from "@/lib/data/require-student";
+import { settlePayment, type SettleOutcome } from "@/lib/data/payments";
 import { attendancePct, formatPercent, formatScore, naira } from "@/lib/format";
 
 export const metadata: Metadata = {
   title: "Payment result",
 };
 
-type Outcome = "success" | "pending" | "failed";
+// The outcome is verified against Paystack on every load. Caching this screen
+// would show a student a stale answer about their own money.
+export const dynamic = "force-dynamic";
 
 /**
  * Never an ambiguous screen after paying.
@@ -27,79 +30,145 @@ type Outcome = "success" | "pending" | "failed";
 export default async function PaymentResultPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; ref?: string }>;
+  searchParams: Promise<{ ref?: string; reference?: string }>;
 }) {
   const params = await searchParams;
-  const outcome: Outcome =
-    params.status === "pending" ? "pending" : params.status === "failed" ? "failed" : "success";
-  const reference = params.ref ?? "DF-TEST-000112";
+  // Paystack appends its own `reference` to the callback; ours is already on
+  // it. Either is accepted so the screen works whichever arrives.
+  const reference = params.ref ?? params.reference ?? null;
 
-  const { courses, dues } = await requireStudent();
+  const { student, courses, dues, compliance } = await requireStudent();
+
+  let outcome: SettleOutcome | null = null;
+  let unreachable = false;
+
+  if (reference) {
+    try {
+      outcome = await settlePayment(reference, student.id);
+    } catch (error) {
+      console.error("settle on return failed", reference, error);
+      unreachable = true;
+    }
+  }
+
+  const confirmedScore = courses.reduce((sum, course) => sum + course.confirmedScore, 0);
   const provisionalScore = courses.reduce((sum, course) => sum + course.provisionalScore, 0);
   const sessionsHeld = courses.reduce((sum, course) => sum + course.sessionsHeld, 0);
-  const newPct = attendancePct(provisionalScore, sessionsHeld);
+
+  // requireStudent() ran before the settle, so its scores are the pre-payment
+  // ones. On success the provisional marks have just been confirmed, which is
+  // exactly the sum of the two.
+  const succeeded = outcome?.status === "success";
+  const counted = succeeded ? confirmedScore + provisionalScore : confirmedScore;
+  const newPct = attendancePct(counted, sessionsHeld);
 
   return (
     <AppShell role="student">
-      {outcome === "success" ? (
+      {succeeded ? (
         <section className="rounded-lg border border-ok bg-ok-tint p-5">
           <CheckCircle2 className="h-7 w-7 text-ok" aria-hidden="true" />
           <h1 className="mt-3 text-2xl font-semibold tracking-[-0.02em] text-ink">Dues paid</h1>
           <p className="mt-2 text-[16px] leading-relaxed text-slate">
-            <strong className="font-semibold text-ink">
-              {formatScore(provisionalScore)} sessions are now counted.
-            </strong>{" "}
-            Your attendance is{" "}
-            <span className="font-semibold text-ink tabular">{formatPercent(newPct)}</span>.
+            {sessionsHeld > 0 ? (
+              <>
+                <strong className="font-semibold text-ink">
+                  {formatScore(counted)} sessions are now counted.
+                </strong>{" "}
+                Your attendance is{" "}
+                <span className="font-semibold text-ink tabular">{formatPercent(newPct)}</span>.
+              </>
+            ) : (
+              <>You&apos;re cleared. Every class from here counts as soon as it&apos;s recorded.</>
+            )}
           </p>
         </section>
       ) : null}
 
-      {outcome === "pending" ? (
+      {outcome?.status === "pending" ? (
         <section className="rounded-lg border border-info bg-info-tint p-5">
-          <Loader2 className="h-7 w-7 text-info motion-safe:animate-spin" aria-hidden="true" />
+          {outcome.mismatch ? (
+            <TriangleAlert className="h-7 w-7 text-info" aria-hidden="true" />
+          ) : (
+            <Loader2 className="h-7 w-7 text-info motion-safe:animate-spin" aria-hidden="true" />
+          )}
           <h1 className="mt-3 text-2xl font-semibold tracking-[-0.02em] text-ink">
-            Checking your payment…
+            {outcome.mismatch ? "That didn't cover the full amount" : "Checking your payment…"}
           </h1>
           <p className="mt-2 text-[16px] leading-relaxed text-slate">
-            Bank transfers can take a few minutes to confirm. You can leave this page — we&apos;ll
-            keep checking, and your sessions will count as soon as it clears.
+            {outcome.mismatch ? (
+              <>
+                You paid{" "}
+                <span className="font-semibold text-ink tabular">
+                  {naira(outcome.mismatch.paidKobo)}
+                </span>{" "}
+                of{" "}
+                <span className="font-semibold text-ink tabular">
+                  {naira(outcome.mismatch.dueKobo)}
+                </span>
+                . Nothing has been lost — take the reference below to the department office and
+                they will sort it out.
+              </>
+            ) : (
+              <>
+                Bank transfers can take a few minutes to confirm. You can leave this page —
+                we&apos;ll keep checking, and your sessions will count as soon as it clears.
+              </>
+            )}
           </p>
         </section>
       ) : null}
 
-      {outcome === "failed" ? (
+      {outcome?.status === "failed" ? (
         <section className="rounded-lg border border-danger bg-danger-tint p-5">
           <TriangleAlert className="h-7 w-7 text-danger" aria-hidden="true" />
           <h1 className="mt-3 text-2xl font-semibold tracking-[-0.02em] text-ink">
             That payment didn&apos;t go through
           </h1>
           <p className="mt-2 text-[16px] leading-relaxed text-slate">
-            Nothing was taken from your account. Your{" "}
-            {formatScore(provisionalScore)} recorded sessions are still waiting — try again when
-            you&apos;re ready.
+            Nothing was taken from your account. Your {formatScore(provisionalScore)} recorded
+            sessions are still waiting — try again when you&apos;re ready.
           </p>
         </section>
       ) : null}
 
-      <dl className="mt-6 grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-line bg-line">
-        <Detail label="Amount" value={naira(dues.duesAmountKobo)} />
-        <Detail label="Reference" value={reference} monospace />
-      </dl>
+      {/* Neither success nor failure: no answer was obtained. Claiming either
+          would be a guess about the student's money. */}
+      {!outcome ? (
+        <section className="rounded-lg border border-line bg-surface-sunken p-5">
+          <TriangleAlert className="h-7 w-7 text-slate" aria-hidden="true" />
+          <h1 className="mt-3 text-2xl font-semibold tracking-[-0.02em] text-ink">
+            {reference ? "We couldn't confirm that payment" : "Nothing to confirm"}
+          </h1>
+          <p className="mt-2 text-[16px] leading-relaxed text-slate">
+            {reference && unreachable
+              ? "Your bank may still have taken it, so don't pay again yet. Open your dues page in a few minutes — the payment history there is the record."
+              : "There's no payment reference on this page. Start from the dues screen."}
+          </p>
+        </section>
+      ) : null}
+
+      {reference ? (
+        <dl className="mt-6 grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-line bg-line">
+          <Detail label="Amount" value={naira(outcome?.amountKobo ?? dues.duesAmountKobo)} />
+          <Detail label="Reference" value={reference} monospace />
+        </dl>
+      ) : null}
 
       <div className="mt-6 flex flex-col gap-2">
-        {outcome === "failed" ? (
-          <Button asChild size="lg">
-            <Link href="/dues">Try paying again</Link>
-          </Button>
-        ) : (
+        {succeeded || compliance === "cleared" ? (
           <Button asChild size="lg">
             <Link href="/dashboard">See your attendance</Link>
           </Button>
+        ) : (
+          <Button asChild size="lg">
+            <Link href="/dues">Back to dues</Link>
+          </Button>
         )}
-        <Button asChild variant="secondary">
-          <Link href="/dues">Back to dues</Link>
-        </Button>
+        {succeeded || compliance === "cleared" ? (
+          <Button asChild variant="secondary">
+            <Link href="/dues">Back to dues</Link>
+          </Button>
+        ) : null}
       </div>
     </AppShell>
   );

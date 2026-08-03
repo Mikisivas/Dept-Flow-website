@@ -33,14 +33,20 @@ harmless; the file opens its own so it can roll back cleanly under psql too.
 
 ## 2. Fill in `.env.local`
 
-Copy `.env.example` to `.env.local`. The two public values are already filled
-in for you. Three secrets are not, and each has one place it comes from:
+Copy `.env.example` to `.env.local`. The public values are already filled in
+for you. Three secrets are not, and each has one place it comes from:
 
 | Variable | Where |
 |---|---|
 | `SUPABASE_SERVICE_ROLE_KEY` | Settings → API → Project API keys → `service_role` |
 | `SUPABASE_JWT_SECRET` | Settings → API → JWT Settings → JWT Secret |
 | `PAYSTACK_SECRET_KEY` | Paystack dashboard → Settings → API Keys → Test Secret Key |
+
+There is no Paystack **public** key to fill in either. Dept-Flow uses the
+redirect flow — the server initialises the transaction and sends the student to
+Paystack's own page — rather than the inline popup, and the public key exists
+only for the popup. On a phone on a poor connection a full page beats loading a
+third-party script into an iframe.
 
 There is no separate session secret to generate. The login token is signed with
 `SUPABASE_JWT_SECRET` — signing with the project's own secret is what lets
@@ -59,6 +65,25 @@ npm run dev
 ```
 
 Log in at `/login` with `CMP/2021/047` and `demo-password`.
+
+If you are testing on a phone against your laptop's dev server, set
+`NEXT_PUBLIC_SITE_URL` to the LAN address Next prints (`http://10.x.x.x:3000`).
+Paystack uses it to send the student back after checkout, so pointing it at
+`localhost` would land them on their own phone's loopback.
+
+## Testing a payment
+
+Paystack test mode takes the card `4084 0840 8408 4081`, any future expiry, CVV
+`408`, and PIN `0000` / OTP `123456` when it asks.
+
+Paystack cannot deliver a webhook to a laptop, so in development the student's
+return from checkout is what settles the payment — `/dues/result` verifies the
+reference against Paystack on load and clears the student. That is not a
+workaround: a bank transfer settles asynchronously and the student frequently
+gets back before the webhook does, so both paths have to work in production too.
+
+Point the webhook at a deployed URL only. It is at `/api/payments/webhook` and
+rejects any body whose `x-paystack-signature` does not verify.
 
 ## How login works, given there is no email
 

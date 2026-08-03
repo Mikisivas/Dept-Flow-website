@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:paystack": "node --conditions=react-server --experimental-strip-types tests/paystack.mts"
   },
   "dependencies": {
     "@node-rs/argon2": "^2.0.2",

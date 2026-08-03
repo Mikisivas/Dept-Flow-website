@@ -82,6 +82,19 @@ export type CheckpointOutcome = {
   bothCaptured: boolean;
 };
 
+/** Card and Pay with Transfer only. Dedicated virtual accounts were dropped. */
+export type PaymentChannel = "card" | "transfer";
+
+/** A dues payment as the student sees it in their own history. */
+export type PaymentRecord = {
+  reference: string;
+  amountKobo: number;
+  status: "pending" | "success" | "failed" | "abandoned" | "reversed";
+  channel: "card" | "transfer" | null;
+  paidAt: string | null;
+  startedAt: string;
+};
+
 export type LecturerClassStatus = "scheduled" | "open" | "closed" | "cancelled";
 
 /** One student on a lecture's roster, as captured rather than as scored. */

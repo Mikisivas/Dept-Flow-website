@@ -20,7 +20,10 @@
     ],
     "paths": {
       "@/*": ["./src/*"]
-    }
+    },
+    // tests/ runs under Node's type stripping rather than through Next, and
+    // Node resolves the real file, so its imports carry a .ts extension.
+    "allowImportingTsExtensions": true
   },
   "include": [
     "next-env.d.ts",

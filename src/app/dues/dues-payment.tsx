@@ -7,8 +7,8 @@ import { StatusBadge } from "@/components/status-badge";
 import { StickyActionBar } from "@/components/sticky-action-bar";
 import { Button } from "@/components/ui/button";
 import type { DuesPeriod } from "@/lib/data/fixtures";
-import type { ComplianceState } from "@/lib/types";
-import { formatDate, formatDaysLeft, formatScore, naira } from "@/lib/format";
+import type { ComplianceState, PaymentChannel, PaymentRecord } from "@/lib/types";
+import { formatDate, formatDateTime, formatDaysLeft, formatScore, naira } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 /**
@@ -22,7 +22,7 @@ import { cn } from "@/lib/utils";
  * must not reappear.
  */
 
-type Channel = "card" | "transfer";
+type Channel = PaymentChannel;
 
 const CHANNELS: Array<{ id: Channel; label: string; hint: string; icon: typeof CreditCard }> = [
   {
@@ -43,13 +43,46 @@ export function DuesPayment({
   compliance,
   dues,
   provisionalScore,
+  payments,
 }: {
   compliance: ComplianceState;
   dues: DuesPeriod;
   provisionalScore: number;
+  payments: PaymentRecord[];
 }) {
   const [channel, setChannel] = useState<Channel>("card");
   const [working, setWorking] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function pay() {
+    setWorking(true);
+    setError(null);
+
+    try {
+      // Initialised server-side: the browser never holds the secret key, and
+      // never gets to say how much is owed.
+      const response = await fetch("/api/payments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ channel }),
+      });
+      const body = await response.json();
+
+      if (!response.ok || !body.authorizationUrl) {
+        setError(body.error ?? "We couldn't start that payment.");
+        setWorking(false);
+        return;
+      }
+
+      // A full navigation, not a new tab: a pop-up blocker eating the checkout
+      // page is indistinguishable from the button being broken. `working`
+      // stays true, so the button cannot be pressed twice on a slow link.
+      window.location.href = body.authorizationUrl;
+    } catch {
+      setError("No connection. Nothing has been charged — try again.");
+      setWorking(false);
+    }
+  }
 
   const cleared = compliance === "cleared";
   const pending = compliance === "pending_verification";
@@ -152,31 +185,78 @@ export function DuesPayment({
         <h2 id="history-heading" className="text-[13px] font-semibold text-slate">
           Payment history
         </h2>
-        <p className="mt-2 rounded-lg border border-line bg-surface p-4 text-[15px] text-slate">
-          No payments yet. Anything you pay appears here with its reference number.
-        </p>
+
+        {payments.length === 0 ? (
+          <p className="mt-2 rounded-lg border border-line bg-surface p-4 text-[15px] text-slate">
+            No payments yet. Anything you pay appears here with its reference number.
+          </p>
+        ) : (
+          <ul className="mt-2 flex flex-col gap-2">
+            {payments.map((payment) => (
+              <li
+                key={payment.reference}
+                className="rounded-lg border border-line bg-surface p-4"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-[15px] font-semibold text-ink tabular">
+                      {naira(payment.amountKobo)}
+                    </p>
+                    <p className="mt-0.5 text-[13px] text-muted tabular" translate="no">
+                      {payment.reference}
+                    </p>
+                  </div>
+                  {/* Never colour alone: the badge carries a word. */}
+                  <StatusBadge
+                    className="shrink-0"
+                    variant={
+                      payment.status === "success"
+                        ? "confirmed"
+                        : payment.status === "pending"
+                          ? "pending"
+                          : "locked"
+                    }
+                    label={HISTORY_LABEL[payment.status]}
+                  />
+                </div>
+                <p className="mt-2 text-[13px] text-slate">
+                  {payment.channel === "card"
+                    ? "Card"
+                    : payment.channel === "transfer"
+                      ? "Bank transfer"
+                      : "Not completed"}{" "}
+                  · {formatDateTime(payment.paidAt ?? payment.startedAt)}
+                </p>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
 
       {!cleared && !pending ? (
         <StickyActionBar
           context={`${naira(dues.duesAmountKobo)} due · ${formatDaysLeft(dues.deadline)}`}
         >
-          <Button
-            size="lg"
-            className="w-full"
-            aria-disabled={working}
-            onClick={async () => {
-              setWorking(true);
-              // Initialises the transaction server-side and redirects to
-              // Paystack. The browser never holds the secret key.
-              await new Promise((resolve) => setTimeout(resolve, 700));
-              setWorking(false);
-            }}
-          >
-            {working ? "Opening Paystack…" : `Pay ${naira(dues.duesAmountKobo)}`}
-          </Button>
+          <div className="w-full">
+            {error ? (
+              <p role="alert" className="mb-2 text-center text-[13px] text-danger">
+                {error}
+              </p>
+            ) : null}
+            <Button size="lg" className="w-full" aria-disabled={working} onClick={pay}>
+              {working ? "Opening Paystack…" : `Pay ${naira(dues.duesAmountKobo)}`}
+            </Button>
+          </div>
         </StickyActionBar>
       ) : null}
     </div>
   );
 }
+
+const HISTORY_LABEL: Record<PaymentRecord["status"], string> = {
+  success: "Paid",
+  pending: "Checking",
+  failed: "Failed",
+  abandoned: "Not finished",
+  reversed: "Reversed",
+};

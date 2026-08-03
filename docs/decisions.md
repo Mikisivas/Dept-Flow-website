@@ -245,6 +245,55 @@ are not hidden there, they are absent.
 `checkpoints` at all. The server returns every field of a live checkpoint except
 the code; being in the room to read it off the board is the mechanism.
 
+## Paying dues
+
+Decided while wiring Paystack. `clear_student()` was already the authoritative
+implementation — the state flips and every provisional score confirms in one
+transaction — so these are the choices the API makes around it.
+
+**Redirect flow, not the inline popup, so there is no public key.** The server
+initialises the transaction and sends the student to Paystack's own page. The
+popup is the only thing `NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY` exists for, so that
+variable is gone from `.env.example` rather than sitting there unread — an
+unused variable in that file is a trap, which `SESSION_SECRET` already
+demonstrated. On a phone on a poor connection, a full page navigation beats
+loading a third-party script into an iframe.
+
+**Paystack requires an email; Dept-Flow collects none.** Identity here is a
+matric number, and asking a student for an address purely to satisfy a required
+field would put a contact detail in the system that nothing else needs and
+someone would eventually mail. The slot is filled with a derived address in
+`.invalid` — the TLD RFC 2606 reserves so that it can never resolve. Nothing is
+ever delivered to it, which is the point: receipts are in-app. The matric
+number travels in `metadata` as well, so the Paystack dashboard stays
+searchable by the identifier the department actually uses.
+
+**The amount is read from `dues_periods` on the server.** The browser sends no
+figure. A client that can name its own price has defeated the whole mechanism.
+The one thing it does choose is the channel, and only the chosen one is passed
+to Paystack — Paystack shows exactly the channels it is given and cannot
+preselect, so passing both would make our radio group decorative.
+
+**Our reference, minted before the student leaves.** The `payments` row exists
+first, so an abandoned checkout is a pending row that can be re-verified rather
+than a transaction we never heard about.
+
+**A webhook is a notification, never evidence.** Anyone can POST JSON at a
+public URL. `/api/payments/webhook` verifies the HMAC-SHA512 signature over the
+*raw* request bytes — re-serialising the parsed body changes key order and
+whitespace and the signature stops matching — and then still calls
+`transaction/verify` before anything changes.
+
+**Both settlement paths have to work.** The webhook and the student's return
+from checkout race each other, and on a laptop the webhook cannot arrive at
+all. `settlePayment()` is idempotent and is called from both; a row already
+`success` is a no-op rather than a second `clear_student()`.
+
+**An underpayment stays pending and keeps its payload.** Money that arrives and
+does not settle the debt is recorded, not cleared and not silently accepted. It
+is a thing a person has to look at, and the verification response is kept so
+they can.
+
 ## Palette
 
 `#FF9935`, eyedropped from the crest, superseding the `#F0952B` visual estimate

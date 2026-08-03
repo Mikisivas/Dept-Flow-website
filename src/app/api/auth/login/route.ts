@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createServiceClient } from "@/lib/supabase/client";
-import { verifyPassword } from "@/lib/auth/passwords";
+import { hashPassword, needsRehash, verifyPassword } from "@/lib/auth/passwords";
 import { issueSession, SESSION_COOKIE, SESSION_COOKIE_OPTIONS } from "@/lib/auth/session";
 import { normaliseMatric } from "@/lib/format";
 import type { AppRole } from "@/lib/types";
@@ -120,9 +120,23 @@ export async function POST(request: Request) {
     );
   }
 
+  // A verified bcrypt digest is a correct password stored with the weaker of
+  // the two algorithms — the seed uses pgcrypto, which has no Argon2. Upgrading
+  // it here migrates each account the first time its owner logs in, with no
+  // migration to run and nobody needing to reset anything.
+  const upgraded =
+    profile.password_hash && needsRehash(profile.password_hash)
+      ? await hashPassword(password)
+      : null;
+
   await supabase
     .from("profiles")
-    .update({ failed_attempts: 0, locked_until: null, last_login_at: new Date().toISOString() })
+    .update({
+      failed_attempts: 0,
+      locked_until: null,
+      last_login_at: new Date().toISOString(),
+      ...(upgraded ? { password_hash: upgraded, password_updated_at: new Date().toISOString() } : {}),
+    })
     .eq("id", profile.id);
 
   const token = await issueSession({

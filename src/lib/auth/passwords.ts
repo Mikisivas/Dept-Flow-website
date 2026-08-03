@@ -1,13 +1,20 @@
 import "server-only";
 
-import { hash, verify } from "@node-rs/argon2";
+import { hash as argonHash, verify as argonVerify } from "@node-rs/argon2";
+import { verify as bcryptVerify } from "@node-rs/bcrypt";
 
 /**
- * Argon2id, with OWASP's recommended parameters for interactive logins.
+ * Argon2id for anything this application hashes, with OWASP's recommended
+ * parameters for interactive logins.
  *
- * The database refuses to store anything that is not a modular crypt string, so
- * a plaintext password escaping a code path cannot be written even if this
- * module is bypassed entirely.
+ * Verification, though, has to accept bcrypt as well. The development seed
+ * hashes with pgcrypto — which has no Argon2 — so every seeded account carries
+ * a `$2a$` digest. An Argon2-only verifier throws on those and the throw looks
+ * exactly like a wrong password, which is a genuinely confusing failure: the
+ * credentials are right, the database is right, and the login still says no.
+ *
+ * The database's check constraint always accepted both. This is the half that
+ * did not.
  */
 const PARAMS = {
   memoryCost: 19_456, // 19 MiB
@@ -16,17 +23,24 @@ const PARAMS = {
 };
 
 export function hashPassword(password: string): Promise<string> {
-  return hash(password, PARAMS);
+  return argonHash(password, PARAMS);
+}
+
+/** Which algorithm produced a digest, read from its modular crypt prefix. */
+export function digestAlgorithm(digest: string): "argon2" | "bcrypt" | "unknown" {
+  if (digest.startsWith("$argon2")) return "argon2";
+  if (/^\$2[aby]\$/.test(digest)) return "bcrypt";
+  return "unknown";
 }
 
 /**
- * Always runs the full verification, including against a dummy digest when the
+ * Always runs a full verification, including against a dummy digest when the
  * account does not exist.
  *
  * Returning early on an unknown matric number makes the response measurably
  * faster for numbers that aren't registered, which turns the login form into a
- * way to enumerate who studies here. The matric number format is guessable —
- * CMP/2021/001 through CMP/2021/999 is under a thousand requests.
+ * way to enumerate who studies here. Matric numbers are sequential — CMP/2021/001
+ * through CMP/2021/999 is under a thousand requests.
  */
 const DUMMY_DIGEST =
   "$argon2id$v=19$m=19456,t=2,p=1$c29tZXNhbHRzb21lc2FsdA$Ry1Ne3sVvGV8xN9hFEcXTNGqvKfXvJKGZ5NqUJZ0k4E";
@@ -35,11 +49,32 @@ export async function verifyPassword(
   password: string,
   digest: string | null,
 ): Promise<boolean> {
+  const target = digest ?? DUMMY_DIGEST;
+
   try {
-    return await verify(digest ?? DUMMY_DIGEST, password);
+    switch (digestAlgorithm(target)) {
+      case "bcrypt":
+        return await bcryptVerify(password, target);
+      case "argon2":
+        return await argonVerify(target, password);
+      default:
+        return false;
+    }
   } catch {
     return false;
   }
+}
+
+/**
+ * True when a digest should be replaced after a successful login.
+ *
+ * A bcrypt hash that verifies is a correct password stored with the weaker of
+ * the two algorithms. Re-hashing on the way past upgrades each account the
+ * first time its owner logs in, without a migration and without anyone needing
+ * to reset anything.
+ */
+export function needsRehash(digest: string): boolean {
+  return digestAlgorithm(digest) !== "argon2";
 }
 
 /**

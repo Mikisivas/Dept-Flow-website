@@ -306,7 +306,13 @@ export async function reconcilePendingPayments(studentId: string): Promise<void>
       } catch (error) {
         // One unreachable reference must not blank the dues screen. The row
         // stays pending and the next load tries again.
-        console.error("reconcile failed", row.paystack_reference, error);
+        //
+        // warn, not error: this is a handled condition on a retry path, and
+        // logging it as an error makes Next's dev overlay throw a red card
+        // over a page that rendered perfectly well.
+        console.warn(
+          `reconcile deferred for ${row.paystack_reference}: ${(error as Error).message}`,
+        );
       }
     }),
   );

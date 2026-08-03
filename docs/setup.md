@@ -28,14 +28,18 @@ harmless; the file opens its own so it can roll back cleanly under psql too.
 ## 2. Fill in `.env.local`
 
 Copy `.env.example` to `.env.local`. The two public values are already filled
-in for you. Four secrets are not, and each has one place it comes from:
+in for you. Three secrets are not, and each has one place it comes from:
 
 | Variable | Where |
 |---|---|
 | `SUPABASE_SERVICE_ROLE_KEY` | Settings → API → Project API keys → `service_role` |
 | `SUPABASE_JWT_SECRET` | Settings → API → JWT Settings → JWT Secret |
 | `PAYSTACK_SECRET_KEY` | Paystack dashboard → Settings → API Keys → Test Secret Key |
-| `SESSION_SECRET` | Generate: `openssl rand -base64 48` |
+
+There is no separate session secret to generate. The login token is signed with
+`SUPABASE_JWT_SECRET` — signing with the project's own secret is what lets
+Supabase accept a token we minted, so `auth.uid()` resolves and every RLS policy
+applies to a login that never involved an email address.
 
 **None of these belong in a chat window, a screenshot, or a commit.** The
 service-role key bypasses row-level security completely — anything holding it

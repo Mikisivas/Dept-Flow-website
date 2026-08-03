@@ -543,6 +543,56 @@ select assert_true(
 );
 
 -- ---------------------------------------------------------------------------
+-- Function exposure
+--
+-- Every function in `public` is published by PostgREST as an RPC, and Postgres
+-- grants EXECUTE to PUBLIC by default. Anyone holding the anon key — which
+-- ships in the browser bundle — can call anything left exposed.
+-- ---------------------------------------------------------------------------
+
+-- The one that mattered: SECURITY DEFINER, so it runs as the owner and ignores
+-- every table grant. Exposed, it walks the register.
+select assert_true(
+  not has_function_privilege('anon', 'resolve_login_identifier(text)', 'execute'),
+  'anon cannot call the login lookup — it would enumerate the register'
+);
+
+select assert_true(
+  not has_function_privilege('authenticated', 'resolve_login_identifier(text)', 'execute'),
+  'a signed-in student cannot call the login lookup either'
+);
+
+select assert_true(
+  has_function_privilege('service_role', 'resolve_login_identifier(text)', 'execute'),
+  'the API can still call it'
+);
+
+select assert_true(
+  not has_function_privilege('anon', 'clear_student(uuid, uuid, clearance_route, uuid)', 'execute')
+  and not has_function_privilege('authenticated', 'clear_student(uuid, uuid, clearance_route, uuid)', 'execute'),
+  'nobody but the API can clear a student''s dues'
+);
+
+select assert_true(
+  not has_function_privilege('anon', 'write_audit(uuid, app_role, text, text, text, text, jsonb)', 'execute')
+  and not has_function_privilege('authenticated', 'write_audit(uuid, app_role, text, text, text, text, jsonb)', 'execute'),
+  'nobody but the API can write an audit entry'
+);
+
+select assert_true(
+  not has_function_privilege('anon', 'resolve_session_score(uuid, uuid, score_source, uuid)', 'execute'),
+  'nobody but the API can score a session'
+);
+
+-- The policies call these as the caller, so revoking them would fail the whole
+-- product closed. This is the positive control for the revokes above.
+select assert_true(
+  has_function_privilege('authenticated', 'is_hod()', 'execute')
+  and has_function_privilege('authenticated', 'teaches_course(uuid)', 'execute'),
+  'the functions the RLS policies call stay reachable by signed-in users'
+);
+
+-- ---------------------------------------------------------------------------
 -- Row-level security
 -- ---------------------------------------------------------------------------
 

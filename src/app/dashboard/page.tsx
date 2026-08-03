@@ -51,16 +51,23 @@ export default async function DashboardPage() {
         · Level {student.level}
       </p>
 
+      {/* The empty state carries no action on purpose. "See your timetable"
+          used to sit under it, linking to /dashboard — the screen it is already
+          on. A button that reloads the current page is worse than no button,
+          and there is no student timetable route to point it at instead. */}
       {totalHeld === 0 ? (
         <EmptyState
           className="mt-6"
           icon={CalendarDays}
-          headline="No classes recorded yet"
-          body="Your attendance appears here after your first lecture."
-          action={
-            <Button asChild variant="secondary">
-              <Link href="/dashboard">See your timetable</Link>
-            </Button>
+          headline={
+            courses.length === 0
+              ? "You're not enrolled in any courses yet"
+              : "No classes recorded yet"
+          }
+          body={
+            courses.length === 0
+              ? "The department office adds you to your courses. Once that's done, your classes appear here."
+              : "Your attendance appears here after your first lecture."
           }
         />
       ) : (

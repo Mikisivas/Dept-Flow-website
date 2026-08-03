@@ -41,7 +41,9 @@ export function ComplianceBanner({
         title="Attendance locked — your dues aren't cleared."
         body={
           graceEndsOn
-            ? `The HOD has opened a grace period until ${formatDate(graceEndsOn)}. Clear your dues before then and your ${waiting} waiting ${sessionWord} will count.`
+            ? provisionalScore > 0
+              ? `The HOD has opened a grace period until ${formatDate(graceEndsOn)}. Clear your dues before then and your ${waiting} waiting ${sessionWord} will count.`
+              : `The HOD has opened a grace period until ${formatDate(graceEndsOn)}. Clear your dues before then and your attendance starts being recorded again.`
             : "New attendance won't be recorded until you clear. Nothing already recorded has been lost."
         }
         action={{ href: "/dues", label: "Pay dues" }}
@@ -57,6 +59,23 @@ export function ComplianceBanner({
         Icon={Info}
         title="Checking your payment…"
         body="This can take a few hours. You don't need to do anything — we'll keep checking and count your sessions as soon as it clears."
+        className={className}
+      />
+    );
+  }
+
+  // Uncleared with nothing recorded yet — a student who registered this
+  // morning. "0 sessions recorded but not yet counted" is arithmetically true
+  // and says nothing: there is no loss to point at, so the sentence has to be
+  // about what happens next instead of about a number that is zero.
+  if (provisionalScore <= 0) {
+    return (
+      <Banner
+        tone="neutral"
+        Icon={Circle}
+        title="Your dues aren't cleared yet."
+        body="Attendance is recorded from your first class. Clearing your dues is what makes it count towards the 75%."
+        action={{ href: "/dues", label: "Pay dues" }}
         className={className}
       />
     );

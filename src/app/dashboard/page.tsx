@@ -123,14 +123,27 @@ export default async function DashboardPage() {
                         <span className="block font-normal text-slate">{course.title}</span>
                       </Link>
                     </h3>
-                    <StatusBadge
-                      className="shrink-0"
-                      variant={course.provisionalScore > 0 ? "provisional" : "confirmed"}
-                    />
+                    {/* Read from the rows' own statuses, not from the summed
+                        score. An uncleared student who scored 0 in every
+                        lecture has a provisional record and no marks — summing
+                        would call that "Counted", which is the opposite of
+                        true. With nothing held there is no status to report at
+                        all, so no badge. */}
+                    {course.sessionsHeld > 0 ? (
+                      <StatusBadge
+                        className="shrink-0"
+                        variant={
+                          course.sessions.some((session) => session.status === "provisional")
+                            ? "provisional"
+                            : "confirmed"
+                        }
+                      />
+                    ) : null}
                   </div>
                   <p className="mt-1 text-[13px] text-muted tabular">
-                    {formatScore(course.confirmedScore + course.provisionalScore)} of{" "}
-                    {course.sessionsHeld} sessions recorded
+                    {course.sessionsHeld === 0
+                      ? "No classes held yet"
+                      : `${formatScore(course.confirmedScore + course.provisionalScore)} of ${course.sessionsHeld} sessions recorded`}
                   </p>
 
                   <AttendanceMeter
@@ -140,7 +153,9 @@ export default async function DashboardPage() {
                     sessionsHeld={course.sessionsHeld}
                   />
 
-                  <CheckpointStrip className="mt-4" sessions={course.sessions} />
+                  {course.sessions.length > 0 ? (
+                    <CheckpointStrip className="mt-4" sessions={course.sessions} />
+                  ) : null}
                 </li>
               ))}
             </ul>

@@ -189,7 +189,11 @@ export async function verifyTransaction(reference: string): Promise<VerifiedTran
   // Paystack has never heard of it. That is an answer, not a failure: the
   // reference was minted here and the student never reached checkout, so the
   // row is dead rather than in flight.
-  if (response.status === 404) {
+  //
+  // Matched on the message as well as the status because Paystack answers an
+  // unknown reference with 400, not the 404 the shape of the call suggests.
+  // Assuming 404 left two rows spinning on "Checking payment…" for ever.
+  if (isUnknownReference(response.status, body?.message)) {
     return { status: "abandoned", amountKobo: 0, channel: null, paidAt: null, raw: body };
   }
 
@@ -206,6 +210,18 @@ export async function verifyTransaction(reference: string): Promise<VerifiedTran
     paidAt: data.paid_at ?? null,
     raw: data,
   };
+}
+
+/**
+ * "This reference is not a transaction" versus "something went wrong".
+ *
+ * Deliberately narrow: a 401 is a key problem and a 5xx is Paystack having a
+ * bad day, and neither means a student's payment is dead. Only an explicit
+ * not-found answer resolves a row.
+ */
+function isUnknownReference(status: number, message: unknown): boolean {
+  if (status === 404) return true;
+  return status === 400 && typeof message === "string" && /not\s*found/i.test(message);
 }
 
 /**

@@ -13,7 +13,12 @@
 process.env.PAYSTACK_SECRET_KEY = "sk_test_deadbeefdeadbeefdeadbeefdeadbeefdeadbeef";
 
 import { createHmac } from "node:crypto";
-import { placeholderEmail, newReference, signatureIsValid } from "../src/lib/paystack.ts";
+import {
+  placeholderEmail,
+  newReference,
+  signatureIsValid,
+  verifyTransaction,
+} from "../src/lib/paystack.ts";
 
 let failed = 0;
 function check(what: string, ok: boolean) {
@@ -44,6 +49,61 @@ check("placeholder email has a real TLD, so a TLD-list validator accepts it",
 const refs = new Set(Array.from({ length: 5000 }, () => newReference()));
 check("5000 references are unique", refs.size === 5000);
 check("references are readable and prefixed", /^DF-[0-9A-F]{12}$/.test(newReference()));
+
+/* ---------------------------------------------------------------------------
+   verifyTransaction, against a stubbed Paystack
+   ---------------------------------------------------------------------------
+
+   These exist because assuming the shape of somebody else's error response
+   cost two payments that sat on "Checking payment…" for ever. Paystack answers
+   an unknown reference with 400, not the 404 the call's shape suggests.
+   --------------------------------------------------------------------------- */
+
+function stubFetch(status: number, payload: unknown) {
+  globalThis.fetch = (async () =>
+    new Response(JSON.stringify(payload), {
+      status,
+      headers: { "Content-Type": "application/json" },
+    })) as typeof fetch;
+}
+
+stubFetch(400, { status: false, message: "Transaction reference not found" });
+check("an unknown reference (400) resolves as abandoned, not an error",
+  (await verifyTransaction("DF-NOPE")).status === "abandoned");
+
+stubFetch(404, { status: false, message: "Not Found" });
+check("a 404 also resolves as abandoned",
+  (await verifyTransaction("DF-NOPE")).status === "abandoned");
+
+stubFetch(401, { status: false, message: "Invalid key" });
+check("a bad key throws rather than marking the payment dead",
+  await threw(() => verifyTransaction("DF-REAL")));
+
+stubFetch(500, { status: false, message: "Internal error" });
+check("a Paystack outage throws rather than marking the payment dead",
+  await threw(() => verifyTransaction("DF-REAL")));
+
+stubFetch(200, {
+  status: true,
+  data: { status: "success", amount: 500000, channel: "bank_transfer", paid_at: "2026-08-03T15:47:00Z" },
+});
+const paid = await verifyTransaction("DF-REAL");
+check("a successful transfer reads back as success", paid.status === "success");
+check("bank_transfer maps to the one word the product uses", paid.channel === "transfer");
+check("the amount comes back in kobo", paid.amountKobo === 500000);
+
+stubFetch(200, { status: true, data: { status: "ongoing", amount: 500000, channel: "card" } });
+check("an unrecognised state is pending, never success",
+  (await verifyTransaction("DF-REAL")).status === "pending");
+
+async function threw(run: () => Promise<unknown>): Promise<boolean> {
+  try {
+    await run();
+    return false;
+  } catch {
+    return true;
+  }
+}
 
 console.log(failed === 0 ? "\nALL PAYSTACK CHECKS PASS" : `\n${failed} FAILED`);
 process.exit(failed === 0 ? 0 : 1);

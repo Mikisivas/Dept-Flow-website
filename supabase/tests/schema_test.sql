@@ -1,15 +1,44 @@
 -- Dept-Flow — schema test suite
 --
--- Run against a database with the migrations and seed applied. Everything runs
--- inside a transaction that rolls back, so it is re-runnable:
+-- Runs against a database with the migrations and seed applied. Everything is
+-- inside a transaction that rolls back, so it changes nothing and can be run
+-- as often as you like.
+--
+-- Two ways to run it, and it is deliberately plain SQL so both work:
+--
+--   Supabase SQL Editor — paste the whole file and run. The last statement
+--   returns one row per assertion, so you can read the results in the grid.
 --
 --   psql -v ON_ERROR_STOP=1 -d <db> -f supabase/tests/schema_test.sql
 --
--- Any failure raises and aborts. Silence at the end means every assertion held.
-
-\set ON_ERROR_STOP on
+-- There are no psql meta-commands in here (no \set, no \echo). Those are
+-- client features that the server never sees, and pasting them into the SQL
+-- Editor produces a syntax error on the backslash.
+--
+-- Any failed assertion raises and aborts the run.
 
 begin;
+
+-- Assertions are collected here as well as raised, because the SQL Editor does
+-- not surface NOTICE output — without a result set there is nothing to read.
+create temporary table assertion_log (
+  seq serial primary key,
+  what text not null
+) on commit drop;
+
+-- The row-level security section later switches to the `authenticated` role to
+-- prove what a student can and cannot read. That role needs to reach this log,
+-- or every assertion made under it fails on the log rather than on the thing
+-- being tested. The temp schema has a generated name, hence the format().
+grant all on assertion_log to authenticated;
+grant usage, select on sequence assertion_log_seq_seq to authenticated;
+do $$
+begin
+  execute format(
+    'grant usage on schema %I to authenticated',
+    (select nspname from pg_namespace where oid = pg_my_temp_schema())
+  );
+end $$;
 
 create or replace function assert_true(p_condition boolean, p_what text)
 returns void language plpgsql as $$
@@ -17,6 +46,7 @@ begin
   if p_condition is not true then
     raise exception 'FAILED: %', p_what;
   end if;
+  insert into assertion_log (what) values (p_what);
   raise notice 'ok — %', p_what;
 end $$;
 
@@ -27,6 +57,7 @@ begin
   begin
     execute p_sql;
   exception when others then
+    insert into assertion_log (what) values (p_what);
     raise notice 'ok — %', p_what;
     return;
   end;
@@ -596,5 +627,9 @@ select assert_true(
 );
 
 reset role;
+
+-- The readable result. Every row here is an assertion that held; a failure
+-- would have aborted before reaching this point.
+select seq as "#", 'ok' as result, what as assertion from assertion_log order by seq;
 
 rollback;

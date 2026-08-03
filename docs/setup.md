@@ -19,7 +19,11 @@ too. It creates the people and courses from the design mockups —
 
 To confirm it worked, paste
 [`supabase/tests/schema_test.sql`](../supabase/tests/schema_test.sql) and run
-it. It prints 69 assertions and rolls back, changing nothing.
+it. It returns a grid of 69 assertions — one row each, in plain English — then
+rolls back, changing nothing. A failure aborts with the assertion that broke.
+
+The SQL Editor may warn that a transaction is already in progress. That is
+harmless; the file opens its own so it can roll back cleanly under psql too.
 
 ## 2. Fill in `.env.local`
 

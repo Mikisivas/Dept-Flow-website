@@ -83,14 +83,20 @@ export async function paystackReachability(): Promise<{
  * satisfy a field would put a contact detail in the system that nothing else
  * needs and someone would eventually mail.
  *
- * So the slot is filled with a derived address in `.invalid`, the TLD RFC 2606
- * reserves precisely so it can never resolve. Nothing is ever delivered to it,
- * which is the intent: receipts are in-app. The matric number also travels in
- * `metadata`, so the Paystack dashboard is searchable by the identifier the
- * department actually uses.
+ * So the slot is filled with a derived address that can never reach a person.
+ * `example.com` is reserved by RFC 2606, is held by IANA, and black-holes
+ * everything sent to it. The matric number also travels in `metadata`, so the
+ * Paystack dashboard stays searchable by the identifier the department
+ * actually uses.
+ *
+ * This was `.invalid` first, which RFC 2606 reserves in the same breath. The
+ * difference that matters to a payment processor: `.invalid` has no entry in
+ * the root zone, so a validator checking the TLD against the real list rejects
+ * the address, while `example.com` resolves and simply never delivers. Same
+ * guarantee, fewer ways to be refused.
  */
 export function placeholderEmail(matricNo: string): string {
-  return `${matricNo.toLowerCase().replace(/\//g, "-")}@students.dept-flow.invalid`;
+  return `${matricNo.toLowerCase().replace(/\//g, "-")}@students.example.com`;
 }
 
 /**

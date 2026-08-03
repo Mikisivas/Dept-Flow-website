@@ -262,11 +262,17 @@ loading a third-party script into an iframe.
 **Paystack requires an email; Dept-Flow collects none.** Identity here is a
 matric number, and asking a student for an address purely to satisfy a required
 field would put a contact detail in the system that nothing else needs and
-someone would eventually mail. The slot is filled with a derived address in
-`.invalid` — the TLD RFC 2606 reserves so that it can never resolve. Nothing is
-ever delivered to it, which is the point: receipts are in-app. The matric
-number travels in `metadata` as well, so the Paystack dashboard stays
-searchable by the identifier the department actually uses.
+someone would eventually mail. The slot is filled with a derived address at
+`students.example.com` — reserved by RFC 2606, held by IANA, and guaranteed to
+black-hole everything sent to it. Receipts are in-app. The matric number
+travels in `metadata` as well, so the Paystack dashboard stays searchable by
+the identifier the department actually uses.
+
+This was `dept-flow.invalid` first, which the same RFC reserves. The difference
+that matters to a payment processor: `.invalid` has no entry in the root zone,
+so any validator checking the TLD against the real list refuses the address,
+while `example.com` resolves and simply never delivers. Identical guarantee,
+fewer ways to be rejected.
 
 **The amount is read from `dues_periods` on the server.** The browser sends no
 figure. A client that can name its own price has defeated the whole mechanism.

@@ -34,10 +34,12 @@ check("a wrong-length signature is rejected without throwing", !signatureIsValid
 check("a signature made with another key is rejected",
   !signatureIsValid(body, createHmac("sha512", "sk_test_other").update(body).digest("hex")));
 
-check("placeholder email is in the reserved .invalid TLD",
-  placeholderEmail("CMP/2021/047").endsWith(".invalid"));
+check("placeholder email uses an RFC 2606 reserved domain that can never deliver",
+  placeholderEmail("CMP/2021/047").endsWith("@students.example.com"));
 check("placeholder email carries the matric number and no slashes",
-  placeholderEmail("CMP/2021/047") === "cmp-2021-047@students.dept-flow.invalid");
+  placeholderEmail("CMP/2021/047") === "cmp-2021-047@students.example.com");
+check("placeholder email has a real TLD, so a TLD-list validator accepts it",
+  /\.(com|net|org)$/.test(placeholderEmail("MTH/2022/018")));
 
 const refs = new Set(Array.from({ length: 5000 }, () => newReference()));
 check("5000 references are unique", refs.size === 5000);

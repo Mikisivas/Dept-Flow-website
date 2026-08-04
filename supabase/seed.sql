@@ -16,6 +16,23 @@
 begin;
 
 -- ---------------------------------------------------------------------------
+-- This is a fresh-install script
+-- ---------------------------------------------------------------------------
+
+-- Running it twice used to fail on a primary-key violation several hundred
+-- lines in, which says nothing about what to do next. It also creates thirteen
+-- lectures from a loop, so "just add on conflict do nothing" would quietly
+-- produce twenty-six.
+do $$
+begin
+  if exists (select 1 from academic_sessions
+              where id = '11111111-1111-1111-1111-111111111111') then
+    raise exception
+      'This project is already seeded. To add columns from a later migration to existing data, run supabase/backfill_course_registration.sql instead. To start over, drop and recreate the schema first.';
+  end if;
+end $$;
+
+-- ---------------------------------------------------------------------------
 -- Academic session, venues, dues
 -- ---------------------------------------------------------------------------
 

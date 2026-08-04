@@ -14,7 +14,8 @@ attendance functions, and the row-level security policies. It needs no database
 password and no service-role key.
 
 Then, optionally, paste [`supabase/seed.sql`](../supabase/seed.sql) and run that
-too. It creates the people and courses from the design mockups —
+too. It is a **fresh-install** script and refuses to run on a project that is
+already seeded, with a message saying what to run instead. It creates the people and courses from the design mockups —
 `CMP/2021/047` and the rest — all with the password `demo-password`.
 
 The seeded timetable puts CMP 301 on Tuesdays, which is faithful and unhelpful
@@ -70,6 +71,25 @@ If you are testing on a phone against your laptop's dev server, set
 `NEXT_PUBLIC_SITE_URL` to the LAN address Next prints (`http://10.x.x.x:3000`).
 Paystack uses it to send the student back after checkout, so pointing it at
 `localhost` would land them on their own phone's loopback.
+
+## Applying a migration to a project that already has data
+
+`setup.sql` and `seed.sql` both assume an empty project. When a later migration
+adds a column to a table that already has rows, the column's default is applied
+to every existing row — and a default that is right for new data can be wrong
+for old.
+
+`20260728001300_course_registration.sql` is the case in point. It adds
+`enrolments.enrolled_on` defaulting to today, which is correct for a student
+enrolling now and says that every existing student joined every course today.
+Since the attendance denominator counts lectures held from the join date, every
+lecture already on record falls outside it and the whole cohort reads 0%.
+
+Run [`supabase/backfill_course_registration.sql`](../supabase/backfill_course_registration.sql)
+once after that migration. It puts the dates back, fills in the course kinds and
+credit units, works out which enrolments are really carry-overs, and enrols any
+student who has no courses at all. It is safe to run twice, and it prints what
+it did.
 
 ## Testing a payment
 

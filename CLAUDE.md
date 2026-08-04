@@ -90,6 +90,38 @@ Never place the full crest at header or favicon size, never recolour or stretch
 it, never put it on an orange fill. The supplied file is a raster on opaque
 white and needs cutting out before it sits on a tinted panel or in dark mode.
 
+## Where the work is
+
+The branch is `claude/shared-components-review-995lls`. Schema first, then
+screens — that order has held throughout.
+
+**Working end to end against a real Supabase project:**
+
+| Path | What runs |
+|---|---|
+| Login | Matric number or staff ID + password. Self-signed JWT, no Supabase Auth. |
+| Registration | Register match → phone OTP → password → account → core enrolment. |
+| Attendance | Lecturer opens a lecture, issues checkpoint codes, closes it; the student submits a code with a position; `resolve_session_score()` scores everyone. |
+| Dues | Paystack redirect → verify → `clear_student()` flips compliance and confirms every provisional score. |
+| Course registration | Admin uploads the list; students pick electives and carry-overs against a 24-unit cap. |
+
+**Still on fixtures in `src/lib/data/queries.ts`:** every HOD screen, most admin
+screens, notifications, password reset. Anything wired is deleted from that
+file rather than left as a fallback — two sources for one screen is how a demo
+quietly shows fixture data.
+
+**Not built:** the scikit-learn advisory model, SMS delivery (the OTP seam
+throws in production), deployment.
+
+**Checks:** `npm run test:paystack` (12 assertions, no network) and
+`supabase/tests/schema_test.sql` (96 assertions, run in the SQL Editor).
+`/api/health` reports, for the signed-in user, which tables they can read and
+whether Paystack answers.
+
+**Applying migrations to a project that already has data** needs care: a
+default that is right for new rows can be wrong for old ones. See
+`supabase/backfill_course_registration.sql` and the section in `docs/setup.md`.
+
 ## Stack
 
 Next.js / React (TypeScript) · Tailwind · shadcn/ui on Radix · FastAPI ·

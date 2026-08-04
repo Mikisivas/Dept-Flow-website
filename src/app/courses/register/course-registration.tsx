@@ -27,7 +27,7 @@ export function CourseRegistration({ registration }: { registration: StudentRegi
   const [working, setWorking] = useState<string | null>(null);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
 
-  const { creditCap, unitsUsed, registered, available } = registration;
+  const { creditCap, unitsUsed, registered, available, semester } = registration;
   const overCap = unitsUsed > creditCap;
 
   async function change(courseId: string, action: "add" | "drop") {
@@ -61,7 +61,7 @@ export function CourseRegistration({ registration }: { registration: StudentRegi
         )}
       >
         <h2 id="credits-heading" className="text-[13px] font-semibold text-slate">
-          Credit units this semester
+          Credit units · {semester === 1 ? "first" : "second"} semester
         </h2>
         <p className="mt-1 text-[32px] leading-none font-semibold tracking-[-0.02em] text-ink tabular">
           {unitsUsed}
@@ -103,7 +103,7 @@ export function CourseRegistration({ registration }: { registration: StudentRegi
 
         {registered.length === 0 ? (
           <p className="mt-2 rounded-lg border border-line bg-surface p-4 text-[15px] text-slate">
-            You&apos;re not registered for anything this semester yet.
+            You&apos;re not registered for anything in this semester yet.
           </p>
         ) : (
           <ul className="mt-3 flex flex-col gap-2">
@@ -153,7 +153,7 @@ export function CourseRegistration({ registration }: { registration: StudentRegi
             className="mt-3"
             icon={BookOpen}
             headline="Nothing else to add"
-            body="There are no electives or lower-level courses open to you this semester."
+            body="There are no electives or lower-level courses open to you in this semester. Check the other one if you were expecting something."
           />
         ) : (
           <ul className="mt-3 flex flex-col gap-2">

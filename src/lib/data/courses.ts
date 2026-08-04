@@ -225,15 +225,21 @@ export type StudentRegistration = {
  */
 export async function loadStudentRegistration(
   studentId: string,
-  semester = 1,
+  semester?: number,
 ): Promise<StudentRegistration> {
   const db = createUserClient(await currentAccessToken());
 
-  const [{ data: student }, { data: config }] = await Promise.all([
+  const [{ data: student }, { data: config }, { data: session }] = await Promise.all([
     db.from("students").select("level").eq("id", studentId).single(),
     db.from("app_config").select("max_credit_units_per_semester").eq("id", 1).single(),
+    db.from("academic_sessions").select("starts_on, ends_on").eq("is_active", true).single(),
   ]);
 
+  // Defaulting to 1 would show a student their first-semester courses in
+  // March. The schema has no "current semester" field to read, so it is
+  // derived from where today falls in the session — and the switcher is there
+  // because a derived answer should never be the only answer.
+  const resolved = semester ?? currentSemester(session?.starts_on, session?.ends_on);
   const level = student?.level ?? 0;
   const creditCap = config?.max_credit_units_per_semester ?? 24;
   const catalogue = await loadCatalogue();
@@ -247,7 +253,7 @@ export async function loadStudentRegistration(
   const sourceByCourse = new Map((mine ?? []).map((row) => [row.course_id, row.source]));
 
   const registered = catalogue
-    .filter((course) => sourceByCourse.has(course.courseId) && course.semester === semester)
+    .filter((course) => sourceByCourse.has(course.courseId) && course.semester === resolved)
     .map((course) => {
       const source = sourceByCourse.get(course.courseId) as "core" | "elective" | "carry_over";
       return { ...course, source, canDrop: source !== "core" };
@@ -257,7 +263,7 @@ export async function loadStudentRegistration(
 
   const available: RegistrationOption[] = catalogue
     .filter((course) => {
-      if (course.semester !== semester) return false;
+      if (course.semester !== resolved) return false;
       if (sourceByCourse.has(course.courseId)) return false;
       if (course.level > level) return false;
       // Compulsory and already theirs — not a choice.
@@ -270,7 +276,24 @@ export async function loadStudentRegistration(
       enrolledAlready: false,
     }));
 
-  return { level, semester, creditCap, unitsUsed, registered, available };
+  return { level, semester: resolved, creditCap, unitsUsed, registered, available };
+}
+
+/**
+ * Which semester today falls in, from the session's own dates.
+ *
+ * Split at the midpoint rather than at a fixed month: sessions do not start in
+ * the same week every year, and a hardcoded "January onwards is semester 2"
+ * goes wrong the first time resumption slips.
+ */
+function currentSemester(startsOn?: string | null, endsOn?: string | null): number {
+  if (!startsOn || !endsOn) return 1;
+
+  const start = Date.parse(startsOn);
+  const end = Date.parse(endsOn);
+  if (Number.isNaN(start) || Number.isNaN(end) || end <= start) return 1;
+
+  return Date.now() >= start + (end - start) / 2 ? 2 : 1;
 }
 
 /** Translates the database's one-word answers into something a student reads. */

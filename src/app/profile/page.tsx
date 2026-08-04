@@ -62,6 +62,9 @@ export default async function ProfilePage() {
           Change password
         </Button>
         <Button asChild variant="secondary" className="justify-start">
+          <Link href="/courses/register">Your courses</Link>
+        </Button>
+        <Button asChild variant="secondary" className="justify-start">
           <Link href="/notifications">Notification preferences</Link>
         </Button>
         <Button asChild variant="secondary" className="justify-start">

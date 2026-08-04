@@ -51,23 +51,30 @@ export default async function DashboardPage() {
         · Level {student.level}
       </p>
 
-      {/* The empty state carries no action on purpose. "See your timetable"
-          used to sit under it, linking to /dashboard — the screen it is already
-          on. A button that reloads the current page is worse than no button,
-          and there is no student timetable route to point it at instead. */}
+      {/* Two different empty states. A student with no courses has something
+          to do about it; a student whose courses simply have not met yet does
+          not, and gets no button — "See your timetable" used to sit here
+          linking to /dashboard, the screen it was already on. */}
       {totalHeld === 0 ? (
         <EmptyState
           className="mt-6"
           icon={CalendarDays}
           headline={
             courses.length === 0
-              ? "You're not enrolled in any courses yet"
+              ? "You're not registered for any courses yet"
               : "No classes recorded yet"
           }
           body={
             courses.length === 0
-              ? "The department office adds you to your courses. Once that's done, your classes appear here."
+              ? "Compulsory courses are added for you. Electives and any course you're repeating, you choose."
               : "Your attendance appears here after your first lecture."
+          }
+          action={
+            courses.length === 0 ? (
+              <Button asChild variant="secondary">
+                <Link href="/courses/register">Choose your courses</Link>
+              </Button>
+            ) : undefined
           }
         />
       ) : (
@@ -109,9 +116,17 @@ export default async function DashboardPage() {
           ) : null}
 
           <section aria-labelledby="courses-heading" className="mt-8">
-            <h2 id="courses-heading" className="text-[13px] font-semibold text-slate">
-              Your courses
-            </h2>
+            <div className="flex items-baseline justify-between gap-3">
+              <h2 id="courses-heading" className="text-[13px] font-semibold text-slate">
+                Your courses
+              </h2>
+              <Link
+                href="/courses/register"
+                className="rounded text-[13px] font-medium text-brand-text underline underline-offset-2 hover:text-brand-pressed focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand-text)]"
+              >
+                Add or remove
+              </Link>
+            </div>
             <CheckpointLegend className="mt-2" />
 
             <ul className="mt-4 flex flex-col gap-3">

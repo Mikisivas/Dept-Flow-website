@@ -300,6 +300,45 @@ does not settle the debt is recorded, not cleared and not silently accepted. It
 is a thing a person has to look at, and the verification response is kept so
 they can.
 
+## Course registration
+
+How a student comes to be on a course, agreed with the department. It matters
+more than it sounds: `enrolments` is the DENOMINATOR of the attendance formula,
+so it decides which lectures count against a student and therefore who sits an
+exam.
+
+- **The admin uploads core and elective courses per level.** Core enrols every
+  student at that level automatically and cannot be opted out of. Electives are
+  opt-in.
+- **Students add their own carry-overs**, from levels below their own. No
+  approval step — the department asked for it to be self-service.
+- **24 credit units per semester**, counting core, electives and carry-overs
+  alike. Core is fixed, so the cap governs what can be added on top.
+
+Three calls made during the build, since they were left open:
+
+**A course joined late does not inherit earlier absences.** `attendance_pct`
+counts lectures held from the student's join date, not every lecture the course
+held. A carry-over added in week 8 would otherwise read 0% for seven classes
+the student had no way of attending, and that number bars people from exams.
+
+**Dropping records rather than deletes**, keeping `enrolled_on`. Deleting would
+take the join date with it, and a student could then drop and re-add a course
+to erase every absence on it. Core cannot be dropped at all — a student who
+could remove it would simply stop being tracked for a course they still have to
+pass.
+
+**`enrolled_on` is its own column, not `created_at`.** A seeded or back-filled
+enrolment has to be able to say "from the start of the session", and the
+difference between those two dates is every lecture held before the row
+existed. Keying off row-creation time gave the entire seeded cohort a
+denominator of zero.
+
+Consequence for upgrades: a migration that adds a dated column to a populated
+table needs a backfill, because a default that is right for new rows is wrong
+for old ones. `supabase/backfill_course_registration.sql` exists for exactly
+that and is documented in `setup.md`.
+
 ## Palette
 
 `#FF9935`, eyedropped from the crest, superseding the `#F0952B` visual estimate

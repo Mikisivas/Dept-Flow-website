@@ -6,12 +6,14 @@ import { DataTable, type Column } from "@/components/data-table";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
-import { getAtRiskStudents, type AtRiskStudent } from "@/lib/data/queries";
+import { loadAtRiskStudents, type AtRiskStudent } from "@/lib/data/hod";
 import { displayNameRegister, formatPercent } from "@/lib/format";
 
 export const metadata: Metadata = {
   title: "At-risk students",
 };
+
+export const dynamic = "force-dynamic";
 
 const PATTERN_LABEL = {
   disengagement: "Disengaging",
@@ -75,7 +77,7 @@ const columns: Column<AtRiskStudent>[] = [
 ];
 
 export default async function AtRiskPage() {
-  const students = await getAtRiskStudents();
+  const students = await loadAtRiskStudents();
 
   return (
     <AppShell role="hod" counts={{ "/hod/risk": students.length }}>

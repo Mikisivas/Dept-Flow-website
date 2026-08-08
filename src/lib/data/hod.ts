@@ -1,0 +1,404 @@
+import "server-only";
+
+import { redirect } from "next/navigation";
+import { createUserClient } from "@/lib/supabase/client";
+import { currentAccessToken, currentUser } from "@/lib/auth/current-user";
+import { attendancePct } from "@/lib/format";
+import type { SessionClaims } from "@/lib/auth/session";
+import type { SessionCell } from "@/lib/types";
+
+/**
+ * What the HOD sees, read as the HOD.
+ *
+ * The authoritative eligibility number is computed here the same way
+ * `attendance_pct()` computes it — confirmed scores over lectures held while
+ * the student was enrolled. The risk model is never consulted for it. A
+ * prediction is advice about the future; this is a determination about the
+ * past, and the two must never be confused on a screen that decides who sits
+ * an exam.
+ */
+
+const HOME_FOR_ROLE = {
+  student: "/dashboard",
+  lecturer: "/lecturer",
+  hod: "/hod",
+  admin: "/admin",
+} as const;
+
+export async function requireHod(): Promise<SessionClaims> {
+  const session = await currentUser();
+  if (!session) redirect("/login");
+  if (session.role !== "hod") redirect(HOME_FOR_ROLE[session.role]);
+  return session;
+}
+
+export type HodOverview = {
+  totalStudents: number;
+  belowThreshold: number;
+  trendingBelow: number;
+  compliance: { cleared: number; provisional: number; locked: number; pending: number };
+  activeGrace: { expiresOn: string; scope: string; studentsAffected: number } | null;
+  pending: { disputes: number; waivers: number };
+};
+
+/**
+ * One student's standing, per course and overall.
+ *
+ * Built once and reused by the overview, the at-risk list and the eligibility
+ * list, because three screens computing the same percentage three ways is how
+ * they end up disagreeing in front of a student.
+ */
+export type StudentStanding = {
+  studentId: string;
+  matricNo: string;
+  surname: string;
+  firstName: string;
+  otherNames: string | null;
+  level: number;
+  compliance: string;
+  courses: Array<{
+    courseId: string;
+    code: string;
+    confirmedScore: number;
+    provisionalScore: number;
+    sessionsHeld: number;
+    pct: number;
+    /** Per lecture, so the shape of the trouble is visible and not just its size. */
+    sessions: SessionCell[];
+  }>;
+  /** Across every course they are enrolled in. */
+  overallPct: number;
+  sessionsHeld: number;
+};
+
+type Db = ReturnType<typeof createUserClient>;
+
+function one<T>(value: T | T[] | null | undefined): T | null {
+  if (!value) return null;
+  return Array.isArray(value) ? (value[0] ?? null) : value;
+}
+
+export async function loadStandings(db: Db, courseId?: string): Promise<StudentStanding[]> {
+  const [{ data: students }, { data: enrolments }, { data: instances }, { data: scores }] =
+    await Promise.all([
+      db.from("students").select("id, matric_no, level, profiles(surname, first_name, other_names)"),
+      db
+        .from("enrolments")
+        .select("student_id, course_id, enrolled_on, courses(id, code)")
+        .is("dropped_at", null),
+      db
+        .from("session_instances")
+        .select("id, course_id, held_on, checkpoint_mode")
+        .eq("status", "closed")
+        .order("held_on"),
+      db.from("session_scores").select("student_id, session_instance_id, score, status"),
+    ]);
+
+  const { data: compliance } = await db
+    .from("compliance_statuses")
+    .select("student_id, state");
+
+  const stateByStudent = new Map((compliance ?? []).map((row) => [row.student_id, row.state]));
+
+  // Scores keyed by student, so each student's loop is a map lookup rather than
+  // a scan of the whole table.
+  const scoresByStudent = new Map<string, typeof scores>();
+  for (const score of scores ?? []) {
+    const list = scoresByStudent.get(score.student_id) ?? [];
+    list.push(score);
+    scoresByStudent.set(score.student_id, list);
+  }
+
+  return (students ?? []).map((student) => {
+    const person = one(
+      student.profiles as unknown as {
+        surname: string;
+        first_name: string;
+        other_names: string | null;
+      },
+    );
+
+    const mine = (enrolments ?? []).filter(
+      (row) => row.student_id === student.id && (!courseId || row.course_id === courseId),
+    );
+    const myScores = scoresByStudent.get(student.id) ?? [];
+
+    const courses = mine.map((enrolment) => {
+      const course = one(enrolment.courses as unknown as { id: string; code: string });
+
+      // The denominator is lectures held while they were on the course, the
+      // same window attendance_pct() uses.
+      const held = (instances ?? []).filter(
+        (instance) =>
+          instance.course_id === enrolment.course_id &&
+          instance.held_on >= enrolment.enrolled_on,
+      );
+      const heldIds = new Set(held.map((instance) => instance.id));
+
+      const relevant = (myScores ?? []).filter((score) => heldIds.has(score.session_instance_id));
+      const confirmedScore = relevant
+        .filter((score) => score.status === "confirmed")
+        .reduce((sum, score) => sum + Number(score.score), 0);
+      const provisionalScore = relevant
+        .filter((score) => score.status === "provisional")
+        .reduce((sum, score) => sum + Number(score.score), 0);
+
+      const scoreByInstance = new Map(relevant.map((score) => [score.session_instance_id, score]));
+
+      const sessions: SessionCell[] = held.map((instance, index) => {
+        const score = scoreByInstance.get(instance.id);
+        const value = Number(score?.score ?? 0);
+        const single = instance.checkpoint_mode === "single";
+
+        return {
+          id: instance.id,
+          label: `Week ${index + 1}`,
+          heldOn: instance.held_on,
+          mode: single ? "single" : "pair",
+          checkpointOne: value > 0,
+          checkpointTwo: value === 1 && !single,
+          status: score?.status === "confirmed" ? "confirmed" : "provisional",
+          source: "digital",
+          score: value,
+        };
+      });
+
+      return {
+        courseId: enrolment.course_id,
+        code: course?.code ?? "",
+        confirmedScore,
+        provisionalScore,
+        sessionsHeld: held.length,
+        pct: attendancePct(confirmedScore, held.length),
+        sessions,
+      };
+    });
+
+    const totalConfirmed = courses.reduce((sum, course) => sum + course.confirmedScore, 0);
+    const totalHeld = courses.reduce((sum, course) => sum + course.sessionsHeld, 0);
+
+    return {
+      studentId: student.id,
+      matricNo: student.matric_no,
+      surname: person?.surname ?? "",
+      firstName: person?.first_name ?? "",
+      otherNames: person?.other_names ?? null,
+      level: student.level,
+      compliance: stateByStudent.get(student.id) ?? "uncleared",
+      courses,
+      overallPct: attendancePct(totalConfirmed, totalHeld),
+      sessionsHeld: totalHeld,
+    };
+  });
+}
+
+export async function loadHodOverview(): Promise<HodOverview> {
+  await requireHod();
+  const db = createUserClient(await currentAccessToken());
+
+  const standings = await loadStandings(db);
+
+  const compliance = { cleared: 0, provisional: 0, locked: 0, pending: 0 };
+  for (const student of standings) {
+    if (student.compliance === "cleared") compliance.cleared += 1;
+    else if (student.compliance === "locked") compliance.locked += 1;
+    else if (student.compliance === "pending_verification") compliance.pending += 1;
+    else compliance.provisional += 1;
+  }
+
+  // Only students whose courses have actually held lectures can be below the
+  // line. Someone with no lectures yet is at 0% by the arithmetic and is not
+  // failing anything.
+  const measurable = standings.filter((student) => student.sessionsHeld > 0);
+  const belowThreshold = measurable.filter((student) => student.overallPct < 75).length;
+
+  const [{ data: grace }, { count: disputes }, { count: waivers }, { data: predictions }] =
+    await Promise.all([
+      db
+        .from("grace_periods")
+        .select("expires_on, scope, level, students_affected")
+        .is("revoked_at", null)
+        .gte("expires_on", new Date().toISOString().slice(0, 10))
+        .order("expires_on", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      db.from("attendance_disputes").select("id", { count: "exact", head: true }).eq("status", "open"),
+      db.from("waivers").select("id", { count: "exact", head: true }).eq("status", "pending"),
+      // Advisory only, and labelled as such wherever it is shown.
+      db.from("risk_predictions").select("student_id, predicted_pct").lt("predicted_pct", 75),
+    ]);
+
+  const atRisk = new Set((predictions ?? []).map((row) => row.student_id));
+  const trendingBelow = standings.filter(
+    (student) => atRisk.has(student.studentId) && student.overallPct >= 75,
+  ).length;
+
+  return {
+    totalStudents: standings.length,
+    belowThreshold,
+    trendingBelow,
+    compliance,
+    activeGrace: grace
+      ? {
+          expiresOn: grace.expires_on,
+          scope: grace.scope === "department" ? "Whole department" : `${grace.level} level`,
+          studentsAffected: grace.students_affected,
+        }
+      : null,
+    pending: { disputes: disputes ?? 0, waivers: waivers ?? 0 },
+  };
+}
+
+export type AtRiskStudent = {
+  studentId: string;
+  matricNo: string;
+  surname: string;
+  firstName: string;
+  otherNames: string | null;
+  level: number;
+  courseCode: string;
+  currentPct: number;
+  predictedPct: number;
+  pattern: "disengagement" | "partial_attendance";
+  sessions: SessionCell[];
+};
+
+/**
+ * The advisory list. `currentPct` is a determination; `predictedPct` is a
+ * guess — they sit in separate columns and the screen says which is which,
+ * because a student is never barred from an exam on the strength of a model.
+ */
+export async function loadAtRiskStudents(): Promise<AtRiskStudent[]> {
+  await requireHod();
+  const db = createUserClient(await currentAccessToken());
+
+  const [{ data: predictions }, standings] = await Promise.all([
+    db
+      .from("risk_predictions")
+      .select("student_id, course_id, predicted_pct, pattern, courses(code)")
+      .order("predicted_pct"),
+    loadStandings(createUserClient(await currentAccessToken())),
+  ]);
+
+  const byId = new Map(standings.map((student) => [student.studentId, student]));
+
+  return (predictions ?? []).flatMap((prediction) => {
+    const student = byId.get(prediction.student_id);
+    if (!student) return [];
+
+    const course = one(prediction.courses as unknown as { code: string });
+    const standing = student.courses.find((entry) => entry.courseId === prediction.course_id);
+
+    return [
+      {
+        studentId: student.studentId,
+        matricNo: student.matricNo,
+        surname: student.surname,
+        firstName: student.firstName,
+        otherNames: student.otherNames,
+        level: student.level,
+        courseCode: course?.code ?? "",
+        currentPct: standing?.pct ?? 0,
+        predictedPct: Number(prediction.predicted_pct),
+        pattern: prediction.pattern as AtRiskStudent["pattern"],
+        sessions: standing?.sessions ?? [],
+      },
+    ];
+  });
+}
+
+export type EligibilityRow = {
+  studentId: string;
+  matricNo: string;
+  surname: string;
+  firstName: string;
+  otherNames: string | null;
+  attendancePct: number;
+  scoreTotal: number;
+  sessionsHeld: number;
+  eligible: boolean;
+  /** Recorded but uncounted marks. Why a student can be short and disputing it. */
+  provisionalScore: number;
+};
+
+export type EligibilityList = {
+  courses: Array<{ courseId: string; code: string; title: string }>;
+  course: { courseId: string; code: string; title: string } | null;
+  thresholdPct: number;
+  rows: EligibilityRow[];
+  authorizedAt: string | null;
+};
+
+/**
+ * The output of the entire system: who may sit the exam for one course.
+ *
+ * Computed from confirmed scores only, which is why a student who has attended
+ * everything but not cleared their dues shows as ineligible with a large
+ * provisional figure beside it. That is the mechanism working, and the column
+ * is there so the HOD can see it rather than having to guess why.
+ */
+export async function loadEligibilityList(courseId?: string): Promise<EligibilityList> {
+  await requireHod();
+  const db = createUserClient(await currentAccessToken());
+
+  const { data: session } = await db
+    .from("academic_sessions")
+    .select("id")
+    .eq("is_active", true)
+    .single();
+
+  const { data: catalogue } = await db
+    .from("courses")
+    .select("id, code, title")
+    .eq("academic_session_id", session?.id ?? "")
+    .order("code");
+
+  const courses = (catalogue ?? []).map((row) => ({
+    courseId: row.id,
+    code: row.code,
+    title: row.title,
+  }));
+
+  const chosen = courses.find((row) => row.courseId === courseId) ?? courses[0] ?? null;
+  if (!chosen) {
+    return { courses, course: null, thresholdPct: 75, rows: [], authorizedAt: null };
+  }
+
+  const { data: list } = await db
+    .from("eligibility_lists")
+    .select("threshold_pct, status, authorized_at")
+    .eq("course_id", chosen.courseId)
+    .maybeSingle();
+
+  const thresholdPct = Number(list?.threshold_pct ?? 75);
+  const standings = await loadStandings(db, chosen.courseId);
+
+  const rows: EligibilityRow[] = standings
+    // Only students actually on this course. `loadStandings` returns everyone,
+    // and a student with no enrolment in it has no standing to report.
+    .filter((student) => student.courses.length > 0)
+    .map((student) => {
+      const course = student.courses[0];
+      return {
+        studentId: student.studentId,
+        matricNo: student.matricNo,
+        surname: student.surname,
+        firstName: student.firstName,
+        otherNames: student.otherNames,
+        attendancePct: course.pct,
+        scoreTotal: course.confirmedScore,
+        sessionsHeld: course.sessionsHeld,
+        eligible: course.sessionsHeld > 0 && course.pct >= thresholdPct,
+        provisionalScore: course.provisionalScore,
+      };
+    })
+    .sort((a, b) => a.matricNo.localeCompare(b.matricNo));
+
+  return {
+    courses,
+    course: chosen,
+    thresholdPct,
+    rows,
+    authorizedAt: list?.status === "authorized" ? (list.authorized_at ?? null) : null,
+  };
+}

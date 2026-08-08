@@ -5,16 +5,20 @@ import { AppShell } from "@/components/app-shell";
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
-import { getHodOverview } from "@/lib/data/queries";
+import { loadHodOverview } from "@/lib/data/hod";
 import { formatDate, formatPercent } from "@/lib/format";
 
 export const metadata: Metadata = {
   title: "Department overview",
 };
 
+// Compliance counts change the moment a student pays, and this is the screen
+// the HOD leaves open.
+export const dynamic = "force-dynamic";
+
 export default async function HodDashboardPage() {
   const { totalStudents, belowThreshold, trendingBelow, compliance, activeGrace, pending } =
-    await getHodOverview();
+    await loadHodOverview();
 
   const counted = compliance.cleared + compliance.provisional + compliance.locked + compliance.pending;
 

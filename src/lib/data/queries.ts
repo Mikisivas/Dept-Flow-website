@@ -18,13 +18,7 @@
 
 import { COMPLIANCE, COURSES, STUDENT } from "@/lib/data/fixtures";
 import type { StudentProfile } from "@/lib/data/fixtures";
-import type {
-  ComplianceState,
-  CourseAttendance,
-  RiskPattern,
-  SessionCell,
-  SubmitRejection,
-} from "@/lib/types";
+import type { ComplianceState, CourseAttendance, SubmitRejection } from "@/lib/types";
 
 /**
  * One student's record as the HOD reads it. Still a fixture: the HOD screens
@@ -177,124 +171,6 @@ export async function getNotifications(): Promise<NotificationItem[]> {
 /* ---------------------------------------------------------------------------
    Attendance
    --------------------------------------------------------------------------- */
-
-export type HodOverview = {
-  totalStudents: number;
-  belowThreshold: number;
-  trendingBelow: number;
-  compliance: { cleared: number; provisional: number; locked: number; pending: number };
-  activeGrace: { expiresOn: string; scope: string; studentsAffected: number } | null;
-  pending: { disputes: number; waivers: number };
-};
-
-export async function getHodOverview(): Promise<HodOverview> {
-  return {
-    totalStudents: 486,
-    belowThreshold: 38,
-    trendingBelow: 62,
-    compliance: { cleared: 301, provisional: 96, locked: 74, pending: 15 },
-    activeGrace: null,
-    pending: { disputes: 3, waivers: 4 },
-  };
-}
-
-export type AtRiskStudent = {
-  studentId: string;
-  matricNo: string;
-  surname: string;
-  firstName: string;
-  otherNames: string | null;
-  level: number;
-  courseCode: string;
-  currentPct: number;
-  predictedPct: number;
-  pattern: RiskPattern;
-  sessions: SessionCell[];
-};
-
-export async function getAtRiskStudents(): Promise<AtRiskStudent[]> {
-  const strip = (pattern: Array<[boolean, boolean]>): SessionCell[] =>
-    pattern.map(([one, two], index) => ({
-      id: `w${index}`,
-      label: `Week ${index + 1}`,
-      heldOn: new Date(Date.UTC(2025, 8, 16 + index * 7)).toISOString(),
-      mode: "pair" as const,
-      checkpointOne: one,
-      checkpointTwo: two,
-      status: "confirmed" as const,
-      source: "digital" as const,
-      score: one && two ? 1 : one || two ? 0.5 : 0,
-    }));
-
-  return [
-    {
-      studentId: "r1",
-      matricNo: "CMP/2021/112",
-      surname: "Sanusi",
-      firstName: "Halima",
-      otherNames: null,
-      level: 400,
-      courseCode: "STA 202",
-      currentPct: 31,
-      predictedPct: 44,
-      pattern: "disengagement",
-      sessions: strip([
-        [true, true],
-        [false, false],
-        [false, false],
-        [true, false],
-        [false, false],
-        [false, false],
-        [true, false],
-        [false, false],
-      ]),
-    },
-    {
-      studentId: "r2",
-      matricNo: "CMP/2021/047",
-      surname: "Okonkwo",
-      firstName: "Chidera",
-      otherNames: "Emeka",
-      level: 400,
-      courseCode: "CMP 301",
-      currentPct: 42,
-      predictedPct: 58,
-      pattern: "partial_attendance",
-      sessions: strip([
-        [true, false],
-        [true, false],
-        [true, true],
-        [true, false],
-        [true, false],
-        [false, false],
-        [true, false],
-        [true, false],
-      ]),
-    },
-    {
-      studentId: "r3",
-      matricNo: "MTH/2022/018",
-      surname: "Adeyemi",
-      firstName: "Tunde",
-      otherNames: "Ola",
-      level: 300,
-      courseCode: "MTH 205",
-      currentPct: 55,
-      predictedPct: 67,
-      pattern: "partial_attendance",
-      sessions: strip([
-        [true, true],
-        [true, false],
-        [true, false],
-        [true, true],
-        [false, false],
-        [true, false],
-        [true, false],
-        [true, true],
-      ]),
-    },
-  ];
-}
 
 export type GracePeriodRecord = {
   id: string;
@@ -699,47 +575,6 @@ export type EligibilityEntry = {
   sessionsHeld: number;
   eligible: boolean;
 };
-
-export async function getEligibilityList(): Promise<{
-  courseCode: string;
-  status: "draft" | "authorized";
-  authorizedBy: string | null;
-  authorizedAt: string | null;
-  thresholdPct: number;
-  entries: EligibilityEntry[];
-}> {
-  const people: Array<[string, string, string, string | null, number, number]> = [
-    ["CMP/2021/047", "Okonkwo", "Chidera", "Emeka", 10, 13],
-    ["CMP/2021/112", "Sanusi", "Halima", null, 3.5, 13],
-    ["CMP/2021/158", "Adebayo", "Folake", "Ronke", 12, 13],
-    ["CMP/2021/203", "Nwachukwu", "Emeka", null, 6.5, 13],
-    ["CMP/2021/241", "Ibrahim", "Zainab", "Aisha", 11.5, 13],
-    ["CMP/2022/018", "Eze", "Chukwudi", null, 9.5, 13],
-    ["CMP/2022/077", "Ogundipe", "Tolu", "Ayomide", 13, 13],
-  ];
-
-  return {
-    courseCode: "CMP 301",
-    status: "draft",
-    authorizedBy: null,
-    authorizedAt: null,
-    thresholdPct: 75,
-    entries: people.map(([matricNo, surname, firstName, otherNames, score, held], index) => {
-      const pct = Math.round((score / held) * 10000) / 100;
-      return {
-        studentId: `e${index}`,
-        matricNo,
-        surname,
-        firstName,
-        otherNames,
-        attendancePct: pct,
-        scoreTotal: score,
-        sessionsHeld: held,
-        eligible: pct >= 75,
-      };
-    }),
-  };
-}
 
 export type ScheduledSession = {
   sessionInstanceId: string;

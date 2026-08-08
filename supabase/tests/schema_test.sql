@@ -153,6 +153,15 @@ select assert_true(
   'after clearing, the same 10.0 of 13 reads as 76.92%'
 );
 
+-- The consequence, stated as the eligibility list states it. She attended
+-- exactly as much before as after; the payment is the only thing that changed,
+-- and it is what carries her over the line.
+select assert_true(
+  attendance_pct('44444444-4444-4444-4444-444444444401',
+                 '66666666-6666-6666-6666-666666666601') >= 75,
+  'clearing dues alone is what makes her eligible — no attendance was added, only counted'
+);
+
 select assert_true(
   (select state from compliance_statuses
     where student_id = '44444444-4444-4444-4444-444444444401') = 'cleared',

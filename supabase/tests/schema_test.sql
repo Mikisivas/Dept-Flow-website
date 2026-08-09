@@ -831,6 +831,61 @@ begin
 end $$;
 
 -- ---------------------------------------------------------------------------
+-- The deadline actually arriving
+-- ---------------------------------------------------------------------------
+
+-- These two transitions existed from the first migration and nothing called
+-- them, so the compliance ladder was inert. That became load-bearing when the
+-- payment window was tied to the lock: with nothing driving the transition, no
+-- student is ever locked and the deadline does not exist.
+
+do $$
+declare
+  v_session uuid := '11111111-1111-1111-1111-111111111111';
+  v_fresh   uuid := gen_random_uuid();
+  v_moved   integer;
+begin
+  insert into profiles (id, role, surname, first_name, phone)
+  values (v_fresh, 'student', 'Timely', 'Student', '+2348058888888');
+  insert into students (id, matric_no, level) values (v_fresh, 'CMP/2021/888', 300);
+  insert into compliance_statuses (student_id, academic_session_id, state)
+  values (v_fresh, v_session, 'uncleared');
+
+  -- Resumption far enough back that the provisional window has closed.
+  update dues_periods set resumption_date = current_date - 60
+   where academic_session_id = v_session;
+
+  v_moved := begin_pending_verification(v_session);
+  perform assert_true(
+    v_moved > 0,
+    'once the provisional window has passed, uncleared students enter the buffer'
+  );
+
+  perform assert_true(
+    (select state from compliance_statuses
+      where student_id = v_fresh and academic_session_id = v_session) = 'pending_verification',
+    'they land in pending verification rather than straight into a lock'
+  );
+
+  -- Rewind so the deadline has NOT passed, and put them back.
+  update compliance_statuses set state = 'uncleared', pending_since = null
+   where student_id = v_fresh and academic_session_id = v_session;
+  update dues_periods set resumption_date = current_date - 2
+   where academic_session_id = v_session;
+
+  perform assert_true(
+    begin_pending_verification(v_session) = 0,
+    'run before the deadline it moves nobody — the rule is in the function, not in the caller'
+  );
+
+  perform assert_true(
+    (select state from compliance_statuses
+      where student_id = v_fresh and academic_session_id = v_session) = 'uncleared',
+    'so a scheduler misfire cannot lock a department out of paying early'
+  );
+end $$;
+
+-- ---------------------------------------------------------------------------
 -- Course registration
 -- ---------------------------------------------------------------------------
 

@@ -369,6 +369,26 @@ Consequence for the UI: the locked banner carries **no Pay dues button**, and
 the dues screen replaces the payment form with an explanation. A button that can
 only ever be refused reads as a broken site rather than as a passed deadline.
 
+## What drives the deadline
+
+`begin_pending_verification` and `lock_after_buffer` existed from the first
+migration and **nothing ever called them**. The whole ladder was inert. That was
+survivable while locking only stopped attendance recording — the seed sets a
+locked student by hand — and stopped being survivable the moment the payment
+window was tied to the lock, because a deadline nothing enforces is not one.
+
+**The date rule lives in the function, not the caller.** The original moved
+every uncleared student into the buffer whenever it was called; the day-30 rule
+was entirely the assumption that somebody would call it on day 31 and never
+sooner. A scheduler misfire, a manual run or a retry would have locked a whole
+department early — and, now, out of paying. It reads the resumption date and
+the configured window itself, so running it on day 3 does nothing.
+
+**pg_cron in Supabase is the recommended driver**, with
+`POST /api/cron/compliance` as the fallback for hosts without it. Running inside
+the database means one less moving part, no shared secret, and it keeps working
+while the web deployment is down.
+
 ## Grace periods
 
 A grace period is the HOD saying: for these students, start recording

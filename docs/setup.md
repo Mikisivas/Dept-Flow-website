@@ -26,7 +26,7 @@ how to point the geo-fence at wherever you are actually testing from.
 
 To confirm it worked, paste
 [`supabase/tests/schema_test.sql`](../supabase/tests/schema_test.sql) and run
-it. It returns a grid of 112 assertions — one row each, in plain English — then
+it. It returns a grid of 116 assertions — one row each, in plain English — then
 rolls back, changing nothing. A failure aborts with the assertion that broke.
 
 The SQL Editor may warn that a transaction is already in progress. That is
@@ -90,6 +90,35 @@ once after that migration. It puts the dates back, fills in the course kinds and
 credit units, works out which enrolments are really carry-overs, and enrols any
 student who has no courses at all. It is safe to run twice, and it prints what
 it did.
+
+## Scheduling the compliance transition
+
+Nothing moves a student from uncleared to pending verification to locked on its
+own. Without a schedule the ladder never runs, no student is ever locked, and —
+since the payment window is tied to the lock — the deadline never arrives.
+
+The preferred route is pg_cron, inside Supabase. Database → Extensions → enable
+`pg_cron`, then in the SQL Editor:
+
+```sql
+select cron.schedule(
+  'dept-flow-compliance',
+  '0 1 * * *',                       -- 01:00 UTC, 02:00 in Lagos
+  $$select advance_compliance_states()$$
+);
+```
+
+One less moving part than an HTTP cron, no shared secret to leak, and it keeps
+running while the web deployment is down or being redeployed.
+
+If your host cannot do that, `POST /api/cron/compliance` does the same thing.
+It needs `CRON_SECRET` in `.env.local` and the same value as a bearer token, and
+it refuses to run if the secret is unset — the endpoint can lock a whole
+department out of paying, so an unset secret is a fault rather than a reason to
+skip the check.
+
+Both are safe to run repeatedly. The transitions are idempotent by their own
+conditions rather than by remembering that they ran.
 
 ## Testing a payment
 

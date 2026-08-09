@@ -624,6 +624,47 @@ would prove only that they are already signed in, which was never in question.
 The new number is refused if it is already on another account: one phone, one
 account, or two students can reset each other's passwords.
 
+## Why every helper function is SECURITY INVOKER
+
+PostgREST publishes **every** function in `public` as an RPC, and Supabase
+grants execute on them to `authenticated` by default. So
+`attendance_pct(student_id, course_id)` — which takes *another student's id as
+an argument* — is callable by anybody with a login.
+
+It is safe only because it is `SECURITY INVOKER`: its internal reads run under
+the caller's own row-level security, so a student asking for another student's
+attendance gets 0 rather than the real figure. The function is not the guard.
+RLS is.
+
+That makes the invoker property load-bearing and easy to break by accident —
+"make it definer so the HOD screen can see everyone" is a plausible change that
+would silently turn it into a way to read any student's record. The schema
+suite therefore asserts that **no function reachable by `authenticated` is
+`SECURITY DEFINER`**, with one documented exception: `current_app_role` takes
+no arguments, so it can only report the caller's own role, and it has to be
+definer because the RLS policies call it and reading `profiles` to answer would
+recurse through those same policies.
+
+The suite also asserts that every authority action — clearing, waiving,
+deactivating, rolling over, authorizing — is reachable by neither `anon` nor
+`authenticated`. Each one goes through an API route that checks the role first.
+
+## Knowing whether the database is up to date
+
+Migrations are applied by hand, one file at a time, in the SQL Editor. Missing
+one is the likeliest way this project breaks, and the symptom is unhelpful:
+PostgREST answers a call to a function that does not exist with a generic
+error that reaches the screen as "That did not go through."
+
+`dept_flow_schema_report()` lists what is absent, so `/api/health` can name the
+file to run instead of shrugging. It also reports whether pg_cron is installed
+and whether the active session has a dues period — without either, nothing ever
+locks, and a demo that expects a locked student silently gets none.
+
+It is `SECURITY DEFINER` because it reads the catalog, and granted to
+`service_role` alone. It takes no arguments, so there is nothing to point at
+another user's data.
+
 ## Palette
 
 `#FF9935`, eyedropped from the crest, superseding the `#F0952B` visual estimate

@@ -1655,6 +1655,122 @@ begin
   perform assert_true(v_ok, 'the same rollover cannot be run twice — the second run would promote everyone again');
 end $$;
 
+
+-- ---------------------------------------------------------------------------
+-- Security posture
+--
+-- These assert the SHAPE of the schema's defences rather than any one rule, so
+-- that weakening them fails the suite instead of going unnoticed.
+--
+-- The one that matters most is the SECURITY DEFINER check. PostgREST publishes
+-- every function in `public` as an RPC, and Supabase grants execute on them to
+-- `authenticated` by default. Functions like `attendance_pct(student, course)`
+-- take another student's id as an argument and are therefore callable by
+-- anybody — they are safe ONLY because they are SECURITY INVOKER, so their
+-- internal reads run under the caller's own RLS and return nothing. Adding
+-- SECURITY DEFINER to one for convenience would silently turn it into a way to
+-- read any student's record.
+-- ---------------------------------------------------------------------------
+
+select assert_true(
+  not exists (
+    select 1 from pg_class c
+    join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public' and c.relkind = 'r' and not c.relrowsecurity
+  ),
+  'every table has row-level security enabled'
+);
+
+do $$
+declare
+  v_leaky text;
+begin
+  select string_agg(p.proname, ', ')
+    into v_leaky
+  from pg_proc p
+  join pg_namespace n on n.oid = p.pronamespace
+  where n.nspname = 'public'
+    and p.prokind = 'f'
+    and p.prosecdef
+    and has_function_privilege('authenticated', p.oid, 'execute')
+    -- current_app_role takes no arguments, so it can only ever report the
+    -- caller's own role. It has to be definer: the RLS policies call it, and
+    -- reading `profiles` to answer would recurse through those same policies.
+    and p.proname <> 'current_app_role';
+
+  perform assert_true(
+    v_leaky is null,
+    'no user-callable function is SECURITY DEFINER — RLS is what scopes them, and it only works if they run as the caller'
+  );
+end $$;
+
+do $$
+declare
+  v_exposed text;
+begin
+  -- Every authority action. Reachable from `authenticated` would mean a student
+  -- could clear themselves, waive their own dues, or promote the department.
+  select string_agg(p.proname, ', ')
+    into v_exposed
+  from pg_proc p
+  join pg_namespace n on n.oid = p.pronamespace
+  where n.nspname = 'public'
+    and p.proname in (
+      'clear_student', 'decide_waiver', 'resolve_dispute', 'open_grace_period',
+      'revoke_grace_period', 'deactivate_student', 'reactivate_student',
+      'resolve_registration_dispute', 'run_level_rollover', 'cancel_session',
+      'schedule_makeup', 'reschedule_session', 'authorize_eligibility_list',
+      'advance_compliance_states', 'write_audit', 'notify_enrolled',
+      'resolve_session_score', 'enrol_in_core_courses'
+    )
+    and (
+      has_function_privilege('authenticated', p.oid, 'execute')
+      or has_function_privilege('anon', p.oid, 'execute')
+    );
+
+  perform assert_true(
+    v_exposed is null,
+    'no authority action is callable by a signed-in user — every one goes through the API, which checks the role'
+  );
+end $$;
+
+select assert_true(
+  not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'venue_directory'
+      and column_name not in ('id', 'name')
+  ),
+  'the venue directory carries names only — it bypasses the geo-fence policy, so it must expose nothing else'
+);
+
+-- The report /api/health reads. Running the full migration set and being told
+-- something is missing would mean the report's own expectations have drifted
+-- from the migrations, which is worse than no report.
+select assert_true(
+  (dept_flow_schema_report()->>'up_to_date')::boolean,
+  'the schema report agrees this database is fully migrated'
+);
+
+select assert_true(
+  not has_function_privilege('authenticated', 'dept_flow_schema_report()', 'execute'),
+  'the schema report is service-role only — it is SECURITY DEFINER and reads the catalog'
+);
+
+-- And the proof that SECURITY INVOKER is doing the work: Chidera asking for
+-- Halima's attendance gets zero, not Halima's real 26.92%.
+set local role authenticated;
+set local request.jwt.claim.sub = '44444444-4444-4444-4444-444444444401';
+
+select assert_true(
+  attendance_pct('44444444-4444-4444-4444-444444444402',
+                 '66666666-6666-6666-6666-666666666601') = 0,
+  'a student calling attendance_pct for another student gets nothing — the function is not the guard, RLS is'
+);
+
+reset role;
+
+
 -- The readable result. Every row here is an assertion that held; a failure
 -- would have aborted before reaching this point.
 select seq as "#", 'ok' as result, what as assertion from assertion_log order by seq;

@@ -117,10 +117,12 @@ demo quietly shows invented data.
 throws in production), deployment.
 
 **Checks:** `npm test` (12 Paystack + 33 account assertions, no
-network) and `supabase/tests/schema_test.sql` (187 assertions, run in the SQL
+network) and `supabase/tests/schema_test.sql` (194 assertions, run in the SQL
 Editor).
-`/api/health` reports, for the signed-in user, which tables they can read and
-whether Paystack answers.
+`/api/health` is the first thing to open when something misbehaves: it reports
+**which migrations are missing by name**, which tables the signed-in user can
+read, whether Paystack answers, and whether pg_cron is installed. A
+half-applied migration set explains more failures than anything else.
 
 **Applying migrations to a project that already has data** needs care: a
 default that is right for new rows can be wrong for old ones. See

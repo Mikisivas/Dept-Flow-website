@@ -1162,6 +1162,118 @@ end $$;
 
 
 
+
+-- ---------------------------------------------------------------------------
+-- Authorizing an exam eligibility list
+--
+-- On its own course and its own student. An earlier block already authorizes a
+-- list for CMP 301 to prove the freeze trigger, and reusing it here would test
+-- the collision rather than the function.
+-- ---------------------------------------------------------------------------
+
+do $$
+declare
+  v_hod     uuid := '33333333-3333-3333-3333-333333333302';
+  v_admin   uuid := '33333333-3333-3333-3333-333333333303';
+  v_session uuid := '11111111-1111-1111-1111-111111111111';
+  v_lect    uuid := '33333333-3333-3333-3333-333333333301';
+  v_venue   uuid := '22222222-2222-2222-2222-222222222201';
+  v_course  uuid := gen_random_uuid();
+  v_student uuid := gen_random_uuid();
+  v_lecture uuid := gen_random_uuid();
+  v_list    uuid;
+  v_e       integer;
+  v_n       integer;
+  v_snap    numeric;
+  v_ok      boolean;
+begin
+  insert into courses (id, academic_session_id, code, title, level, lecturer_id, kind, credit_units, semester)
+  values (v_course, v_session, 'CMP 499', 'Project', 400, v_lect, 'core', 3, 1);
+
+  insert into profiles (id, role, surname, first_name, phone)
+  values (v_student, 'student', 'Eligible', 'Test', '+2348055555555');
+  insert into students (id, matric_no, level) values (v_student, 'CMP/2021/555', 400);
+  insert into enrolments (student_id, course_id, source, enrolled_on)
+  values (v_student, v_course, 'core', date '2025-09-15');
+
+  insert into session_instances (id, course_id, held_on, venue_id, type, status, checkpoint_mode, closed_at, created_by)
+  values (v_lecture, v_course, date '2025-10-07', v_venue, 'makeup', 'closed', 'pair', now(), v_lect);
+
+  -- One lecture, attended in full, but provisional: the student has not paid.
+  insert into session_scores (student_id, session_instance_id, score, status, source)
+  values (v_student, v_lecture, 1.0, 'provisional', 'digital');
+
+  begin
+    perform authorize_eligibility_list(v_course, v_hod, 'ok');
+    v_ok := false;
+  exception when others then v_ok := true;
+  end;
+  perform assert_true(v_ok, 'authorizing without a substantive note is refused');
+
+  begin
+    perform authorize_eligibility_list(v_course, v_admin, 'The administrator is not the head of department.');
+    v_ok := false;
+  exception when others then v_ok := true;
+  end;
+  perform assert_true(v_ok, 'only the head of department can authorize an eligibility list');
+
+  select eligible, not_eligible into v_e, v_n
+  from authorize_eligibility_list(v_course, v_hod, 'Final list for the 2025/2026 first semester.');
+
+  perform assert_true(v_e + v_n > 0, 'authorizing snapshots every enrolled student');
+
+  perform assert_true(
+    v_e = 0 and v_n = 1,
+    'a student whose only attendance is provisional is recorded as not eligible — the money is what counts it'
+  );
+
+  select id into v_list from eligibility_lists where course_id = v_course;
+  perform assert_true(
+    (select status from eligibility_lists where id = v_list) = 'authorized'
+      and (select authorized_by from eligibility_lists where id = v_list) = v_hod,
+    'the list records who froze it and when'
+  );
+
+  select attendance_pct into v_snap
+  from eligibility_entries where list_id = v_list and student_id = v_student;
+
+  perform assert_true(
+    v_snap = attendance_pct(v_student, v_course),
+    'the snapshot matches what every other screen was showing at the time'
+  );
+
+  perform assert_true(
+    (select count(*) from audit_log
+      where action = 'eligibility.authorize' and target_id = v_list::text) = 1,
+    'authorizing writes an audit row'
+  );
+
+  -- The freeze is the whole point: clearing this student afterwards takes them
+  -- from 0% to 100%, and must NOT move the list an exam board already sat with.
+  perform clear_student(v_student, v_session, 'payment');
+
+  perform assert_true(
+    attendance_pct(v_student, v_course) = 100,
+    'clearing takes the student to 100% live'
+  );
+
+  perform assert_true(
+    (select attendance_pct from eligibility_entries
+      where list_id = v_list and student_id = v_student) = v_snap,
+    'and the frozen list still says what it said — a correction is a new list, never an edit'
+  );
+
+  select eligible, not_eligible into v_e, v_n
+  from authorize_eligibility_list(v_course, v_hod, 'Trying to authorize the same list twice.');
+  perform assert_true(v_e = 0 and v_n = 0, 'an authorized list cannot be authorized again');
+
+  perform assert_true(
+    (select count(*) from audit_log
+      where action = 'eligibility.authorize' and target_id = v_list::text) = 1,
+    'and the second attempt writes no second audit row'
+  );
+end $$;
+
 -- ---------------------------------------------------------------------------
 -- Schedule changes: cancelling, makeups, reschedules
 --

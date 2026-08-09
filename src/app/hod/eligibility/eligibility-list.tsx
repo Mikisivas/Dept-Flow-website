@@ -1,10 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { CircleCheck, CircleSlash, Lock } from "lucide-react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { DataTable, type Column } from "@/components/data-table";
 import { Button } from "@/components/ui/button";
+import { PrintButton } from "./print-button";
 import type { EligibilityRow as EligibilityEntry } from "@/lib/data/hod";
 import { displayNameRegister, formatDate, formatPercent, formatScore } from "@/lib/format";
 
@@ -71,6 +73,7 @@ const columns: Column<EligibilityEntry>[] = [
 ];
 
 export function EligibilityList({
+  courseId,
   courseCode,
   entries,
   thresholdPct,
@@ -78,6 +81,7 @@ export function EligibilityList({
   authorizedBy,
   authorizedAt,
 }: {
+  courseId: string;
   courseCode: string;
   entries: EligibilityEntry[];
   thresholdPct: number;
@@ -85,8 +89,40 @@ export function EligibilityList({
   authorizedBy: string | null;
   authorizedAt: string | null;
 }) {
-  const [status, setStatus] = useState(initialStatus);
+  const router = useRouter();
+  const status = initialStatus;
   const [confirming, setConfirming] = useState(false);
+  const [working, setWorking] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function authorize(note: string) {
+    setWorking(true);
+    setError(null);
+
+    try {
+      const response = await fetch("/api/hod/eligibility", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ courseId, note }),
+      });
+      const result = await response.json();
+
+      if (!response.ok) {
+        setError(result.error ?? "That did not go through. Try again.");
+        return;
+      }
+
+      setConfirming(false);
+      // Re-read rather than flipping a local flag. The authorized list is the
+      // snapshot the server just took, and it is allowed to differ from what
+      // is on screen — that difference is exactly what freezing is for.
+      router.refresh();
+    } catch {
+      setError("Could not reach the server. Check the connection and try again.");
+    } finally {
+      setWorking(false);
+    }
+  }
 
   const eligible = entries.filter((entry) => entry.eligible).length;
   const notEligible = entries.length - eligible;
@@ -130,22 +166,25 @@ export function EligibilityList({
             Authorize list
           </Button>
         ) : (
-          <Button size="lg" variant="secondary">
-            Print or save as PDF
-          </Button>
+          <PrintButton />
         )}
       </div>
 
       <ConfirmDialog
         open={confirming}
-        onOpenChange={setConfirming}
+        onOpenChange={(open) => {
+          setConfirming(open);
+          if (!open) setError(null);
+        }}
         title={`Authorize the ${courseCode} eligibility list?`}
         description={
           <>
             This is the department&apos;s formal record of who may sit the exam.{" "}
             <strong className="font-semibold text-ink">{notEligible} students</strong> will be
-            recorded as not eligible. Once authorized the list is frozen and your name is attached
-            to it.
+            recorded as not eligible. Every percentage is{" "}
+            <strong className="font-semibold text-ink">copied as it stands now</strong> — a grace
+            period or a corrected dispute afterwards will not change this list. Your name is
+            attached to it, and a correction means issuing a new one.
           </>
         }
         impact={[
@@ -153,13 +192,12 @@ export function EligibilityList({
           { label: "Not eligible", value: String(notEligible) },
           { label: "Threshold", value: `${thresholdPct}%` },
         ]}
+        error={error}
+        working={working}
         reasonLabel="Note for the audit log"
         reasonHint="Recorded against your authorization."
         confirmLabel="Authorize list"
-        onConfirm={() => {
-          setStatus("authorized");
-          setConfirming(false);
-        }}
+        onConfirm={authorize}
       />
     </>
   );

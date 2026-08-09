@@ -1,7 +1,7 @@
 import "server-only";
 
 import { redirect } from "next/navigation";
-import { createUserClient } from "@/lib/supabase/client";
+import { createServiceClient, createUserClient } from "@/lib/supabase/client";
 import { currentAccessToken, currentUser } from "@/lib/auth/current-user";
 import type { SessionClaims } from "@/lib/auth/session";
 
@@ -590,4 +590,204 @@ export async function loadTimetable(): Promise<TimetableRow[]> {
         ? a.startsAt.localeCompare(b.startsAt)
         : a.dayOfWeek - b.dayOfWeek,
     );
+}
+
+// ---------------------------------------------------------------------------
+// Uploading the register
+// ---------------------------------------------------------------------------
+
+export type RegisterRow = { matricNo: string; surname: string; level: number };
+
+export type RegisterPreview = {
+  created: RegisterRow[];
+  /** Already on the register, unclaimed, and the upload changes something. */
+  changed: Array<RegisterRow & { was: { surname: string; level: number } }>;
+  unchanged: number;
+  /**
+   * On the register, already claimed, and the upload would change it. Reported
+   * and never applied — see below.
+   */
+  claimedConflicts: Array<RegisterRow & { was: { surname: string; level: number } }>;
+  /**
+   * On the register but absent from the upload. Never deleted, because a
+   * truncated paste would otherwise lock out everyone missing from it.
+   */
+  missing: number;
+  rejected: Array<{ line: number; reason: string }>;
+};
+
+/**
+ * One CSV row: matric number, surname, level.
+ *
+ * Strict about the prefix. Computer Science is CMP in this department and the
+ * database rejects CSC outright, so a silently skipped row is a student who
+ * cannot create an account and has no idea why.
+ */
+function parseRegisterRow(line: string): { row?: RegisterRow; reason?: string } {
+  const parts = line.split(",").map((part) => part.trim());
+  if (parts.length < 3) return { reason: "needs matric number, surname and level" };
+
+  const [matricText, surname, levelText] = parts;
+  const matric = matricText.toUpperCase();
+
+  if (!/^(MTH|CMP|STA)\/[0-9]{4}\/[0-9]{3,4}$/.test(matric)) {
+    return {
+      reason: matric.startsWith("CSC")
+        ? "Computer Science is CMP in this department, not CSC"
+        : `"${matricText}" is not a matric number — expected e.g. CMP/2021/047`,
+    };
+  }
+  if (!surname) return { reason: "no surname" };
+
+  const level = Number(levelText);
+  if (![100, 200, 300, 400].includes(level)) {
+    return { reason: `level "${levelText}" is not 100, 200, 300 or 400` };
+  }
+
+  return { row: { matricNo: matric, surname, level } };
+}
+
+function parseRegister(csv: string) {
+  const lines = csv
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    // Tolerate a header row, since a spreadsheet export always has one.
+    .filter((line, index) => !(index === 0 && /^matric/i.test(line)));
+
+  const rows: RegisterRow[] = [];
+  const rejected: RegisterPreview["rejected"] = [];
+
+  lines.forEach((line, index) => {
+    const { row, reason } = parseRegisterRow(line);
+    if (row) rows.push(row);
+    else rejected.push({ line: index + 1, reason: reason ?? "could not read that line" });
+  });
+
+  return { rows, rejected };
+}
+
+/**
+ * What an upload would do, without doing any of it.
+ *
+ * Not optional, and not a nicety: a column mapped one place to the left turns
+ * every surname into a level and locks out an entire year. The diff is the
+ * only thing standing between a mis-pasted spreadsheet and a department that
+ * cannot register.
+ */
+export async function previewRegisterUpload(csv: string): Promise<RegisterPreview> {
+  const db = await adminDb();
+  const sessionId = await activeSessionId(db);
+  const { rows, rejected } = parseRegister(csv);
+
+  const { data: existing } = await db
+    .from("whitelist_entries")
+    .select("matric_no, surname, level, claimed")
+    .eq("academic_session_id", sessionId ?? "");
+
+  const byMatric = new Map((existing ?? []).map((row) => [row.matric_no, row]));
+  const uploaded = new Set(rows.map((row) => row.matricNo));
+
+  const preview: RegisterPreview = {
+    created: [],
+    changed: [],
+    unchanged: 0,
+    claimedConflicts: [],
+    missing: (existing ?? []).filter((row) => !uploaded.has(row.matric_no)).length,
+    rejected,
+  };
+
+  for (const row of rows) {
+    const current = byMatric.get(row.matricNo);
+
+    if (!current) {
+      preview.created.push(row);
+      continue;
+    }
+
+    const same = current.surname === row.surname && current.level === row.level;
+    if (same) {
+      preview.unchanged += 1;
+      continue;
+    }
+
+    const was = { surname: current.surname, level: current.level };
+    if (current.claimed) preview.claimedConflicts.push({ ...row, was });
+    else preview.changed.push({ ...row, was });
+  }
+
+  return preview;
+}
+
+export type RegisterUploadResult = {
+  created: number;
+  changed: number;
+  skippedClaimed: number;
+  rejected: RegisterPreview["rejected"];
+};
+
+/**
+ * Applying it.
+ *
+ * Two rules that are the whole safety of this operation:
+ *
+ *   Rows already CLAIMED are never rewritten. A student has registered against
+ *   that surname and level; changing them underneath would break the identity
+ *   the register exists to establish, and would do it silently.
+ *
+ *   Rows absent from the upload are never deleted. A paste that lost its last
+ *   two hundred lines would otherwise lock those students out of registration
+ *   with no trace of what happened.
+ */
+export async function commitRegisterUpload(csv: string): Promise<RegisterUploadResult> {
+  const session = await requireAdmin();
+  const db = createServiceClient();
+
+  const { data: active } = await db
+    .from("academic_sessions")
+    .select("id")
+    .eq("is_active", true)
+    .maybeSingle();
+
+  if (!active) throw new Error("There is no active academic session.");
+
+  const preview = await previewRegisterUpload(csv);
+  const writable = [...preview.created, ...preview.changed];
+
+  if (writable.length > 0) {
+    const { error } = await db.from("whitelist_entries").upsert(
+      writable.map((row) => ({
+        academic_session_id: active.id,
+        matric_no: row.matricNo,
+        surname: row.surname,
+        level: row.level,
+      })),
+      { onConflict: "academic_session_id,matric_no" },
+    );
+
+    if (error) throw new Error(`Could not save the register: ${error.message}`);
+  }
+
+  await db.rpc("write_audit", {
+    p_actor_id: session.profileId,
+    p_actor_role: "admin",
+    p_action: "register.upload",
+    p_target_table: "whitelist_entries",
+    p_target_id: active.id,
+    p_reason: `Register upload: ${preview.created.length} added, ${preview.changed.length} changed`,
+    p_metadata: {
+      created: preview.created.length,
+      changed: preview.changed.length,
+      skipped_claimed: preview.claimedConflicts.length,
+      rejected: preview.rejected.length,
+      absent_from_upload: preview.missing,
+    },
+  });
+
+  return {
+    created: preview.created.length,
+    changed: preview.changed.length,
+    skippedClaimed: preview.claimedConflicts.length,
+    rejected: preview.rejected,
+  };
 }

@@ -3,9 +3,12 @@ import Link from "next/link";
 import { AppShell } from "@/components/app-shell";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
+import { ChangePasswordButton, ChangePhoneButton } from "./account-actions";
 import { LogOutButton } from "@/components/log-out-button";
 import { requireStudent } from "@/lib/data/require-student";
 import { displayNameRegister, programmeFromMatric } from "@/lib/format";
+
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Your profile",
@@ -45,11 +48,7 @@ export default async function ProfilePage() {
             label="Phone number"
             value={student.phone}
             monospace
-            action={
-              <Button variant="ghost" className="h-9 px-2 text-[14px]">
-                Change
-              </Button>
-            }
+            action={<ChangePhoneButton current={student.phone} />}
           />
         </dl>
         <p className="border-t border-line px-4 py-3 text-[13px] leading-relaxed text-muted">
@@ -58,14 +57,12 @@ export default async function ProfilePage() {
       </section>
 
       <section className="mt-6 flex flex-col gap-2">
-        <Button variant="secondary" className="justify-start">
-          Change password
-        </Button>
+        <ChangePasswordButton />
         <Button asChild variant="secondary" className="justify-start">
           <Link href="/courses/register">Your courses</Link>
         </Button>
         <Button asChild variant="secondary" className="justify-start">
-          <Link href="/notifications">Notification preferences</Link>
+          <Link href="/notifications">Your notifications</Link>
         </Button>
         <Button asChild variant="secondary" className="justify-start">
           <Link href="/privacy">Privacy notice</Link>

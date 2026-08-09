@@ -576,6 +576,54 @@ The code is spent at the moment the password moves.
 often a student locked out by failed attempts; leaving `locked_until` in place
 means the reset appears to work and the login still refuses them.
 
+## Authorizing an eligibility list
+
+The final authoritative output of the whole system: who may sit a paper.
+
+**Authorizing snapshots, it does not flip a status.** Every enrolled student's
+percentage is copied into `eligibility_entries` at that moment, and the screen
+reads the snapshot from then on. If it recomputed, a grace period opened next
+week or a dispute corrected next month would silently rewrite the list an exam
+board already sat with — and "frozen" would be decoration. The existing
+`eligibility_entries_frozen` trigger then refuses any edit at the database
+level.
+
+**A correction is a new list, never an edit to this one**, so the version the
+board saw stays recoverable.
+
+**A course that has held no lectures makes nobody eligible.** 0 of 0 is not a
+failure to attend, but it is not a pass either; the list records them as not
+eligible and the count says how many lectures it was computed from.
+
+## Uploading the register
+
+**The preview is the safeguard, not a courtesy.** One column out of alignment
+turns every surname into a level and locks out an entire year — and the
+register is what decides whether a student can create an account at all. The
+diff is a step the administrator has to read before anything is written.
+
+**A row a student has already claimed is never rewritten.** They registered
+against that surname and level; changing them underneath would break the
+identity the register exists to establish, and would do it silently. Those rows
+are reported and left alone for the office to correct individually.
+
+**Rows absent from an upload are never deleted.** A paste that lost its last
+two hundred lines would otherwise lock those students out of registration with
+no trace of what happened.
+
+## Changing a password or a phone number while signed in
+
+**A password change asks for the current password.** A signed-in session is not
+proof of identity — a borrowed unlocked phone is exactly the case that check
+exists for. This is what makes it different from a reset, which proves identity
+through the phone instead.
+
+**A phone change sends its code to the new number.** What needs proving is that
+the person asking can receive messages there. Sending it to the old number
+would prove only that they are already signed in, which was never in question.
+The new number is refused if it is already on another account: one phone, one
+account, or two students can reset each other's passwords.
+
 ## Palette
 
 `#FF9935`, eyedropped from the crest, superseding the `#F0952B` visual estimate

@@ -327,6 +327,7 @@ export type EligibilityList = {
   thresholdPct: number;
   rows: EligibilityRow[];
   authorizedAt: string | null;
+  authorizedBy: string | null;
 };
 
 /**
@@ -361,16 +362,83 @@ export async function loadEligibilityList(courseId?: string): Promise<Eligibilit
 
   const chosen = courses.find((row) => row.courseId === courseId) ?? courses[0] ?? null;
   if (!chosen) {
-    return { courses, course: null, thresholdPct: 75, rows: [], authorizedAt: null };
+    return {
+      courses,
+      course: null,
+      thresholdPct: 75,
+      rows: [],
+      authorizedAt: null,
+      authorizedBy: null,
+    };
   }
 
   const { data: list } = await db
     .from("eligibility_lists")
-    .select("threshold_pct, status, authorized_at")
+    .select("id, threshold_pct, status, authorized_at, authorized_by")
     .eq("course_id", chosen.courseId)
     .maybeSingle();
 
   const thresholdPct = Number(list?.threshold_pct ?? 75);
+
+  // An authorized list is read from its own snapshot, never recomputed. If it
+  // were recomputed, a grace period opened next week would silently rewrite the
+  // list an exam board already sat with — and freezing would be decoration.
+  if (list?.status === "authorized") {
+    const [{ data: entries }, { data: authoriser }] = await Promise.all([
+      db
+        .from("eligibility_entries")
+        .select("student_id, attendance_pct, score_total, sessions_held, eligible")
+        .eq("list_id", list.id),
+      list.authorized_by
+        ? db.from("profiles").select("surname, first_name").eq("id", list.authorized_by).maybeSingle()
+        : Promise.resolve({ data: null }),
+    ]);
+
+    const ids = (entries ?? []).map((row) => row.student_id);
+    const { data: people } = ids.length
+      ? await db
+          .from("students")
+          .select("id, matric_no, profiles(surname, first_name, other_names)")
+          .in("id", ids)
+      : { data: [] };
+
+    const byId = new Map((people ?? []).map((row) => [row.id, row]));
+
+    return {
+      courses,
+      course: chosen,
+      thresholdPct,
+      rows: (entries ?? [])
+        .map((entry) => {
+          const student = byId.get(entry.student_id);
+          const person = one(
+            student?.profiles as unknown as {
+              surname: string;
+              first_name: string;
+              other_names: string | null;
+            },
+          );
+          return {
+            studentId: entry.student_id,
+            matricNo: student?.matric_no ?? "",
+            surname: person?.surname ?? "",
+            firstName: person?.first_name ?? "",
+            otherNames: person?.other_names ?? null,
+            attendancePct: Number(entry.attendance_pct),
+            scoreTotal: Number(entry.score_total),
+            sessionsHeld: entry.sessions_held,
+            eligible: entry.eligible,
+            // The frozen row carries no provisional figure: what was not
+            // counted at the moment of authorization is not part of the record.
+            provisionalScore: 0,
+          };
+        })
+        .sort((a, b) => a.matricNo.localeCompare(b.matricNo)),
+      authorizedAt: list.authorized_at ?? null,
+      authorizedBy: authoriser ? `${authoriser.first_name} ${authoriser.surname}` : null,
+    };
+  }
+
   const standings = await loadStandings(db, chosen.courseId);
 
   const rows: EligibilityRow[] = standings
@@ -399,7 +467,8 @@ export async function loadEligibilityList(courseId?: string): Promise<Eligibilit
     course: chosen,
     thresholdPct,
     rows,
-    authorizedAt: list?.status === "authorized" ? (list.authorized_at ?? null) : null,
+    authorizedAt: null,
+    authorizedBy: null,
   };
 }
 

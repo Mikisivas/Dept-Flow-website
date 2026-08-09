@@ -25,6 +25,7 @@ type Row = Record<string, unknown> | null;
 
 const state = {
   student: null as Row,
+  profile: null as Row,
   otp: null as Row,
   updates: [] as Array<{ table: string; values: Record<string, unknown> }>,
   inserts: [] as Array<{ table: string; values: Record<string, unknown> }>,
@@ -44,7 +45,10 @@ function builder(table: string) {
   }
 
   chain.maybeSingle = () =>
-    Promise.resolve({ data: table === "students" ? state.student : state.otp });
+    Promise.resolve({
+      data:
+        table === "students" ? state.student : table === "profiles" ? state.profile : state.otp,
+    });
   chain.single = chain.maybeSingle;
   chain.insert = (values: Record<string, unknown>) => {
     state.inserts.push({ table, values });
@@ -71,15 +75,20 @@ mock.module("../src/lib/supabase/client.ts", {
 });
 
 const { hashPassword } = await import("../src/lib/auth/passwords.ts");
-const { startPasswordReset, completePasswordReset } = await import(
-  "../src/lib/data/password-reset.ts"
-);
+const {
+  startPasswordReset,
+  completePasswordReset,
+  changePassword,
+  startPhoneChange,
+  completePhoneChange,
+} = await import("../src/lib/data/password-reset.ts");
 
 const PHONE = "+2348051234567";
 const PROFILE = "44444444-4444-4444-4444-444444444401";
 
 function reset() {
   state.student = null;
+  state.profile = null;
   state.otp = null;
   state.updates = [];
   state.inserts = [];
@@ -226,6 +235,84 @@ reset();
 state.otp = null;
 done = await completePasswordReset({ matricNo: "CMP/2021/047", code: CODE, password: "correct horse battery" });
 check("with no outstanding code there is nothing to spend", done.outcome === "bad_code");
+
+// ---------------------------------------------------------------------------
+// Changing a password while signed in
+// ---------------------------------------------------------------------------
+
+const currentHash = await hashPassword("the old one");
+
+reset();
+state.profile = { password_hash: currentHash };
+let changed = await changePassword({
+  profileId: PROFILE,
+  currentPassword: "the old one",
+  newPassword: "a longer new one",
+});
+check("the right current password changes it", changed.outcome === "changed");
+
+reset();
+state.profile = { password_hash: currentHash };
+changed = await changePassword({
+  profileId: PROFILE,
+  currentPassword: "not the old one",
+  newPassword: "a longer new one",
+});
+check(
+  "a wrong current password is refused — a borrowed unlocked phone is exactly this case",
+  changed.outcome === "wrong_current",
+);
+check("and nothing is written", state.updates.length === 0);
+
+reset();
+state.profile = { password_hash: currentHash };
+changed = await changePassword({
+  profileId: PROFILE,
+  currentPassword: "the old one",
+  newPassword: "short",
+});
+check("a short new password is refused", changed.outcome === "weak_password");
+
+// ---------------------------------------------------------------------------
+// Changing a phone number
+// ---------------------------------------------------------------------------
+
+reset();
+let phoneStart = await startPhoneChange({ profileId: PROFILE, phone: "08051234567" });
+check("a number without the +234 country code is refused", phoneStart.outcome === "invalid");
+
+reset();
+state.profile = { id: "someone-else" };
+phoneStart = await startPhoneChange({ profileId: PROFILE, phone: "+2348051112222" });
+check(
+  "a number already on another account is refused — otherwise two students can reset each other",
+  phoneStart.outcome === "phone_taken",
+);
+
+reset();
+phoneStart = await startPhoneChange({ profileId: PROFILE, phone: "+2348051112222" });
+check("a free, well-formed number gets a code", phoneStart.outcome === "sent");
+check(
+  "the code goes to the NEW number, which is the thing being proved",
+  state.inserts.some((row) => row.values.phone === "+2348051112222"),
+);
+check(
+  "and it is filed under phone_change, not reusable as a reset",
+  state.inserts.some((row) => row.values.purpose === "phone_change"),
+);
+
+reset();
+state.otp = { id: "otp-2", code_hash: hash, expires_at: future, attempts: 0, max_attempts: 5 };
+const phoneDone = await completePhoneChange({
+  profileId: PROFILE,
+  phone: "+2348051112222",
+  code: CODE,
+});
+check("the right code moves the number", phoneDone.outcome === "changed");
+check(
+  "the number only changes once the code is entered",
+  state.updates.some((row) => row.table === "profiles" && row.values.phone === "+2348051112222"),
+);
 
 console.log(failed === 0 ? "\nALL PASSWORD RESET CHECKS PASS" : `\n${failed} FAILED`);
 process.exit(failed === 0 ? 0 : 1);

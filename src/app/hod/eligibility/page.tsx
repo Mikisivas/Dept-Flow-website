@@ -72,11 +72,12 @@ export default async function EligibilityPage({
 
       <div className="mt-6">
         <EligibilityList
+          courseId={list.course.courseId}
           courseCode={list.course.code}
           entries={list.rows}
           thresholdPct={list.thresholdPct}
           status={list.authorizedAt ? "authorized" : "draft"}
-          authorizedBy={null}
+          authorizedBy={list.authorizedBy}
           authorizedAt={list.authorizedAt}
         />
       </div>

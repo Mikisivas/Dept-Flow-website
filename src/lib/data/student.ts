@@ -289,3 +289,202 @@ export async function loadStudentDashboard(): Promise<StudentDashboard> {
       : null,
   };
 }
+
+// ---------------------------------------------------------------------------
+// One course, in full
+// ---------------------------------------------------------------------------
+
+export type CourseDetail = {
+  course: CourseAttendance;
+  lecturer: string | null;
+  /** "Tuesday 10:00–12:00", or null when the course has no weekly slot. */
+  schedule: string | null;
+  venue: string | null;
+  /**
+   * Advisory only, and null until the model has run. Never the eligibility
+   * determination — that is confirmed score over lectures held, and nothing
+   * else is allowed to stand in for it.
+   */
+  projectedPct: number | null;
+};
+
+const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+/**
+ * The student's own view of one course they are enrolled in.
+ *
+ * Built with the same window and the same rules as the dashboard — lectures
+ * held since they joined, confirmed scores in the numerator — because a
+ * student who sees 73% on one screen and 76% on another has no way to know
+ * which one the exam board will use.
+ */
+export async function loadCourseDetail(code: string): Promise<CourseDetail | null> {
+  const session = await currentUser();
+  if (!session) throw new DashboardUnavailable("Not signed in");
+
+  const db = createUserClient(await currentAccessToken());
+  const wanted = decodeURIComponent(code).toUpperCase();
+
+  const { data: enrolments } = await db
+    .from("enrolments")
+    .select("course_id, enrolled_on, courses(id, code, title, lecturer_id)")
+    .eq("student_id", session.profileId)
+    .is("dropped_at", null);
+
+  const enrolment = (enrolments ?? []).find((row) => {
+    const course = one(row.courses as unknown as { code: string });
+    return course?.code.toUpperCase() === wanted;
+  });
+
+  // Not enrolled is indistinguishable from not existing, on purpose. A student
+  // must not be able to probe the catalogue for courses they are not on.
+  if (!enrolment) return null;
+
+  const course = one(
+    enrolment.courses as unknown as {
+      id: string;
+      code: string;
+      title: string;
+      lecturer_id: string | null;
+    },
+  );
+  if (!course) return null;
+
+  const [{ data: instances }, { data: scores }, { data: entry }] = await Promise.all([
+    db
+      .from("session_instances")
+      .select("id, held_on, checkpoint_mode")
+      .eq("course_id", course.id)
+      .eq("status", "closed")
+      .gte("held_on", enrolment.enrolled_on)
+      .order("held_on"),
+    db
+      .from("session_scores")
+      .select("session_instance_id, score, status, source")
+      .eq("student_id", session.profileId),
+    db
+      .from("timetable_entries")
+      .select("day_of_week, start_time, end_time, venue_id")
+      .eq("course_id", course.id)
+      .maybeSingle(),
+  ]);
+
+  const scoreByInstance = new Map((scores ?? []).map((row) => [row.session_instance_id, row]));
+
+  const sessions: SessionCell[] = (instances ?? []).map((instance, index) => {
+    const score = scoreByInstance.get(instance.id);
+    const value = Number(score?.score ?? 0);
+    const single = instance.checkpoint_mode === "single";
+
+    return {
+      id: instance.id,
+      label: `Week ${index + 1}`,
+      heldOn: instance.held_on,
+      mode: single ? "single" : "pair",
+      checkpointOne: value > 0,
+      checkpointTwo: value === 1 && !single,
+      status: score?.status === "confirmed" ? "confirmed" : "provisional",
+      source: score?.source === "manually_entered" ? "manually_entered" : "digital",
+      score: value,
+    };
+  });
+
+  const [{ data: lecturer }, { data: venue }, { data: risk }] = await Promise.all([
+    course.lecturer_id
+      ? db.from("profiles").select("surname, first_name").eq("id", course.lecturer_id).maybeSingle()
+      : Promise.resolve({ data: null }),
+    entry?.venue_id
+      ? db.from("venue_directory").select("name").eq("id", entry.venue_id).maybeSingle()
+      : Promise.resolve({ data: null }),
+    db
+      .from("risk_predictions")
+      .select("predicted_pct")
+      .eq("student_id", session.profileId)
+      .eq("course_id", course.id)
+      .maybeSingle(),
+  ]);
+
+  return {
+    course: {
+      courseId: course.id,
+      code: course.code,
+      title: course.title,
+      confirmedScore: sessions
+        .filter((s) => s.status === "confirmed")
+        .reduce((sum, s) => sum + s.score, 0),
+      provisionalScore: sessions
+        .filter((s) => s.status === "provisional")
+        .reduce((sum, s) => sum + s.score, 0),
+      sessionsHeld: sessions.length,
+      sessions,
+    },
+    lecturer: lecturer ? `${lecturer.first_name} ${lecturer.surname}` : null,
+    schedule: entry
+      ? `${WEEKDAYS[entry.day_of_week] ?? ""} ${String(entry.start_time).slice(0, 5)}–${String(entry.end_time).slice(0, 5)}`.trim()
+      : null,
+    venue: venue?.name ?? null,
+    projectedPct: risk ? Number(risk.predicted_pct) : null,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Notifications
+// ---------------------------------------------------------------------------
+
+export type NotificationItem = {
+  id: string;
+  kind: "payment_reminder" | "payment_confirmed" | "risk_nudge" | "grace_period" | "schedule_change" | "clearance_granted";
+  title: string;
+  body: string;
+  link: string | null;
+  createdAt: string;
+  readAt: string | null;
+};
+
+export async function loadNotifications(): Promise<NotificationItem[]> {
+  const session = await currentUser();
+  if (!session) throw new DashboardUnavailable("Not signed in");
+
+  const db = createUserClient(await currentAccessToken());
+
+  // No `where recipient_id = ...` clause: the policy is what scopes this, and
+  // relying on it here is what proves it works.
+  const { data } = await db
+    .from("notifications")
+    .select("id, kind, title, body, link, read_at, created_at")
+    .order("created_at", { ascending: false })
+    .limit(100);
+
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    kind: row.kind as NotificationItem["kind"],
+    title: row.title,
+    body: row.body,
+    link: row.link,
+    createdAt: row.created_at,
+    readAt: row.read_at,
+  }));
+}
+
+/**
+ * Marking everything read.
+ *
+ * Under the student's own token, not the service role: `notifications_self_update`
+ * is the policy that makes this safe, and going around it with the service key
+ * would leave the policy untested and a student able to mark another's read the
+ * day someone adds an id parameter.
+ */
+export async function markNotificationsRead(): Promise<number> {
+  const session = await currentUser();
+  if (!session) throw new DashboardUnavailable("Not signed in");
+
+  const db = createUserClient(await currentAccessToken());
+
+  const { data } = await db
+    .from("notifications")
+    .update({ read_at: new Date().toISOString() })
+    .is("read_at", null)
+    .select("id");
+
+  return data?.length ?? 0;
+}

@@ -8,7 +8,6 @@ import { Countdown } from "@/components/countdown";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { sendOtp, verifyOtp } from "@/lib/data/queries";
 import { isValidMatric, normaliseMatric } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -18,6 +17,10 @@ import { cn } from "@/lib/utils";
  * The phone number is shown masked and is never editable here: letting someone
  * who knows a matric number redirect the reset code to their own phone would
  * turn this screen into the account-takeover path it exists to prevent.
+ *
+ * A matric number with no account walks through the same screens and is told
+ * the same things, right up to the code step. Answering "no such student"
+ * would make this a way to enumerate which matric numbers are worth attacking.
  */
 
 type Phase = "identify" | "code" | "password" | "done";
@@ -41,21 +44,36 @@ export function ForgotForm() {
     }
     setError(null);
     setWorking(true);
-    const { expiresAt: expiry } = await sendOtp(normaliseMatric(matric));
-    setWorking(false);
-    // The masked number comes from the account, never from this form.
-    setMaskedPhone("+234 805 *** 4567");
-    setExpiresAt(expiry);
-    setPhase("code");
+
+    try {
+      const response = await fetch("/api/password-reset", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ step: "start", matricNo: normaliseMatric(matric) }),
+      });
+      const result = await response.json();
+
+      if (!response.ok) {
+        setError(result.error ?? "That did not go through. Try again.");
+        return;
+      }
+
+      // The masked number comes from the account, never from this form — and is
+      // absent when no code was actually sent.
+      setMaskedPhone(result.maskedPhone);
+      setExpiresAt(result.expiresAt);
+      setPhase("code");
+    } catch {
+      setError("Could not reach the server. Check the connection and try again.");
+    } finally {
+      setWorking(false);
+    }
   }
 
-  async function handleVerify(value: string) {
+  function handleVerify(value: string) {
+    if (value.length < 6) return;
     setError(null);
-    setWorking(true);
-    const result = await verifyOtp(value);
-    setWorking(false);
-    if (result.ok) setPhase("password");
-    else setError(result.reason ?? "That code isn't right.");
+    setPhase("password");
   }
 
   async function handleReset(event: React.FormEvent<HTMLFormElement>) {
@@ -70,9 +88,37 @@ export function ForgotForm() {
     }
     setError(null);
     setWorking(true);
-    await new Promise((resolve) => setTimeout(resolve, 700));
-    setWorking(false);
-    setPhase("done");
+
+    try {
+      const response = await fetch("/api/password-reset", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          step: "complete",
+          matricNo: normaliseMatric(matric),
+          code,
+          password,
+        }),
+      });
+      const result = await response.json();
+
+      if (!response.ok) {
+        setError(result.error ?? "That did not go through. Try again.");
+        // A bad code has to send them back to the code step, not leave them
+        // retyping a password against a code that will never work.
+        if (/code/i.test(String(result.error ?? ""))) {
+          setCode("");
+          setPhase("code");
+        }
+        return;
+      }
+
+      setPhase("done");
+    } catch {
+      setError("Could not reach the server. Check the connection and try again.");
+    } finally {
+      setWorking(false);
+    }
   }
 
   if (phase === "done") {
@@ -92,7 +138,9 @@ export function ForgotForm() {
         phase === "identify"
           ? "We'll send a code to the phone number on your account."
           : phase === "code"
-            ? `We sent a 6-digit code to ${maskedPhone}.`
+            ? maskedPhone
+              ? `We sent a 6-digit code to ${maskedPhone}.`
+              : "If that matric number has an account, a code is on its way to the phone registered to it."
             : "Choose a new password."
       }
       footer={
@@ -146,12 +194,8 @@ export function ForgotForm() {
               <Countdown expiresAt={expiresAt} prefix="Expires in" expiredLabel="Code expired" />
             </p>
           ) : null}
-          <Button
-            size="lg"
-            onClick={() => handleVerify(code)}
-            aria-disabled={working || code.length < 6}
-          >
-            {working ? "Checking…" : "Confirm code"}
+          <Button size="lg" onClick={() => handleVerify(code)} aria-disabled={code.length < 6}>
+            Continue
           </Button>
           <p className="text-center text-[13px] text-muted">
             Not your number any more? The department office can update it.

@@ -545,6 +545,37 @@ student's denominator is the lectures held since *they* joined. A carry-over
 student who joined in week eight is not marked absent for the seven weeks
 before that, on the lecturer's course list any more than anywhere else.
 
+## Password reset
+
+The one flow where getting it wrong hands over an account. The screen that
+existed before accepted the hardcoded code `123456` and then told the student
+their password had changed, having written nothing.
+
+**The phone is never taken from the form.** It is looked up from the profile
+and only ever returned masked. Letting whoever knows a matric number nominate
+where the code goes would make this the account-takeover path it exists to
+prevent.
+
+**A matric number with no account walks the same path and is told the same
+things.** "No such student" would make this an oracle for which matric numbers
+are worth attacking — and a deactivated account is reported identically, since
+"that account is deactivated" is a fact about a student the person typing may
+have no business knowing. The masked number is the only difference, and it only
+appears when a code was genuinely sent.
+
+**Reset codes live in their own namespace.** `purpose = 'password_reset'`, so a
+registration code cannot be spent here. Without the separation, someone who
+triggered a registration OTP against an unclaimed matric number could use it to
+reset a real account.
+
+**Verifying and changing are one call, not two.** A "verify" step that answers
+yes and leaves the client to ask for the change is a step an attacker can skip.
+The code is spent at the moment the password moves.
+
+**Resetting clears the lockout.** A student resetting their password is very
+often a student locked out by failed attempts; leaving `locked_until` in place
+means the reset appears to work and the login still refuses them.
+
 ## Palette
 
 `#FF9935`, eyedropped from the crest, superseding the `#F0952B` visual estimate

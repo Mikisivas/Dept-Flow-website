@@ -3,7 +3,8 @@ import { Bell, CalendarClock, CreditCard, ShieldCheck, TrendingDown } from "luci
 import { AppShell } from "@/components/app-shell";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
-import { getNotifications } from "@/lib/data/queries";
+import { loadNotifications } from "@/lib/data/student";
+import { MarkReadButton } from "./mark-read-button";
 import { formatDateTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -11,15 +12,19 @@ export const metadata: Metadata = {
   title: "Notifications",
 };
 
+export const dynamic = "force-dynamic";
+
 const ICONS = {
   payment_reminder: CreditCard,
+  payment_confirmed: CreditCard,
+  clearance_granted: ShieldCheck,
   risk_nudge: TrendingDown,
   grace_period: ShieldCheck,
   schedule_change: CalendarClock,
 } as const;
 
 export default async function NotificationsPage() {
-  const notifications = await getNotifications();
+  const notifications = await loadNotifications();
   const unread = notifications.filter((item) => !item.readAt).length;
 
   return (
@@ -27,6 +32,7 @@ export default async function NotificationsPage() {
       <PageHeader
         title="Notifications"
         subtitle={unread > 0 ? `${unread} unread` : "You're up to date."}
+        action={<MarkReadButton unread={unread} />}
       />
 
       {notifications.length === 0 ? (
@@ -39,7 +45,7 @@ export default async function NotificationsPage() {
       ) : (
         <ul className="mt-6 flex flex-col gap-2">
           {notifications.map((item) => {
-            const Icon = ICONS[item.kind];
+            const Icon = ICONS[item.kind] ?? Bell;
             const isUnread = !item.readAt;
             return (
               <li

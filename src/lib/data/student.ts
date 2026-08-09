@@ -19,6 +19,12 @@ import type { DuesPeriod, StudentProfile, TodayClass } from "@/lib/data/fixtures
 export type StudentDashboard = {
   student: StudentProfile;
   compliance: ComplianceState;
+  /**
+   * Whether the student can start a payment at all. The portal is not open all
+   * session: once locked, paying is shut along with recording attendance, and a
+   * grace period reopens both because it is one lock.
+   */
+  paymentOpen: boolean;
   dues: DuesPeriod;
   courses: CourseAttendance[];
   today: TodayClass[];
@@ -265,6 +271,7 @@ export async function loadStudentDashboard(): Promise<StudentDashboard> {
       phone: profile.phone ?? "",
     },
     compliance: (compliance?.state ?? "uncleared") as ComplianceState,
+    paymentOpen: (compliance?.state ?? "uncleared") !== "locked" || covering != null,
     dues: {
       duesAmountKobo: Number(dues?.dues_amount_kobo ?? 0),
       resumptionDate: resumption,

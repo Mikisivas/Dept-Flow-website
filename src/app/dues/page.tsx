@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 export default async function DuesPage() {
-  const { student, compliance, dues, courses } = await requireStudent();
+  const { student, compliance, paymentOpen, dues, courses } = await requireStudent();
   const provisionalScore = courses.reduce((sum, course) => sum + course.provisionalScore, 0);
   // Resolve anything stuck before drawing the list, so no row shows a spinner
   // that will never stop.
@@ -28,6 +28,7 @@ export default async function DuesPage() {
           compliance={compliance}
           dues={dues}
           provisionalScore={provisionalScore}
+          paymentOpen={paymentOpen}
           payments={payments}
         />
       </div>

@@ -54,14 +54,17 @@ export function ComplianceBanner({
     );
   }
 
+  // Locked and no grace period: paying is shut too, so this carries no "Pay
+  // dues" button. Offering one would send the student to a screen that can only
+  // refuse them, which reads as the site being broken rather than as the
+  // department's deadline having passed.
   if (state === "locked") {
     return (
       <Banner
         tone="danger"
         Icon={Lock}
-        title="Attendance locked — your dues aren't cleared."
-        body="New attendance won't be recorded until you clear. Nothing already recorded has been lost."
-        action={{ href: "/dues", label: "Pay dues" }}
+        title="Attendance locked — the payment deadline passed."
+        body="New attendance isn't being recorded, and payment for this session has closed. Nothing already recorded has been lost. The department office can reopen payment."
         className={className}
       />
     );

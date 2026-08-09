@@ -35,6 +35,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Your dues are already cleared." }, { status: 409 });
     }
 
+    if (result.outcome === "window_closed") {
+      return NextResponse.json(
+        {
+          error:
+            "Payment for this session has closed. The department opens it again for late payment — speak to the office.",
+          windowClosed: true,
+        },
+        { status: 409 },
+      );
+    }
+
     if (result.outcome === "no_dues_period") {
       return NextResponse.json(
         { error: "No dues have been set for this session yet." },

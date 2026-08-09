@@ -339,6 +339,36 @@ table needs a backfill, because a default that is right for new rows is wrong
 for old ones. `supabase/backfill_course_registration.sql` exists for exactly
 that and is documented in `setup.md`.
 
+## The payment window closes with the lock
+
+**The portal is not open all session.** Once a student is locked, paying is
+shut along with recording attendance. Department decision, and the reasoning is
+behavioural: a deadline that can be ignored indefinitely is not a deadline. If
+the portal stays open all year, "pay within 30 days" is advice and the money
+arrives in month three.
+
+The cost is accepted rather than mitigated. A student who finds the money on
+day 35 cannot hand it over until the HOD opens a window — that is the
+compulsion working, not a gap in it.
+
+**Implemented as one rule, not two.** `is_payment_open()` is defined as the
+inverse of `is_attendance_locked()`. A separate payment calendar would need its
+own dates, its own grace mechanism, and its own answer for every student the two
+disagreed about. Being locked already means "the provisional window ran out and
+you did not clear", which is exactly the condition to gate payment on — and the
+lock check already consults grace periods, so a grace period reopens payment
+without another line being written.
+
+**Starting a payment is gated; verifying one is not.** A transfer begun on day
+29 can settle on day 32, and a bank does not care about the window. Refusing to
+verify money that has already left a student's account would take the payment
+and withhold the clearance, which is the worst outcome this system can produce.
+The asymmetry is deliberate and is asserted in the schema tests.
+
+Consequence for the UI: the locked banner carries **no Pay dues button**, and
+the dues screen replaces the payment form with an explanation. A button that can
+only ever be refused reads as a broken site rather than as a passed deadline.
+
 ## Grace periods
 
 A grace period is the HOD saying: for these students, start recording
@@ -346,6 +376,9 @@ attendance again until this date, even though they have not paid. Locking is
 blunt and the cause is often not the student's — a bursary disburses late, a
 bank is down for three days — and those lectures cannot be attended
 retroactively.
+
+**It reopens payment as well as recording.** Once locked, a student cannot pay
+either — see the section above — and the grace period is the only way back in.
 
 **It restores recording, not counting.** Marks come back provisional exactly as
 before. The student still has to pay for them to count towards the 75%. What

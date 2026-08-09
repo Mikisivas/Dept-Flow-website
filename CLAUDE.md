@@ -116,7 +116,7 @@ quietly shows fixture data.
 throws in production), deployment.
 
 **Checks:** `npm run test:paystack` (12 assertions, no network) and
-`supabase/tests/schema_test.sql` (108 assertions, run in the SQL Editor).
+`supabase/tests/schema_test.sql` (112 assertions, run in the SQL Editor).
 `/api/health` reports, for the signed-in user, which tables they can read and
 whether Paystack answers.
 

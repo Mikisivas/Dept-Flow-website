@@ -788,6 +788,49 @@ begin
 end $$;
 
 -- ---------------------------------------------------------------------------
+-- The payment window closes with the lock
+-- ---------------------------------------------------------------------------
+
+-- Department decision: the portal is not open all session. A deadline that can
+-- be ignored indefinitely is not a deadline, so being locked shuts paying as
+-- well as recording — and the same grace period reopens both, because it is one
+-- lock rather than two calendars.
+
+do $$
+declare
+  v_session uuid := '11111111-1111-1111-1111-111111111111';
+  v_hod     uuid := '33333333-3333-3333-3333-333333333302';
+  v_tunde   uuid := '44444444-4444-4444-4444-444444444403'; -- locked
+  v_halima  uuid := '44444444-4444-4444-4444-444444444402'; -- cleared
+  v_grace   uuid;
+begin
+  perform assert_true(
+    not is_payment_open(v_tunde, v_session),
+    'a locked student cannot start a payment — the deadline is a real one'
+  );
+
+  perform assert_true(
+    is_payment_open(v_halima, v_session),
+    'everyone else can still pay'
+  );
+
+  v_grace := open_grace_period(v_session, 'department', null, current_date + 14,
+                               'Bursary disbursement was three weeks late.', v_hod);
+
+  perform assert_true(
+    is_payment_open(v_tunde, v_session),
+    'a grace period reopens payment as well as attendance — one lock, one key'
+  );
+
+  perform revoke_grace_period(v_grace, v_hod, 'Disbursement completed and confirmed.');
+
+  perform assert_true(
+    not is_payment_open(v_tunde, v_session),
+    'and closes both again when it ends'
+  );
+end $$;
+
+-- ---------------------------------------------------------------------------
 -- Course registration
 -- ---------------------------------------------------------------------------
 

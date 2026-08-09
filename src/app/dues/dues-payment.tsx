@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Building2, CreditCard } from "lucide-react";
+import { Building2, CreditCard, Lock } from "lucide-react";
 import { ComplianceBanner } from "@/components/compliance-banner";
 import { StatusBadge } from "@/components/status-badge";
 import { StickyActionBar } from "@/components/sticky-action-bar";
@@ -43,11 +43,13 @@ export function DuesPayment({
   compliance,
   dues,
   provisionalScore,
+  paymentOpen,
   payments,
 }: {
   compliance: ComplianceState;
   dues: DuesPeriod;
   provisionalScore: number;
+  paymentOpen: boolean;
   payments: PaymentRecord[];
 }) {
   const [channel, setChannel] = useState<Channel>("card");
@@ -98,6 +100,10 @@ export function DuesPayment({
 
   const cleared = compliance === "cleared";
   const pending = compliance === "pending_verification";
+  // Locked with no grace period open: the portal is shut. The form is not
+  // shown at all rather than shown and refused — a Pay button that always
+  // errors reads as a broken site, not as a passed deadline.
+  const closed = !cleared && !paymentOpen;
 
   return (
     <div className="flex flex-col gap-6">
@@ -143,7 +149,28 @@ export function DuesPayment({
         ) : null}
       </section>
 
-      {!cleared && !pending ? (
+      {closed ? (
+        <section className="rounded-lg border border-danger bg-danger-tint p-5">
+          <Lock className="h-7 w-7 text-danger" aria-hidden="true" />
+          <h2 className="mt-3 text-[19px] font-semibold text-ink">Payment has closed</h2>
+          <p className="mt-2 text-[15px] leading-relaxed text-slate">
+            The deadline for this session passed, so dues can no longer be paid here and new
+            attendance isn&apos;t being recorded.{" "}
+            {provisionalScore > 0 ? (
+              <>
+                Your{" "}
+                <strong className="font-semibold text-ink">
+                  {formatScore(provisionalScore)} recorded {provisionalScore === 1 ? "session" : "sessions"}
+                </strong>{" "}
+                have not been lost.{" "}
+              </>
+            ) : null}
+            The department office can reopen payment — speak to them.
+          </p>
+        </section>
+      ) : null}
+
+      {!cleared && !pending && !closed ? (
         <section aria-labelledby="channel-heading">
           <h2 id="channel-heading" className="text-[13px] font-semibold text-slate">
             How would you like to pay?
@@ -239,7 +266,7 @@ export function DuesPayment({
         )}
       </section>
 
-      {!cleared && !pending ? (
+      {!cleared && !pending && !closed ? (
         <StickyActionBar
           context={`${naira(dues.duesAmountKobo)} due · ${formatDaysLeft(dues.deadline)}`}
         >

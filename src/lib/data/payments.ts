@@ -24,6 +24,7 @@ export type { PaymentRecord };
 export type StartResult =
   | { outcome: "redirect"; authorizationUrl: string; reference: string }
   | { outcome: "already_cleared" }
+  | { outcome: "window_closed" }
   | { outcome: "no_dues_period" };
 
 export async function startDuesPayment(
@@ -66,6 +67,20 @@ export async function startDuesPayment(
   // Charging a student who is already cleared is the one outcome with no way
   // back that does not involve a refund.
   if (compliance?.state === "cleared") return { outcome: "already_cleared" };
+
+  // The portal is not open all session. Once a student is locked, paying is
+  // shut along with recording attendance — the department's deadline is meant
+  // to be a deadline. A grace period reopens both, because it is one lock.
+  //
+  // Checked here and NOT in settlePayment: a transfer begun on day 29 can land
+  // on day 32, and refusing to verify money that has already left a student's
+  // account would take the payment and withhold the clearance.
+  const { data: open } = await db.rpc("is_payment_open", {
+    p_student_id: studentId,
+    p_academic_session_id: session.id,
+  });
+
+  if (open === false) return { outcome: "window_closed" };
 
   const reference = newReference();
 

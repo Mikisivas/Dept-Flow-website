@@ -493,3 +493,147 @@ export async function loadGraceScreen(): Promise<GraceScreen> {
     levelCounts,
   };
 }
+
+export type WaiverRequest = {
+  id: string;
+  matricNo: string;
+  surname: string;
+  firstName: string;
+  otherNames: string | null;
+  level: number;
+  requestNote: string;
+  requestedAt: string;
+  /** What granting would immediately confirm. The thing being decided about. */
+  provisionalScore: number;
+  status: "pending" | "granted" | "declined";
+};
+
+export async function loadWaivers(): Promise<WaiverRequest[]> {
+  await requireHod();
+  const db = createUserClient(await currentAccessToken());
+
+  const { data: rows } = await db
+    .from("waivers")
+    .select(
+      "id, student_id, request_note, created_at, status, students(matric_no, level, profiles(surname, first_name, other_names))",
+    )
+    .eq("status", "pending")
+    .order("created_at", { ascending: false });
+
+  if (!rows || rows.length === 0) return [];
+
+  // The waiting marks, per student. Granting confirms exactly these, so the
+  // figure on the card is the consequence rather than a decoration.
+  const { data: scores } = await db
+    .from("session_scores")
+    .select("student_id, score")
+    .eq("status", "provisional")
+    .in(
+      "student_id",
+      rows.map((row) => row.student_id),
+    );
+
+  const waitingByStudent = new Map<string, number>();
+  for (const score of scores ?? []) {
+    waitingByStudent.set(
+      score.student_id,
+      (waitingByStudent.get(score.student_id) ?? 0) + Number(score.score),
+    );
+  }
+
+  return rows.map((row) => {
+    const student = one(
+      row.students as unknown as {
+        matric_no: string;
+        level: number;
+        profiles: { surname: string; first_name: string; other_names: string | null } | null;
+      },
+    );
+    const person = one(student?.profiles);
+
+    return {
+      id: row.id,
+      matricNo: student?.matric_no ?? "",
+      surname: person?.surname ?? "",
+      firstName: person?.first_name ?? "",
+      otherNames: person?.other_names ?? null,
+      level: student?.level ?? 0,
+      requestNote: row.request_note ?? "",
+      requestedAt: row.created_at,
+      provisionalScore: waitingByStudent.get(row.student_id) ?? 0,
+      status: row.status as WaiverRequest["status"],
+    };
+  });
+}
+
+export type AttendanceDispute = {
+  id: string;
+  matricNo: string;
+  surname: string;
+  firstName: string;
+  otherNames: string | null;
+  courseCode: string;
+  heldOn: string;
+  studentNote: string;
+  recordedReason: string;
+  source: "digital" | "manually_entered";
+  status: "open" | "upheld" | "corrected";
+};
+
+export async function loadDisputes(): Promise<AttendanceDispute[]> {
+  await requireHod();
+  const db = createUserClient(await currentAccessToken());
+
+  const { data: rows } = await db
+    .from("attendance_disputes")
+    .select(
+      "id, student_id, checkpoint_id, student_note, status, raised_at, students(matric_no, profiles(surname, first_name, other_names)), session_instances(held_on, courses(code))",
+    )
+    .eq("status", "open")
+    .order("raised_at", { ascending: false });
+
+  if (!rows || rows.length === 0) return [];
+
+  // What the system actually recorded, which is the first thing the HOD needs
+  // — a rejection for being outside the hall reads very differently from one
+  // for a code that had already expired.
+  const checkpointIds = rows.map((row) => row.checkpoint_id).filter(Boolean) as string[];
+  const { data: marks } = checkpointIds.length
+    ? await db
+        .from("attendance_marks")
+        .select("student_id, checkpoint_id, reject_reason")
+        .in("checkpoint_id", checkpointIds)
+    : { data: [] };
+
+  return rows.map((row) => {
+    const student = one(
+      row.students as unknown as {
+        matric_no: string;
+        profiles: { surname: string; first_name: string; other_names: string | null } | null;
+      },
+    );
+    const person = one(student?.profiles);
+    const instance = one(
+      row.session_instances as unknown as { held_on: string; courses: { code: string } | null },
+    );
+    const mark = (marks ?? []).find(
+      (entry) => entry.student_id === row.student_id && entry.checkpoint_id === row.checkpoint_id,
+    );
+
+    return {
+      id: row.id,
+      matricNo: student?.matric_no ?? "",
+      surname: person?.surname ?? "",
+      firstName: person?.first_name ?? "",
+      otherNames: person?.other_names ?? null,
+      courseCode: one(instance?.courses)?.code ?? "",
+      heldOn: instance?.held_on ?? "",
+      studentNote: row.student_note,
+      // No mark at all means they never submitted — itself an answer, and not
+      // the same as having been turned away.
+      recordedReason: mark?.reject_reason ?? "no_submission",
+      source: "digital",
+      status: row.status as AttendanceDispute["status"],
+    };
+  });
+}

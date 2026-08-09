@@ -422,6 +422,43 @@ reason, and write an audit row naming the actor. Enforced in the database
 functions rather than in the API, so the rule holds for anything that ever
 writes these tables.
 
+## Waivers and disputes
+
+The last two HOD decisions, and the two whose consequences reach furthest back
+in time.
+
+**A granted waiver clears the student, through the same path a payment takes.**
+`decide_waiver` calls `clear_student(..., 'waiver', actor)` — the same function
+the Paystack verification calls — so every provisional score the student holds
+is confirmed in the same transaction. A waiver that only flipped a status and
+left the marks provisional would be a kindness that changed nothing: the
+student would still be under 75% and still barred from the exam. Granting a
+waiver *is* the department deciding the money is not owed, so it has to land
+exactly where paying it would have.
+
+**Upholding a dispute is as much a decision as correcting one.** Both write a
+reason, an actor, a timestamp and an audit row. Only correcting touches
+attendance, but a student whose dispute was rejected is owed the same record —
+they will ask why, and "it was closed" is not an answer. This was a real bug in
+the screen: the Uphold button removed the card from the browser's state and
+called nothing, so a rejection left no trace anywhere.
+
+**Correcting re-scores rather than sets a score.** `resolve_dispute` accepts the
+marks — the named checkpoint, or every checkpoint of the lecture when the
+student disputed the whole thing — and then calls `resolve_session_score`, the
+same function the lecturer's close runs. A corrected lecture is therefore
+scored by the rules every other lecture is scored by, including the 1.0 / 0.5
+split for a missed second checkpoint. Writing `1.0` directly would be the
+easier code and would quietly hand out a full mark for half a lecture.
+
+The marks are upserted, not inserted, because a dispute almost always follows a
+rejected submission — the row already exists and carries the rejection.
+
+**Both scores go into the audit row.** `score_before` and `score_after`, not
+just the fact of a change. Six months later, at an exam board, "the score
+changed" is not defensible; "it went from 0.5 to 1.0, on this date, by this
+person, for this reason" is.
+
 ## Palette
 
 `#FF9935`, eyedropped from the crest, superseding the `#F0952B` visual estimate

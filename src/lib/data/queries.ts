@@ -18,7 +18,7 @@
 
 import { COMPLIANCE, COURSES, STUDENT } from "@/lib/data/fixtures";
 import type { StudentProfile } from "@/lib/data/fixtures";
-import type { ComplianceState, CourseAttendance, SubmitRejection } from "@/lib/types";
+import type { ComplianceState, CourseAttendance } from "@/lib/types";
 
 /**
  * One student's record as the HOD reads it. Still a fixture: the HOD screens
@@ -413,96 +413,6 @@ export async function getAuditLog(): Promise<AuditEntry[]> {
       target: "CMP 301",
       reason: "Final list for the 2025/2026 first semester.",
       createdAt: new Date(now - 5 * 86_400_000).toISOString(),
-    },
-  ];
-}
-
-export type WaiverRequest = {
-  id: string;
-  matricNo: string;
-  surname: string;
-  firstName: string;
-  otherNames: string | null;
-  level: number;
-  requestNote: string;
-  requestedAt: string;
-  provisionalScore: number;
-  status: "pending" | "granted" | "declined";
-};
-
-export async function getWaivers(): Promise<WaiverRequest[]> {
-  const now = Date.now();
-  return [
-    {
-      id: "w1",
-      matricNo: "CMP/2021/203",
-      surname: "Nwachukwu",
-      firstName: "Emeka",
-      otherNames: null,
-      level: 400,
-      requestNote:
-        "My father was hospitalised in October and the family covered the bills. I can pay in January.",
-      requestedAt: new Date(now - 2 * 86_400_000).toISOString(),
-      provisionalScore: 9,
-      status: "pending",
-    },
-    {
-      id: "w2",
-      matricNo: "STA/2022/091",
-      surname: "Bassey",
-      firstName: "Idara",
-      otherNames: "Grace",
-      level: 300,
-      requestNote: "I am on the departmental hardship list for this session.",
-      requestedAt: new Date(now - 5 * 86_400_000).toISOString(),
-      provisionalScore: 6.5,
-      status: "pending",
-    },
-  ];
-}
-
-export type AttendanceDispute = {
-  id: string;
-  matricNo: string;
-  surname: string;
-  firstName: string;
-  otherNames: string | null;
-  courseCode: string;
-  heldOn: string;
-  studentNote: string;
-  recordedReason: SubmitRejection;
-  source: "digital" | "manually_entered";
-  status: "open" | "upheld" | "corrected";
-};
-
-export async function getDisputes(): Promise<AttendanceDispute[]> {
-  const now = Date.now();
-  return [
-    {
-      id: "d1",
-      matricNo: "CMP/2021/158",
-      surname: "Adebayo",
-      firstName: "Folake",
-      otherNames: "Ronke",
-      courseCode: "CMP 301",
-      heldOn: new Date(now - 6 * 86_400_000).toISOString(),
-      studentNote: "I was in the back row of the hall the whole lecture but it said I was outside.",
-      recordedReason: "outside_geofence",
-      source: "digital",
-      status: "open",
-    },
-    {
-      id: "d2",
-      matricNo: "CMP/2022/018",
-      surname: "Eze",
-      firstName: "Chukwudi",
-      otherNames: null,
-      courseCode: "MTH 205",
-      heldOn: new Date(now - 9 * 86_400_000).toISOString(),
-      studentNote: "I signed the paper sheet but my name is not on the record.",
-      recordedReason: "already_submitted",
-      source: "manually_entered",
-      status: "open",
     },
   ];
 }

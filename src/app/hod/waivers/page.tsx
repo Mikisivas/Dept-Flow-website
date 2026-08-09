@@ -1,13 +1,15 @@
 import type { Metadata } from "next";
 import { AppShell } from "@/components/app-shell";
 import { PageHeader } from "@/components/page-header";
-import { getWaivers } from "@/lib/data/queries";
+import { loadWaivers } from "@/lib/data/hod";
 import { WaiverList } from "./waiver-list";
+
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = { title: "Waivers" };
 
 export default async function WaiversPage() {
-  const requests = await getWaivers();
+  const requests = await loadWaivers();
 
   return (
     <AppShell role="hod" counts={{ "/hod/waivers": requests.length }}>

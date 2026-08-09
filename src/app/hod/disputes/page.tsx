@@ -1,13 +1,15 @@
 import type { Metadata } from "next";
 import { AppShell } from "@/components/app-shell";
 import { PageHeader } from "@/components/page-header";
-import { getDisputes } from "@/lib/data/queries";
+import { loadDisputes } from "@/lib/data/hod";
 import { DisputeList } from "./dispute-list";
+
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = { title: "Disputes" };
 
 export default async function DisputesPage() {
-  const disputes = await getDisputes();
+  const disputes = await loadDisputes();
 
   return (
     <AppShell role="hod" counts={{ "/hod/disputes": disputes.length }}>

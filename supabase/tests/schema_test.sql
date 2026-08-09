@@ -886,6 +886,130 @@ begin
 end $$;
 
 -- ---------------------------------------------------------------------------
+-- Waivers and disputes
+-- ---------------------------------------------------------------------------
+
+-- Both are authority actions in the same shape as a grace period. What differs
+-- is the consequence: a granted waiver clears the student, and a corrected
+-- dispute changes an attendance percentage after the fact.
+
+do $$
+declare
+  v_session uuid := '11111111-1111-1111-1111-111111111111';
+  v_hod     uuid := '33333333-3333-3333-3333-333333333302';
+  v_halima  uuid := '44444444-4444-4444-4444-444444444402';
+  v_course  uuid := '66666666-6666-6666-6666-666666666601';
+  v_student uuid := gen_random_uuid();
+  v_waiver  uuid := gen_random_uuid();
+  v_lecture uuid := gen_random_uuid();
+  v_cp      uuid := gen_random_uuid();
+  v_dispute uuid := gen_random_uuid();
+begin
+  -- A student of this section's own, so the earlier clearing assertions are
+  -- not disturbed by it.
+  insert into profiles (id, role, surname, first_name, phone)
+  values (v_student, 'student', 'Waiver', 'Candidate', '+2348057777777');
+  insert into students (id, matric_no, level) values (v_student, 'CMP/2021/777', 300);
+  insert into compliance_statuses (student_id, academic_session_id, state)
+  values (v_student, v_session, 'uncleared');
+  insert into enrolments (student_id, course_id, source, enrolled_on)
+  values (v_student, v_course, 'carry_over', date '2025-09-15');
+
+  insert into session_scores (student_id, session_instance_id, score, status)
+  select v_student, si.id, 1.0, 'provisional'
+  from session_instances si
+  where si.course_id = v_course and si.status = 'closed'
+  limit 4;
+
+  insert into waivers (id, student_id, academic_session_id, request_note)
+  values (v_waiver, v_student, v_session, 'Father lost his job this term.');
+
+  perform assert_true(
+    attendance_pct(v_student, v_course) = 0,
+    'a student awaiting a waiver counts for nothing, exactly like one awaiting a payment'
+  );
+
+  perform assert_rejects(
+    format('select decide_waiver(%L, %L, true, %L)', v_waiver, v_hod, 'ok'),
+    'a waiver decision without a substantive reason is refused'
+  );
+
+  perform assert_true(
+    decide_waiver(v_waiver, v_hod, true, 'Hardship verified with the bursary office.') = 'granted',
+    'the HOD can grant a waiver'
+  );
+
+  perform assert_true(
+    attendance_pct(v_student, v_course) > 0,
+    'granting confirms the provisional scores — a waiver that left them waiting would change nothing'
+  );
+
+  perform assert_true(
+    (select cleared_via from compliance_statuses
+      where student_id = v_student and academic_session_id = v_session) = 'waiver',
+    'and records the route as a waiver rather than a payment'
+  );
+
+  perform assert_true(
+    decide_waiver(v_waiver, v_hod, false, 'Trying to decide the same one twice.') = 'already_decided',
+    'a decided waiver cannot be decided again'
+  );
+
+  -- ------------------------------------------------------------------------
+  -- A lecture Halima was rejected on, then disputes
+  -- ------------------------------------------------------------------------
+  insert into session_instances (id, course_id, timetable_entry_id, held_on, venue_id,
+                                 type, status, checkpoint_mode, closed_at, created_by)
+  values (v_lecture, v_course, '77777777-7777-7777-7777-777777777701', current_date - 1,
+          '22222222-2222-2222-2222-222222222201', 'recurring', 'closed', 'single', now(),
+          '33333333-3333-3333-3333-333333333301');
+
+  insert into checkpoints (id, session_instance_id, index, token, issued_at, expires_at, issued_by)
+  values (v_cp, v_lecture, 1, '1234', now() - interval '2 hours', now() - interval '1 hour',
+          '33333333-3333-3333-3333-333333333301');
+
+  insert into attendance_marks (student_id, checkpoint_id, accepted, reject_reason, distance_m)
+  values (v_halima, v_cp, false, 'outside_geofence', 87);
+
+  perform resolve_session_score(v_halima, v_lecture);
+
+  perform assert_true(
+    (select score from session_scores
+      where student_id = v_halima and session_instance_id = v_lecture) = 0,
+    'a rejected submission scores zero'
+  );
+
+  insert into attendance_disputes (id, student_id, session_instance_id, checkpoint_id, student_note)
+  values (v_dispute, v_halima, v_lecture, v_cp, 'I was in the third row the whole lecture.');
+
+  perform assert_true(
+    resolve_dispute(v_dispute, v_hod, false, 'Lecturer confirms she was present and signed the sheet.')
+      = 'corrected',
+    'the HOD can correct a disputed mark'
+  );
+
+  perform assert_true(
+    (select score from session_scores
+      where student_id = v_halima and session_instance_id = v_lecture) = 1.0,
+    'correcting re-scores through resolve_session_score, by the same rules as every other lecture'
+  );
+
+  perform assert_true(
+    (select (metadata->>'score_before')::numeric from audit_log
+      where action = 'dispute.corrected') = 0
+    and (select (metadata->>'score_after')::numeric from audit_log
+      where action = 'dispute.corrected') = 1.0,
+    'the audit row records both scores — "it changed" is not a defensible answer later'
+  );
+
+  perform assert_true(
+    resolve_dispute(v_dispute, v_hod, true, 'Trying to resolve it a second time.')
+      = 'already_resolved',
+    'a resolved dispute cannot be resolved again'
+  );
+end $$;
+
+-- ---------------------------------------------------------------------------
 -- Course registration
 -- ---------------------------------------------------------------------------
 

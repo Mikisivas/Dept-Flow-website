@@ -1,11 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { ClipboardCheck, FileText } from "lucide-react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
-import type { AttendanceDispute } from "@/lib/data/queries";
+import type { AttendanceDispute } from "@/lib/data/hod";
 import { displayNameRegister, formatDateShort } from "@/lib/format";
 
 /**
@@ -30,8 +31,45 @@ const REASON_LABEL: Record<string, string> = {
 };
 
 export function DisputeList({ disputes }: { disputes: AttendanceDispute[] }) {
-  const [open, setOpen] = useState(disputes);
-  const [correcting, setCorrecting] = useState<AttendanceDispute | null>(null);
+  const router = useRouter();
+  const [deciding, setDeciding] = useState<{ dispute: AttendanceDispute; uphold: boolean } | null>(
+    null,
+  );
+  const [working, setWorking] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const open = disputes;
+
+  /**
+   * Upholding is a decision as much as correcting is. It used to remove the
+   * card from the list and nothing else — no reason, no record, and a student
+   * asking why would find nothing to answer with.
+   */
+  async function decide(reason: string) {
+    if (!deciding) return;
+    setWorking(true);
+    setError(null);
+
+    try {
+      const response = await fetch("/api/hod/disputes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          disputeId: deciding.dispute.id,
+          uphold: deciding.uphold,
+          reason,
+        }),
+      });
+      const body = await response.json();
+
+      if (!response.ok) setError(body.error ?? "That didn't work.");
+      else router.refresh();
+    } catch {
+      setError("No connection. Nothing was changed.");
+    }
+
+    setWorking(false);
+    setDeciding(null);
+  }
 
   if (open.length === 0) {
     return (
@@ -73,11 +111,10 @@ export function DisputeList({ disputes }: { disputes: AttendanceDispute[] }) {
             </p>
 
             <div className="mt-3 flex flex-wrap gap-2">
-              <Button onClick={() => setCorrecting(dispute)}>Correct the record</Button>
-              <Button
-                variant="ghost"
-                onClick={() => setOpen((current) => current.filter((d) => d.id !== dispute.id))}
-              >
+              <Button onClick={() => setDeciding({ dispute, uphold: false })}>
+                Correct the record
+              </Button>
+              <Button variant="ghost" onClick={() => setDeciding({ dispute, uphold: true })}>
                 Uphold the rejection
               </Button>
             </div>
@@ -85,33 +122,56 @@ export function DisputeList({ disputes }: { disputes: AttendanceDispute[] }) {
         ))}
       </ul>
 
+      {error ? (
+        <p
+          role="alert"
+          className="mt-4 rounded-lg border border-danger bg-danger-tint p-4 text-[15px] text-ink"
+        >
+          {error}
+        </p>
+      ) : null}
+
       <ConfirmDialog
-        open={correcting !== null}
-        onOpenChange={(nowOpen) => !nowOpen && setCorrecting(null)}
-        title={correcting ? `Correct ${correcting.courseCode} for ${correcting.surname}?` : ""}
+        open={deciding !== null}
+        onOpenChange={(nowOpen) => !nowOpen && setDeciding(null)}
+        variant={deciding?.uphold ? "destructive" : "primary"}
+        title={
+          deciding
+            ? deciding.uphold
+              ? `Uphold the rejection for ${deciding.dispute.surname}?`
+              : `Correct ${deciding.dispute.courseCode} for ${deciding.dispute.surname}?`
+            : ""
+        }
         description={
-          <>
-            This marks the student as having attended, and their attendance percentage changes
-            immediately. The correction and your reason are written to the audit log against this
-            student.
-          </>
+          deciding?.uphold ? (
+            <>
+              The original record stands and their attendance percentage does not change. Your
+              reason is written to the audit log, so the student can be told why.
+            </>
+          ) : (
+            <>
+              This marks the student as having attended, and their attendance percentage changes
+              immediately. The score before and after, your reason and your name are written to the
+              audit log.
+            </>
+          )
         }
         impact={
-          correcting
+          deciding
             ? [
-                { label: "Student", value: correcting.matricNo },
-                { label: "Course", value: correcting.courseCode },
-                { label: "Session", value: formatDateShort(correcting.heldOn) },
+                { label: "Student", value: deciding.dispute.matricNo },
+                { label: "Course", value: deciding.dispute.courseCode },
+                { label: "Session", value: formatDateShort(deciding.dispute.heldOn) },
               ]
             : undefined
         }
-        reasonLabel="Why is the record being changed?"
+        reasonLabel={
+          deciding?.uphold ? "Why is the rejection standing?" : "Why is the record being changed?"
+        }
         reasonHint="Recorded permanently in the audit log."
-        confirmLabel="Correct the record"
-        onConfirm={() => {
-          setOpen((current) => current.filter((d) => d.id !== correcting?.id));
-          setCorrecting(null);
-        }}
+        confirmLabel={deciding?.uphold ? "Uphold the rejection" : "Correct the record"}
+        working={working}
+        onConfirm={decide}
       />
     </>
   );

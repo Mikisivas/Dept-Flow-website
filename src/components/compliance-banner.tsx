@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Info, Lock, Circle } from "lucide-react";
+import { Circle, Info, Lock, ShieldCheck } from "lucide-react";
 import type { ComplianceState } from "@/lib/types";
 import { formatDate, formatScore } from "@/lib/format";
 import { Button } from "@/components/ui/button";
@@ -33,19 +33,34 @@ export function ComplianceBanner({
   const waiting = formatScore(provisionalScore);
   const sessionWord = provisionalScore === 1 ? "session" : "sessions";
 
+  // Locked, but a grace period is open. Two things are true at once and the
+  // student needs both: attendance is being recorded again RIGHT NOW, and it
+  // still will not count until they clear. Leading with "Attendance locked"
+  // here would be the one thing that is no longer the case.
+  if (state === "locked" && graceEndsOn) {
+    return (
+      <Banner
+        tone="info"
+        Icon={ShieldCheck}
+        title={`Your attendance is being recorded again, until ${formatDate(graceEndsOn)}.`}
+        body={
+          provisionalScore > 0
+            ? `The HOD has opened a grace period. Attend as normal — but your ${waiting} waiting ${sessionWord} still won't count until you clear, and recording stops again after that date.`
+            : "The HOD has opened a grace period. Attend as normal — but nothing counts towards the 75% until you clear, and recording stops again after that date."
+        }
+        action={{ href: "/dues", label: "Pay dues" }}
+        className={className}
+      />
+    );
+  }
+
   if (state === "locked") {
     return (
       <Banner
         tone="danger"
         Icon={Lock}
         title="Attendance locked — your dues aren't cleared."
-        body={
-          graceEndsOn
-            ? provisionalScore > 0
-              ? `The HOD has opened a grace period until ${formatDate(graceEndsOn)}. Clear your dues before then and your ${waiting} waiting ${sessionWord} will count.`
-              : `The HOD has opened a grace period until ${formatDate(graceEndsOn)}. Clear your dues before then and your attendance starts being recorded again.`
-            : "New attendance won't be recorded until you clear. Nothing already recorded has been lost."
-        }
+        body="New attendance won't be recorded until you clear. Nothing already recorded has been lost."
         action={{ href: "/dues", label: "Pay dues" }}
         className={className}
       />

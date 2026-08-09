@@ -1656,6 +1656,92 @@ begin
 end $$;
 
 
+
+-- ---------------------------------------------------------------------------
+-- A correction never lowers a score
+--
+-- Found by rehearsing the demo. Correcting a dispute on a lecture with no
+-- checkpoint rows re-scored the student from an empty set of marks and took
+-- them from 0.5 to 0. The HOD clicked "correct"; ending up with less than they
+-- started with is the opposite of that instruction.
+-- ---------------------------------------------------------------------------
+
+do $$
+declare
+  v_hod     uuid := '33333333-3333-3333-3333-333333333302';
+  v_lect    uuid := '33333333-3333-3333-3333-333333333301';
+  v_venue   uuid := '22222222-2222-2222-2222-222222222201';
+  v_course  uuid := '66666666-6666-6666-6666-666666666601';
+  v_student uuid := '44444444-4444-4444-4444-444444444402';
+  v_paper   uuid := gen_random_uuid();
+  v_dispute uuid;
+begin
+  -- A lecture recorded from a paper register: a real score, and no checkpoints
+  -- at all for a correction to accept.
+  insert into session_instances (id, course_id, held_on, venue_id, type, status, checkpoint_mode, closed_at, created_by)
+  -- 'pair', because a half mark is only meaningful against two checkpoints —
+  -- enforce_single_checkpoint_scoring refuses 0.5 on a single-checkpoint
+  -- lecture, which is the schema defending the rule rather than this test
+  -- working around it.
+  values (v_paper, v_course, date '2026-02-10', v_venue, 'makeup', 'closed', 'pair', now(), v_lect);
+
+  insert into session_scores (student_id, session_instance_id, score, status, source, confirmed_at)
+  values (v_student, v_paper, 0.5, 'confirmed', 'manually_entered', now());
+
+  insert into attendance_disputes (student_id, session_instance_id, student_note)
+  values (v_student, v_paper, 'I was there for the whole hour and signed the sheet.')
+  returning id into v_dispute;
+
+  perform resolve_dispute(v_dispute, v_hod, false, 'Lecturer confirms she was present for the whole lecture.');
+
+  perform assert_true(
+    (select score from session_scores
+      where student_id = v_student and session_instance_id = v_paper) = 1.0,
+    'correcting a dispute on a lecture with no checkpoints credits the whole lecture rather than scoring from nothing'
+  );
+
+  perform assert_true(
+    (select (metadata->>'score_after')::numeric from audit_log
+      where action = 'dispute.corrected' and target_id = v_dispute::text) = 1.0,
+    'and the audit row carries the score it actually ended at'
+  );
+end $$;
+
+do $$
+declare
+  v_hod     uuid := '33333333-3333-3333-3333-333333333302';
+  v_lect    uuid := '33333333-3333-3333-3333-333333333301';
+  v_venue   uuid := '22222222-2222-2222-2222-222222222201';
+  v_course  uuid := '66666666-6666-6666-6666-666666666601';
+  v_student uuid := '44444444-4444-4444-4444-444444444402';
+  v_full    uuid := gen_random_uuid();
+  v_cp      uuid := gen_random_uuid();
+  v_dispute uuid;
+begin
+  -- The other half of the floor: checkpoints exist, but only one of a pair, so
+  -- re-scoring would legitimately produce 0.5 against an existing 1.0.
+  insert into session_instances (id, course_id, held_on, venue_id, type, status, checkpoint_mode, closed_at, created_by)
+  values (v_full, v_course, date '2026-02-17', v_venue, 'makeup', 'closed', 'pair', now(), v_lect);
+
+  insert into checkpoints (id, session_instance_id, index, token, expires_at, issued_by)
+  values (v_cp, v_full, 1, '4417', now() + interval '1 hour', v_lect);
+
+  insert into session_scores (student_id, session_instance_id, score, status, source, confirmed_at)
+  values (v_student, v_full, 1.0, 'confirmed', 'manually_entered', now());
+
+  insert into attendance_disputes (student_id, session_instance_id, student_note)
+  values (v_student, v_full, 'The second checkpoint never appeared on my phone.')
+  returning id into v_dispute;
+
+  perform resolve_dispute(v_dispute, v_hod, false, 'Second checkpoint was never issued; not her fault.');
+
+  perform assert_true(
+    (select score from session_scores
+      where student_id = v_student and session_instance_id = v_full) = 1.0,
+    'a correction never docks a student — where re-scoring comes out lower, the recomputation is what is wrong'
+  );
+end $$;
+
 -- ---------------------------------------------------------------------------
 -- Security posture
 --

@@ -14,6 +14,7 @@ warns students before they fall below the 75% exam-eligibility threshold.
 | `docs/dept-flow-design-skill.md` | Design system: palette, typography, the checkpoint motif, per-role patterns, pre-ship checklist. |
 | `design/*.dc.html` | The design mockups — six groups covering shared components and all forty routes. Open in a browser. |
 | `supabase/README.md` | The schema, what it enforces, and how to run its tests. |
+| `docs/demo.md` | The walkthrough: logins, the order of screens, and the numbers that will appear. |
 
 ## Naming
 
@@ -117,7 +118,7 @@ demo quietly shows invented data.
 throws in production), deployment.
 
 **Checks:** `npm test` (12 Paystack + 33 account assertions, no
-network) and `supabase/tests/schema_test.sql` (194 assertions, run in the SQL
+network) and `supabase/tests/schema_test.sql` (197 assertions, run in the SQL
 Editor).
 `/api/health` is the first thing to open when something misbehaves: it reports
 **which migrations are missing by name**, which tables the signed-in user can

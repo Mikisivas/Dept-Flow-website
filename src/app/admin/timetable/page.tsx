@@ -1,28 +1,36 @@
 import type { Metadata } from "next";
 import { AppShell } from "@/components/app-shell";
 import { DataTable, type Column } from "@/components/data-table";
+import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
-import { getLecturerSchedule, type ScheduledSession } from "@/lib/data/queries";
-import { formatDateShort, formatWeekday } from "@/lib/format";
+import { loadTimetable, weekdayName, type TimetableRow } from "@/lib/data/admin";
+import { CalendarRange } from "lucide-react";
 
 export const metadata: Metadata = { title: "Timetable" };
 
-const columns: Column<ScheduledSession>[] = [
+export const dynamic = "force-dynamic";
+
+const columns: Column<TimetableRow>[] = [
   {
     key: "course",
     header: "Course",
     mobile: "title",
-    cell: (row) => <span translate="no">{row.courseCode}</span>,
+    cell: (row) => (
+      <span>
+        <span className="block" translate="no">
+          {row.courseCode}
+        </span>
+        <span className="block text-[12px] text-muted">
+          {row.courseTitle} · Level {row.level}
+        </span>
+      </span>
+    ),
   },
   {
     key: "day",
     header: "Day",
     mobile: "meta",
-    cell: (row) => (
-      <span className="tabular">
-        {formatWeekday(row.heldOn)} · {formatDateShort(row.heldOn)}
-      </span>
-    ),
+    cell: (row) => <span>{weekdayName(row.dayOfWeek)}</span>,
   },
   {
     key: "time",
@@ -34,25 +42,43 @@ const columns: Column<ScheduledSession>[] = [
       </span>
     ),
   },
+  {
+    key: "lecturer",
+    header: "Lecturer",
+    mobile: "meta",
+    cell: (row) => (
+      <span className="text-[13px] text-slate">{row.lecturer ?? "Not assigned"}</span>
+    ),
+  },
   { key: "venue", header: "Venue", mobile: "trailing", cell: (row) => row.venue },
 ];
 
 export default async function TimetablePage() {
-  const sessions = await getLecturerSchedule();
+  const entries = await loadTimetable();
 
   return (
     <AppShell role="admin">
       <PageHeader
         title="Timetable"
-        subtitle="The recurring baseline for the active session. Previous sessions are archived read-only."
+        subtitle="The recurring weekly baseline for the active session. A particular Tuesday's lecture lives on the lecturer's schedule, not here."
       />
-      <DataTable
-        className="mt-6"
-        rows={sessions}
-        columns={columns}
-        rowKey={(row) => row.sessionInstanceId}
-        caption={`${sessions.length} entries in the active session`}
-      />
+      {entries.length === 0 ? (
+        <div className="mt-6">
+          <EmptyState
+            icon={CalendarRange}
+            headline="No timetable entries for this session"
+            body="Until a course has a weekly slot, its lecturer has nothing to start."
+          />
+        </div>
+      ) : (
+        <DataTable
+          className="mt-6"
+          rows={entries}
+          columns={columns}
+          rowKey={(row) => row.id}
+          caption={`${entries.length} entries in the active session`}
+        />
+      )}
     </AppShell>
   );
 }

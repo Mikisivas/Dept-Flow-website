@@ -506,6 +506,45 @@ overview's GPS-rejection banner stays silent below twenty submissions on each
 side of the window. Four rejections out of six is 67% and means nothing, and a
 banner that cries wolf on noise is how a real spike becomes invisible.
 
+## Schedule changes
+
+**The schedule is the timetable projected forward, not a list of rows.**
+`timetable_entries` is a weekly pattern — a class happens every Tuesday at ten.
+A `session_instances` row is one specific date that was started, cancelled or
+added. Instances are created when a lecturer *starts* a lecture, so listing only
+instances would show an empty schedule. The screen projects three weeks from the
+pattern and lays any instance for that date over the top.
+
+This is also why the administrator's timetable screen shows weekdays and the
+lecturer's schedule shows dates. They are different objects, and letting "the
+timetable" mean both is how two roles end up describing different things with
+the same word.
+
+**Cancelling writes a row rather than deleting one.** There is usually nothing
+to delete — a future occurrence is only a pattern. The cancelled instance is
+what removes the lecture from the student's schedule, and it is also what shows
+later that the lecture was deliberately called off rather than quietly skipped.
+
+**A lecture that was held cannot be cancelled.** It would drop out of every
+enrolled student's denominator and move their percentage — including the
+students who came. The function refuses it outright.
+
+**Rescheduling is one transaction and one notification.** A lecturer could
+cancel and then add a makeup, and both steps would be correct. What they would
+not be is atomic: a cancellation that lands while the makeup fails leaves
+students told a lecture is off with no replacement, and two notifications for
+one change reads as two changes.
+
+**Students are notified from the database, not the API.** `notify_enrolled` is
+called inside `cancel_session`, `schedule_makeup` and `reschedule_session`, so
+the promise the screen makes — "every enrolled student is notified straight
+away" — is attached to the write itself. A caller cannot perform half of it.
+
+**Average attendance is the average of each student's own percentage**, and each
+student's denominator is the lectures held since *they* joined. A carry-over
+student who joined in week eight is not marked absent for the seven weeks
+before that, on the lecturer's course list any more than anywhere else.
+
 ## Palette
 
 `#FF9935`, eyedropped from the crest, superseding the `#F0952B` visual estimate

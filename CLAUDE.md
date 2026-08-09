@@ -105,10 +105,10 @@ screens — that order has held throughout.
 | Dues | Paystack redirect → verify → `clear_student()` flips compliance and confirms every provisional score. |
 | Course registration | Admin uploads the list; students pick electives and carry-overs against a 24-unit cap. |
 | HOD | Overview, at-risk list, per-course exam eligibility, grace periods, waivers, disputes and the per-student record. |
-| Admin | Overview, students (deactivate and reverse it), payments, the register, registration disputes, configuration, audit log, level rollover. |
+| Admin | Overview, students (deactivate and reverse it), payments, the register, registration disputes, timetable, configuration, audit log, level rollover. |
+| Lecturer | Dashboard, schedule (cancel, reschedule, add a makeup — each notifies every enrolled student), course list. |
 
-**Still on fixtures in `src/lib/data/queries.ts`:** the HOD's lecturer-oversight
-screen, the lecturer's schedule and course list, course detail, notifications,
+**Still on fixtures in `src/lib/data/queries.ts`:** course detail, notifications,
 password reset. Anything wired is deleted from that
 file rather than left as a fallback — two sources for one screen is how a demo
 quietly shows fixture data.
@@ -117,7 +117,7 @@ quietly shows fixture data.
 throws in production), deployment.
 
 **Checks:** `npm run test:paystack` (12 assertions, no network) and
-`supabase/tests/schema_test.sql` (155 assertions, run in the SQL Editor).
+`supabase/tests/schema_test.sql` (176 assertions, run in the SQL Editor).
 `/api/health` reports, for the signed-in user, which tables they can read and
 whether Paystack answers.
 

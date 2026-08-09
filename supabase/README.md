@@ -26,7 +26,7 @@ supabase/
     ..._compliance_schedule.sql      what actually drives the day-31 transition
   seed.sql                           development data
   seed_today.sql                     a class on today's weekday, for testing
-  tests/schema_test.sql              155 assertions
+  tests/schema_test.sql              176 assertions
 ```
 
 ## Running it

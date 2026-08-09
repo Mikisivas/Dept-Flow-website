@@ -509,3 +509,85 @@ export async function loadRolloverPreview(): Promise<RolloverPreview | null> {
       : null,
   };
 }
+
+// ---------------------------------------------------------------------------
+// The timetable
+// ---------------------------------------------------------------------------
+
+export type TimetableRow = {
+  id: string;
+  courseCode: string;
+  courseTitle: string;
+  level: number;
+  dayOfWeek: number;
+  startsAt: string;
+  endsAt: string;
+  venue: string;
+  lecturer: string | null;
+};
+
+const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+export function weekdayName(dayOfWeek: number): string {
+  return WEEKDAYS[dayOfWeek] ?? "—";
+}
+
+/**
+ * The recurring weekly baseline, not a list of dates.
+ *
+ * A timetable entry says a class happens every Tuesday at ten. What happened on
+ * one particular Tuesday is a `session_instances` row, and belongs on the
+ * lecturer's schedule rather than here — confusing the two is how "the
+ * timetable" ends up meaning two different things to two roles.
+ */
+export async function loadTimetable(): Promise<TimetableRow[]> {
+  const db = await adminDb();
+  const sessionId = await activeSessionId(db);
+
+  const { data: entries } = await db
+    .from("timetable_entries")
+    .select("id, course_id, day_of_week, start_time, end_time, venue_id")
+    .eq("academic_session_id", sessionId ?? "");
+
+  if (!entries?.length) return [];
+
+  const [{ data: courses }, { data: venues }] = await Promise.all([
+    db
+      .from("courses")
+      .select("id, code, title, level, lecturer_id")
+      .in("id", [...new Set(entries.map((entry) => entry.course_id))]),
+    db.from("venues").select("id, name"),
+  ]);
+
+  const lecturerIds = [...new Set((courses ?? []).map((c) => c.lecturer_id).filter(Boolean))];
+  const { data: people } = lecturerIds.length
+    ? await db.from("profiles").select("id, surname, first_name").in("id", lecturerIds)
+    : { data: [] };
+
+  const courseById = new Map((courses ?? []).map((course) => [course.id, course]));
+  const venueById = new Map((venues ?? []).map((venue) => [venue.id, venue.name]));
+  const nameById = new Map(
+    (people ?? []).map((person) => [person.id, `${person.first_name} ${person.surname}`]),
+  );
+
+  return entries
+    .map((entry) => {
+      const course = courseById.get(entry.course_id);
+      return {
+        id: entry.id,
+        courseCode: course?.code ?? "—",
+        courseTitle: course?.title ?? "",
+        level: course?.level ?? 0,
+        dayOfWeek: entry.day_of_week,
+        startsAt: String(entry.start_time).slice(0, 5),
+        endsAt: String(entry.end_time).slice(0, 5),
+        venue: venueById.get(entry.venue_id) ?? "Venue not set",
+        lecturer: course?.lecturer_id ? (nameById.get(course.lecturer_id) ?? null) : null,
+      };
+    })
+    .sort((a, b) =>
+      a.dayOfWeek === b.dayOfWeek
+        ? a.startsAt.localeCompare(b.startsAt)
+        : a.dayOfWeek - b.dayOfWeek,
+    );
+}

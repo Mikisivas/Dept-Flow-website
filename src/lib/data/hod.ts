@@ -706,3 +706,97 @@ export async function loadStudentRecord(matricNo: string): Promise<StudentRecord
     })),
   };
 }
+
+// ---------------------------------------------------------------------------
+// Lecturer oversight
+// ---------------------------------------------------------------------------
+
+export type LecturerOversight = {
+  lecturerId: string;
+  name: string;
+  sessionsHeld: number;
+  paperBatches: number;
+  singleCheckpoint: number;
+  cancelled: number;
+};
+
+/**
+ * What turns the paper fallback into a monitored path rather than a silent
+ * backdoor.
+ *
+ * Every number here is a count the screen turns into a rate, because a raw
+ * count punishes whoever teaches the most. A lecturer with two paper batches
+ * out of forty lectures is not the same as one with two out of four.
+ */
+export async function loadLecturerOversight(): Promise<LecturerOversight[]> {
+  await requireHod();
+  const db = createUserClient(await currentAccessToken());
+
+  const { data: lecturers } = await db
+    .from("profiles")
+    .select("id, surname, first_name")
+    .eq("role", "lecturer")
+    .order("surname");
+
+  const lecturerIds = (lecturers ?? []).map((row) => row.id);
+  if (lecturerIds.length === 0) return [];
+
+  const { data: courses } = await db
+    .from("courses")
+    .select("id, lecturer_id")
+    .in("lecturer_id", lecturerIds);
+
+  const courseIds = (courses ?? []).map((course) => course.id);
+  const lecturerByCourse = new Map(
+    (courses ?? []).map((course) => [course.id, course.lecturer_id as string]),
+  );
+
+  const [{ data: instances }, { data: batches }] = await Promise.all([
+    courseIds.length
+      ? db
+          .from("session_instances")
+          .select("id, course_id, status, checkpoint_mode")
+          .in("course_id", courseIds)
+      : Promise.resolve({ data: [] }),
+    db.from("manual_attendance_batches").select("session_instance_id"),
+  ]);
+
+  const batched = new Set((batches ?? []).map((row) => row.session_instance_id));
+
+  const tally = new Map<string, Omit<LecturerOversight, "lecturerId" | "name">>();
+  for (const id of lecturerIds) {
+    tally.set(id, { sessionsHeld: 0, paperBatches: 0, singleCheckpoint: 0, cancelled: 0 });
+  }
+
+  for (const instance of instances ?? []) {
+    const lecturerId = lecturerByCourse.get(instance.course_id);
+    if (!lecturerId) continue;
+    const row = tally.get(lecturerId);
+    if (!row) continue;
+
+    if (instance.status === "cancelled") {
+      row.cancelled += 1;
+      continue;
+    }
+
+    // Only closed lectures are counted. One still open is not yet a fact about
+    // how it was run, and counting it would move the rate for an hour and then
+    // move it back.
+    if (instance.status !== "closed") continue;
+
+    row.sessionsHeld += 1;
+    if (instance.checkpoint_mode === "single") row.singleCheckpoint += 1;
+    if (batched.has(instance.id)) row.paperBatches += 1;
+  }
+
+  return (lecturers ?? []).map((lecturer) => ({
+    lecturerId: lecturer.id,
+    name: `${lecturer.first_name} ${lecturer.surname}`,
+    ...(tally.get(lecturer.id) ?? {
+      sessionsHeld: 0,
+      paperBatches: 0,
+      singleCheckpoint: 0,
+      cancelled: 0,
+    }),
+  }));
+}

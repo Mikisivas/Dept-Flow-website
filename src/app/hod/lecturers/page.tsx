@@ -2,10 +2,12 @@ import type { Metadata } from "next";
 import { AppShell } from "@/components/app-shell";
 import { DataTable, type Column } from "@/components/data-table";
 import { PageHeader } from "@/components/page-header";
-import { getLecturerOversight, type LecturerOversight } from "@/lib/data/queries";
+import { loadLecturerOversight, type LecturerOversight } from "@/lib/data/hod";
 import { formatPercent } from "@/lib/format";
 
 export const metadata: Metadata = { title: "Lecturer oversight" };
+
+export const dynamic = "force-dynamic";
 
 /**
  * This is what turns the paper fallback into a monitored path rather than a
@@ -33,6 +35,9 @@ const columns: Column<LecturerOversight>[] = [
     align: "right",
     mobile: "trailing",
     cell: (row) => {
+      // No lectures held yet means there is no rate, not a rate of zero.
+      if (row.sessionsHeld === 0) return <span className="tabular text-muted">—</span>;
+
       const rate = Math.round((row.paperBatches / row.sessionsHeld) * 100);
       return (
         <span className={rate >= 25 ? "font-semibold text-danger tabular" : "tabular"}>
@@ -55,7 +60,7 @@ const columns: Column<LecturerOversight>[] = [
 ];
 
 export default async function LecturerOversightPage() {
-  const lecturers = await getLecturerOversight();
+  const lecturers = await loadLecturerOversight();
 
   return (
     <AppShell role="hod">

@@ -5,7 +5,7 @@ import { CircleCheck, CircleSlash, Lock } from "lucide-react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { DataTable, type Column } from "@/components/data-table";
 import { Button } from "@/components/ui/button";
-import type { EligibilityEntry } from "@/lib/data/queries";
+import type { EligibilityRow as EligibilityEntry } from "@/lib/data/hod";
 import { displayNameRegister, formatDate, formatPercent, formatScore } from "@/lib/format";
 
 /**

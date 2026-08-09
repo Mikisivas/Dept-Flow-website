@@ -1161,6 +1161,168 @@ begin
 end $$;
 
 
+
+-- ---------------------------------------------------------------------------
+-- Schedule changes: cancelling, makeups, reschedules
+--
+-- Placed before the admin block, because the rollover at the end changes every
+-- student's level and switches the active session.
+-- ---------------------------------------------------------------------------
+
+do $$
+declare
+  v_lect   uuid := '33333333-3333-3333-3333-333333333301'; -- Bello, teaches all three
+  v_hod    uuid := '33333333-3333-3333-3333-333333333302';
+  v_cmp301 uuid := '66666666-6666-6666-6666-666666666601';
+  v_sta202 uuid := '66666666-6666-6666-6666-666666666603';
+  v_entry  uuid := '77777777-7777-7777-7777-777777777701';
+  v_venue  uuid := '22222222-2222-2222-2222-222222222201';
+  v_future date := current_date + 7;
+  v_held   date;
+  v_before integer;
+  v_after  integer;
+  v_ok     boolean;
+begin
+  select count(*) into v_before from notifications;
+
+  -- ==== cancel_session ====
+
+  begin
+    perform cancel_session(v_cmp301, v_entry, v_future, v_lect, 'busy');
+    v_ok := false;
+  exception when others then v_ok := true;
+  end;
+  perform assert_true(v_ok, 'a cancellation without a substantive reason is refused — students are shown it');
+
+  perform assert_true(
+    cancel_session(v_cmp301, v_entry, v_future, v_hod, 'The HOD is not the lecturer for this course.') = 'not_your_course',
+    'a lecturer cannot cancel another lecturer''s lecture'
+  );
+
+  perform assert_true(
+    cancel_session(v_cmp301, v_entry, v_future, v_lect, 'Departmental seminar clashes with this slot.') = 'cancelled',
+    'the lecturer can cancel a future lecture that has no instance row yet'
+  );
+
+  perform assert_true(
+    (select status from session_instances where course_id = v_cmp301 and held_on = v_future) = 'cancelled',
+    'cancelling writes an instance rather than deleting one — the absence is recorded'
+  );
+
+  perform assert_true(
+    (select venue_id from session_instances where course_id = v_cmp301 and held_on = v_future) = v_venue,
+    'the cancelled instance carries the venue from the timetable entry'
+  );
+
+  select count(*) into v_after from notifications;
+  perform assert_true(
+    v_after > v_before,
+    'cancelling notifies the enrolled students, as the screen promises'
+  );
+
+  perform assert_true(
+    (select count(*) from notifications n
+      join enrolments e on e.student_id = n.recipient_id and e.course_id = v_cmp301
+     where n.kind = 'schedule_change') > 0,
+    'the notification goes to students enrolled in that course'
+  );
+
+  perform assert_true(
+    cancel_session(v_cmp301, v_entry, v_future, v_lect, 'Trying to cancel the very same lecture twice.') = 'already_cancelled',
+    'a cancelled lecture cannot be cancelled again'
+  );
+
+  -- A lecture already held must not be cancellable: it would drop out of every
+  -- enrolled student's denominator and move percentages for students who came.
+  select held_on into v_held
+  from session_instances
+  where course_id = v_cmp301 and status = 'closed'
+  order by held_on limit 1;
+
+  perform assert_true(
+    cancel_session(v_cmp301, v_entry, v_held, v_lect, 'Trying to cancel a lecture that was actually taught.') = 'already_held',
+    'a lecture that was held cannot be cancelled — that would move every student''s percentage'
+  );
+
+  -- ==== schedule_makeup ====
+
+  begin
+    perform schedule_makeup(v_sta202, current_date - 1, time '15:00', time '17:00', v_venue, v_lect, null);
+    v_ok := false;
+  exception when others then v_ok := true;
+  end;
+  perform assert_true(v_ok, 'a makeup class cannot be scheduled in the past');
+
+  begin
+    perform schedule_makeup(v_sta202, v_future, time '17:00', time '15:00', v_venue, v_lect, null);
+    v_ok := false;
+  exception when others then v_ok := true;
+  end;
+  perform assert_true(v_ok, 'a makeup class must end after it starts');
+
+  perform assert_true(
+    schedule_makeup(v_sta202, v_future, time '15:00', time '17:00', v_venue, v_hod, null) = 'not_your_course',
+    'a makeup can only be scheduled by the course''s own lecturer'
+  );
+
+  perform assert_true(
+    schedule_makeup(v_sta202, v_future, time '15:00', time '17:00', gen_random_uuid(), v_lect, null) = 'no_such_venue',
+    'a makeup class needs a real venue — the geo-fence comes from it'
+  );
+
+  perform assert_true(
+    schedule_makeup(v_sta202, v_future, time '15:00', time '17:00', v_venue, v_lect, 'Replacing the lecture lost to the seminar.') = 'scheduled',
+    'the lecturer can schedule a makeup class'
+  );
+
+  perform assert_true(
+    (select type from session_instances where course_id = v_sta202 and held_on = v_future) = 'makeup'
+      and (select timetable_entry_id from session_instances where course_id = v_sta202 and held_on = v_future) is null,
+    'a makeup has no timetable entry — it is not a recurring slot'
+  );
+
+  perform assert_true(
+    schedule_makeup(v_sta202, v_future, time '18:00', time '20:00', v_venue, v_lect, null) = 'already_scheduled',
+    'two lectures for one course on one day is a double-tap, not an intention'
+  );
+
+  -- Cancelling frees the day again, which is the whole point of a makeup after
+  -- a cancellation.
+  perform cancel_session(v_sta202, null, v_future, v_lect, 'Venue double-booked, moving it again.');
+  perform assert_true(
+    schedule_makeup(v_sta202, v_future, time '18:00', time '20:00', v_venue, v_lect, null) = 'scheduled',
+    'once cancelled, the day is free for another makeup'
+  );
+
+  -- ==== reschedule_session ====
+
+  perform assert_true(
+    reschedule_session(v_cmp301, v_entry, v_future + 7, v_future + 8, time '10:00', time '12:00',
+                       v_venue, v_lect, 'Venue needed for an external examination.') = 'rescheduled',
+    'the lecturer can move a lecture to another day'
+  );
+
+  perform assert_true(
+    (select status from session_instances where course_id = v_cmp301 and held_on = v_future + 7) = 'cancelled'
+      and (select type from session_instances where course_id = v_cmp301 and held_on = v_future + 8) = 'reschedule',
+    'the old slot is cancelled and the new one is marked a reschedule — nothing is deleted'
+  );
+
+  perform assert_true(
+    (select count(*) from notifications
+      where kind = 'schedule_change' and title like '%has moved to%') > 0,
+    'a reschedule sends one notification, not a cancellation and an addition'
+  );
+
+  begin
+    perform reschedule_session(v_cmp301, v_entry, v_future + 14, current_date - 1, time '10:00', time '12:00',
+                               v_venue, v_lect, 'Trying to move a lecture backwards in time.');
+    v_ok := false;
+  exception when others then v_ok := true;
+  end;
+  perform assert_true(v_ok, 'a lecture cannot be moved into the past');
+end $$;
+
 -- ---------------------------------------------------------------------------
 -- The administrator's authority actions
 --

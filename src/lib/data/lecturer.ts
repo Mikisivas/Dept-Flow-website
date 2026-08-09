@@ -394,3 +394,228 @@ export async function loadSessionControl(id: string): Promise<SessionControl | n
     }),
   };
 }
+
+// ---------------------------------------------------------------------------
+// The schedule
+// ---------------------------------------------------------------------------
+
+export type ScheduledSession = {
+  /** Null until somebody starts, cancels or schedules it — see below. */
+  sessionInstanceId: string | null;
+  timetableEntryId: string | null;
+  courseId: string;
+  courseCode: string;
+  heldOn: string;
+  startsAt: string;
+  endsAt: string;
+  venue: string;
+  type: "recurring" | "makeup" | "reschedule";
+  status: "scheduled" | "open" | "closed" | "cancelled";
+  cancellationReason: string | null;
+};
+
+const SCHEDULE_HORIZON_DAYS = 21;
+
+/**
+ * The lecturer's upcoming lectures.
+ *
+ * Two sources, and they mean different things. `timetable_entries` is a weekly
+ * pattern — it says a class is *meant* to happen every Tuesday. A
+ * `session_instances` row is a specific date that was started, cancelled or
+ * added. So the schedule is the pattern projected forward, with any instance
+ * for that date laid over the top of it.
+ *
+ * Doing it the other way — listing only instances — would show an empty
+ * schedule, because instances are created when a lecture starts. Nothing is
+ * scheduled ahead of time.
+ */
+export async function loadLecturerSchedule(): Promise<ScheduledSession[]> {
+  const session = await requireLecturer();
+  const db = createUserClient(await currentAccessToken());
+  const { date } = lagosToday();
+
+  const { data: courses } = await db
+    .from("courses")
+    .select("id, code")
+    .eq("lecturer_id", session.profileId);
+
+  const courseIds = (courses ?? []).map((course) => course.id);
+  if (courseIds.length === 0) return [];
+
+  const codeById = new Map((courses ?? []).map((course) => [course.id, course.code]));
+
+  const horizon = new Date(`${date}T00:00:00Z`);
+  horizon.setUTCDate(horizon.getUTCDate() + SCHEDULE_HORIZON_DAYS);
+  const until = horizon.toISOString().slice(0, 10);
+
+  const [{ data: timetable }, { data: instances }] = await Promise.all([
+    db
+      .from("timetable_entries")
+      .select("id, course_id, day_of_week, start_time, end_time, venue_id")
+      .in("course_id", courseIds),
+    db
+      .from("session_instances")
+      .select(
+        "id, course_id, timetable_entry_id, held_on, scheduled_start, scheduled_end, venue_id, type, status, cancellation_reason",
+      )
+      .in("course_id", courseIds)
+      .gte("held_on", date)
+      .lte("held_on", until),
+  ]);
+
+  const venues = await venueNames(db, [
+    ...(timetable ?? []).map((entry) => entry.venue_id),
+    ...(instances ?? []).map((instance) => instance.venue_id),
+  ]);
+
+  // Keyed by course and date rather than by timetable entry: a makeup has no
+  // entry at all, and a cancellation written against the course still has to
+  // suppress the projected occurrence.
+  const instanceByDay = new Map(
+    (instances ?? []).map((instance) => [`${instance.course_id}|${instance.held_on}`, instance]),
+  );
+
+  const rows: ScheduledSession[] = [];
+
+  for (let offset = 0; offset <= SCHEDULE_HORIZON_DAYS; offset += 1) {
+    const day = new Date(`${date}T00:00:00Z`);
+    day.setUTCDate(day.getUTCDate() + offset);
+    const iso = day.toISOString().slice(0, 10);
+    // Postgres `day_of_week` matches JavaScript's: 0 is Sunday.
+    const weekday = day.getUTCDay();
+
+    for (const entry of timetable ?? []) {
+      if (entry.day_of_week !== weekday) continue;
+
+      const instance = instanceByDay.get(`${entry.course_id}|${iso}`);
+
+      rows.push({
+        sessionInstanceId: instance?.id ?? null,
+        timetableEntryId: entry.id,
+        courseId: entry.course_id,
+        courseCode: codeById.get(entry.course_id) ?? "",
+        heldOn: iso,
+        startsAt: hhmm(entry.start_time),
+        endsAt: hhmm(entry.end_time),
+        venue: venues.get(entry.venue_id) ?? "Venue not set",
+        type: (instance?.type as ScheduledSession["type"]) ?? "recurring",
+        status: (instance?.status as ScheduledSession["status"]) ?? "scheduled",
+        cancellationReason: instance?.cancellation_reason ?? null,
+      });
+    }
+  }
+
+  // Makeups and reschedules have no weekly pattern to project, so they are
+  // added from the instances directly.
+  for (const instance of instances ?? []) {
+    if (instance.timetable_entry_id) continue;
+
+    rows.push({
+      sessionInstanceId: instance.id,
+      timetableEntryId: null,
+      courseId: instance.course_id,
+      courseCode: codeById.get(instance.course_id) ?? "",
+      heldOn: instance.held_on,
+      startsAt: hhmm(instance.scheduled_start?.slice(11, 19)),
+      endsAt: hhmm(instance.scheduled_end?.slice(11, 19)),
+      venue: venues.get(instance.venue_id) ?? "Venue not set",
+      type: instance.type as ScheduledSession["type"],
+      status: instance.status as ScheduledSession["status"],
+      cancellationReason: instance.cancellation_reason ?? null,
+    });
+  }
+
+  return rows.sort((a, b) =>
+    a.heldOn === b.heldOn ? a.startsAt.localeCompare(b.startsAt) : a.heldOn.localeCompare(b.heldOn),
+  );
+}
+
+export type LecturerVenue = { id: string; name: string };
+
+/** For the makeup-class form. Names only — coordinates are admin-only. */
+export async function loadVenueOptions(): Promise<LecturerVenue[]> {
+  await requireLecturer();
+  const db = createUserClient(await currentAccessToken());
+  const { data } = await db.from("venue_directory").select("id, name").order("name");
+  return (data ?? []).map((venue) => ({ id: venue.id, name: venue.name }));
+}
+
+// ---------------------------------------------------------------------------
+// The lecturer's own courses
+// ---------------------------------------------------------------------------
+
+export type LecturerCourse = {
+  courseId: string;
+  code: string;
+  title: string;
+  enrolled: number;
+  sessionsHeld: number;
+  /** Counted attendance across the class, or null when nothing has been held. */
+  averagePct: number | null;
+};
+
+export async function loadLecturerCourses(): Promise<LecturerCourse[]> {
+  const session = await requireLecturer();
+  const db = createUserClient(await currentAccessToken());
+
+  const { data: courses } = await db
+    .from("courses")
+    .select("id, code, title")
+    .eq("lecturer_id", session.profileId)
+    .order("code");
+
+  const courseIds = (courses ?? []).map((course) => course.id);
+  if (courseIds.length === 0) return [];
+
+  const [{ data: enrolments }, { data: instances }, { data: scores }] = await Promise.all([
+    db
+      .from("enrolments")
+      .select("student_id, course_id, enrolled_on")
+      .in("course_id", courseIds)
+      .is("dropped_at", null),
+    db
+      .from("session_instances")
+      .select("id, course_id, held_on")
+      .in("course_id", courseIds)
+      .eq("status", "closed"),
+    db.from("session_scores").select("student_id, session_instance_id, score, status"),
+  ]);
+
+  const scoreByKey = new Map(
+    (scores ?? []).map((row) => [`${row.student_id}|${row.session_instance_id}`, row]),
+  );
+
+  return (courses ?? []).map((course) => {
+    const held = (instances ?? []).filter((instance) => instance.course_id === course.id);
+    const roll = (enrolments ?? []).filter((row) => row.course_id === course.id);
+
+    // The class average is the average of each student's own percentage, and
+    // each student's denominator is the lectures held since THEY joined. A
+    // carry-over student who joined in week 8 is not marked absent for the
+    // seven weeks before that, here or anywhere else.
+    let totalPct = 0;
+    let counted = 0;
+
+    for (const enrolment of roll) {
+      const mine = held.filter((instance) => instance.held_on >= enrolment.enrolled_on);
+      if (mine.length === 0) continue;
+
+      const confirmed = mine.reduce((sum, instance) => {
+        const score = scoreByKey.get(`${enrolment.student_id}|${instance.id}`);
+        return sum + (score?.status === "confirmed" ? Number(score.score) : 0);
+      }, 0);
+
+      totalPct += (confirmed / mine.length) * 100;
+      counted += 1;
+    }
+
+    return {
+      courseId: course.id,
+      code: course.code,
+      title: course.title,
+      enrolled: roll.length,
+      sessionsHeld: held.length,
+      averagePct: counted === 0 ? null : Math.round(totalPct / counted),
+    };
+  });
+}

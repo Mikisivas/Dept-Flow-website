@@ -38,6 +38,8 @@ export function ConfirmDialog({
   title,
   description,
   impact,
+  extra,
+  error,
   confirmLabel,
   cancelLabel = "Cancel",
   variant = "primary",
@@ -52,6 +54,14 @@ export function ConfirmDialog({
   title: string;
   description: React.ReactNode;
   impact?: ImpactRow[];
+  /**
+   * Extra controls the action needs — a reason category, a typed confirmation.
+   * Inside the dialog rather than beside it: anything the caller renders on the
+   * page behind an open modal is covered by the overlay and cannot be reached.
+   */
+  extra?: React.ReactNode;
+  /** Server-side refusals, shown where the action was attempted. */
+  error?: string | null;
   /** Repeats the verb: "Open grace period", "Deactivate student". */
   confirmLabel: string;
   cancelLabel?: string;
@@ -110,6 +120,8 @@ export function ConfirmDialog({
             </dl>
           ) : null}
 
+          {extra}
+
           {requireReason ? (
             <Field
               label={reasonLabel}
@@ -129,6 +141,12 @@ export function ConfirmDialog({
                 )}
               />
             </Field>
+          ) : null}
+
+          {error ? (
+            <p role="alert" className="rounded-md border border-danger bg-danger-tint px-3 py-2 text-[14px] text-ink">
+              {error}
+            </p>
           ) : null}
         </DialogBody>
 

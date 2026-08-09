@@ -3,12 +3,14 @@ import Link from "next/link";
 import { TriangleAlert } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { PageHeader } from "@/components/page-header";
-import { getAdminOverview } from "@/lib/data/queries";
+import { loadAdminOverview } from "@/lib/data/admin";
 import { formatDate, formatPercent } from "@/lib/format";
 
 export const metadata: Metadata = {
   title: "System overview",
 };
+
+export const dynamic = "force-dynamic";
 
 /**
  * Operations and infrastructure. Aggregate signals only.
@@ -19,9 +21,16 @@ export const metadata: Metadata = {
  */
 export default async function AdminDashboardPage() {
   const { byLevel, reconciliation, gpsRejectionRate, registration, duesWindow } =
-    await getAdminOverview();
+    await loadAdminOverview();
 
-  const spiking = gpsRejectionRate.current > gpsRejectionRate.baseline * 2;
+  // `sampled` is the guard that matters. Four rejections out of six is 67% and
+  // means nothing; raising a department-wide alarm off it would teach whoever
+  // reads this screen to ignore the banner, which is the one outcome that
+  // makes a real spike invisible.
+  const spiking =
+    gpsRejectionRate.sampled &&
+    gpsRejectionRate.baseline > 0 &&
+    gpsRejectionRate.current > gpsRejectionRate.baseline * 2;
   const totals = byLevel.reduce(
     (acc, row) => ({
       cleared: acc.cleared + row.cleared,
@@ -33,10 +42,16 @@ export default async function AdminDashboardPage() {
   const all = totals.cleared + totals.provisional + totals.locked;
 
   return (
-    <AppShell role="admin" counts={{ "/admin/students": registration.openDisputes }}>
+    <AppShell role="admin" counts={{ "/admin/disputes": registration.openDisputes }}>
       <PageHeader
         title="System overview"
-        subtitle={`Dues window closes ${formatDate(duesWindow.deadline)} · ${duesWindow.daysRemaining} days left`}
+        subtitle={
+          duesWindow === null
+            ? "No dues period is set for this session — nothing locks until one is."
+            : duesWindow.daysRemaining > 0
+              ? `Dues window closes ${formatDate(duesWindow.deadline)} · ${duesWindow.daysRemaining} days left`
+              : `Dues window closed ${formatDate(duesWindow.deadline)}`
+        }
       />
 
       {/* A steady GPS rejection rate is just GPS. A spike is people trying
@@ -68,7 +83,7 @@ export default async function AdminDashboardPage() {
 
         <ul className="mt-3 flex flex-col gap-2">
           {byLevel.map((row) => {
-            const total = row.cleared + row.provisional + row.locked;
+            const total = row.cleared + row.provisional + row.locked || 1;
             return (
               <li key={row.level} className="rounded-lg border border-line bg-surface p-4">
                 <div className="flex items-baseline justify-between gap-3">
@@ -97,9 +112,11 @@ export default async function AdminDashboardPage() {
           })}
         </ul>
 
-        <p className="mt-2 text-[13px] text-muted tabular">
-          {formatPercent(Math.round((totals.cleared / all) * 100))} of the department is cleared
-        </p>
+        {all > 0 ? (
+          <p className="mt-2 text-[13px] text-muted tabular">
+            {formatPercent(Math.round((totals.cleared / all) * 100))} of the department is cleared
+          </p>
+        ) : null}
       </section>
 
       <section aria-labelledby="ops-heading" className="mt-8">

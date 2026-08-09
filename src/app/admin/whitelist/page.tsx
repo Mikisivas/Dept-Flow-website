@@ -4,9 +4,11 @@ import { AppShell } from "@/components/app-shell";
 import { DataTable, type Column } from "@/components/data-table";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
-import { getWhitelist, type WhitelistRow } from "@/lib/data/queries";
+import { loadWhitelist, type WhitelistRow } from "@/lib/data/admin";
 
 export const metadata: Metadata = { title: "Register" };
+
+export const dynamic = "force-dynamic";
 
 const columns: Column<WhitelistRow>[] = [
   {
@@ -41,7 +43,7 @@ const columns: Column<WhitelistRow>[] = [
 ];
 
 export default async function WhitelistPage() {
-  const rows = await getWhitelist();
+  const rows = await loadWhitelist();
   const unclaimed = rows.filter((row) => !row.claimed).length;
 
   return (

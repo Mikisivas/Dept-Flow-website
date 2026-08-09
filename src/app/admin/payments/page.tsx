@@ -2,16 +2,19 @@ import type { Metadata } from "next";
 import { AppShell } from "@/components/app-shell";
 import { DataTable, type Column } from "@/components/data-table";
 import { PageHeader } from "@/components/page-header";
-import { getPayments, type PaymentRow } from "@/lib/data/queries";
+import { loadPayments, type PaymentRow } from "@/lib/data/admin";
 import { formatDateTime, naira } from "@/lib/format";
 
 export const metadata: Metadata = { title: "Payments" };
+
+export const dynamic = "force-dynamic";
 
 const STATUS_STYLE: Record<PaymentRow["status"], string> = {
   success: "text-ok",
   pending: "text-info",
   failed: "text-danger",
   abandoned: "text-muted",
+  reversed: "text-danger",
 };
 
 const STATUS_LABEL: Record<PaymentRow["status"], string> = {
@@ -19,6 +22,7 @@ const STATUS_LABEL: Record<PaymentRow["status"], string> = {
   pending: "Checking",
   failed: "Failed",
   abandoned: "Abandoned",
+  reversed: "Reversed",
 };
 
 const columns: Column<PaymentRow>[] = [
@@ -48,7 +52,7 @@ const columns: Column<PaymentRow>[] = [
     mobile: "meta",
     cell: (row) => (
       <span className="text-[13px] text-slate">
-        {row.channel === "card" ? "Card" : "Pay with Transfer"}
+        {row.channel === "card" ? "Card" : row.channel === "transfer" ? "Pay with Transfer" : "—"}
       </span>
     ),
   },
@@ -86,7 +90,7 @@ const columns: Column<PaymentRow>[] = [
 ];
 
 export default async function PaymentsPage() {
-  const payments = await getPayments();
+  const payments = await loadPayments();
   const needsAttention = payments.filter(
     (row) => row.status === "pending" || row.status === "failed",
   ).length;

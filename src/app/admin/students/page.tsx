@@ -1,13 +1,15 @@
 import type { Metadata } from "next";
 import { AppShell } from "@/components/app-shell";
 import { PageHeader } from "@/components/page-header";
-import { getAdminStudents } from "@/lib/data/queries";
+import { loadAdminStudents } from "@/lib/data/admin";
 import { StudentTable } from "./student-table";
 
 export const metadata: Metadata = { title: "Students" };
 
+export const dynamic = "force-dynamic";
+
 export default async function AdminStudentsPage() {
-  const students = await getAdminStudents();
+  const students = await loadAdminStudents();
 
   return (
     <AppShell role="admin">

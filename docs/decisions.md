@@ -459,6 +459,53 @@ just the fact of a change. Six months later, at an exam board, "the score
 changed" is not defensible; "it went from 0.5 to 1.0, on this date, by this
 person, for this reason" is.
 
+## The administrator's actions
+
+Admin is the registry side: money, the register, configuration, the audit
+trail. The dividing line against the HOD is that **admin never sees an
+individual student's risk** — RLS refuses them `risk_predictions` outright.
+Risk is a judgement about a person, and the person reconciling payments is not
+the person who should be forming it.
+
+**Deactivation is a soft delete, and reversible.** The login stops; every row
+stays. Attendance, payments and audit rows survive, because the commonest
+reason to look up a withdrawn student is a dispute about the term they were
+still here for. It is reversible because the commonest cause of a deactivation
+is a clerical error — a screen that can only close accounts turns a mis-click
+into a database task. Reactivating carries the old reason into the audit row
+before clearing it, so undoing does not erase what was undone.
+
+**Revoking a registration does two things or it does nothing useful.** The
+claiming account is frozen *and* the register row is released. Freezing alone
+leaves the real student unable to register, because their own matric number is
+still marked claimed. It goes through `deactivate_student` rather than writing
+the columns directly, so there is one code path for "how a student stops being
+able to log in" and the closure is recorded under `student.deactivate`, where
+anyone would look for it.
+
+**Dismissing a registration report is a decision too.** Reason required, audit
+row written. This screen used to drop the card from the browser's state and
+call nothing — a rejection that left no trace, so the same student could be
+asked to prove the same thing three times.
+
+**The level rollover marks graduands before it promotes anyone.** In the other
+order the 300s become 400s first and then graduate — the wrong cohort leaves,
+and nobody catches it until final results. It also refuses to run twice for the
+same pair of sessions, opens the new session with every continuing student
+uncleared, and switches the active session inside the same transaction:
+promoting everyone and then forgetting to switch leaves the department at the
+right levels in the wrong year, which is harder to detect than either half
+failing outright.
+
+On top of the reason every authority action takes, the rollover asks for the
+closing session's name to be typed out. A reason can be written by someone who
+did not read the dialog; the name of the year they are about to close cannot.
+
+**A rate needs a sample before it is allowed to raise an alarm.** The admin
+overview's GPS-rejection banner stays silent below twenty submissions on each
+side of the window. Four rejections out of six is 67% and means nothing, and a
+banner that cries wolf on noise is how a real spike becomes invisible.
+
 ## Palette
 
 `#FF9935`, eyedropped from the crest, superseding the `#F0952B` visual estimate

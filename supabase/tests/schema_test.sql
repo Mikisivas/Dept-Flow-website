@@ -1160,6 +1160,227 @@ begin
   );
 end $$;
 
+
+-- ---------------------------------------------------------------------------
+-- The administrator's authority actions
+--
+-- Deliberately last: the rollover changes every student's level and switches
+-- the active session, so nothing after it would be testing what it thinks.
+-- ---------------------------------------------------------------------------
+
+do $$
+declare
+  v_admin   uuid := '33333333-3333-3333-3333-333333333303';
+  v_session uuid := '11111111-1111-1111-1111-111111111111';
+  v_chidera uuid := '44444444-4444-4444-4444-444444444401'; -- 400
+  v_halima  uuid := '44444444-4444-4444-4444-444444444402'; -- 400
+  v_tunde   uuid := '44444444-4444-4444-4444-444444444403'; -- 300
+  v_next    uuid := gen_random_uuid();
+  v_dispute uuid;
+  v_result  text;
+  v_promoted   integer;
+  v_graduating integer;
+  v_was_final  integer;
+  v_was_junior integer;
+  v_ok      boolean;
+begin
+  -- ==== deactivate_student ====
+
+  begin
+    perform deactivate_student(v_chidera, null, 'withdrawn', 'Left the programme in October.');
+    v_ok := false;
+  exception when others then v_ok := true;
+  end;
+  perform assert_true(v_ok, 'a deactivation with no actor is refused');
+
+  begin
+    perform deactivate_student(v_chidera, v_admin, 'withdrawn', 'left');
+    v_ok := false;
+  exception when others then v_ok := true;
+  end;
+  perform assert_true(v_ok, 'a deactivation without a substantive note is refused');
+
+  perform assert_true(
+    deactivate_student(v_chidera, v_admin, 'withdrawn', 'Withdrew from the programme, letter on file.') = 'deactivated',
+    'the admin can deactivate a student'
+  );
+
+  perform assert_true(
+    (select status from students where id = v_chidera) = 'deactivated'
+      and (select deactivated_by from students where id = v_chidera) = v_admin,
+    'deactivating records who did it'
+  );
+
+  perform assert_true(
+    (select count(*) from session_scores where student_id = v_chidera) > 0,
+    'deactivating keeps their attendance history — it is a soft delete, not a delete'
+  );
+
+  perform assert_true(
+    (select count(*) from audit_log
+      where action = 'student.deactivate' and target_id = v_chidera::text) = 1,
+    'deactivating writes an audit row'
+  );
+
+  perform assert_true(
+    deactivate_student(v_chidera, v_admin, 'withdrawn', 'Trying the same thing twice over.') = 'already_deactivated',
+    'a deactivated student cannot be deactivated again'
+  );
+
+  perform assert_true(
+    reactivate_student(v_chidera, v_admin, 'Clerical error — wrong student was selected.') = 'reactivated',
+    'the admin can reverse a deactivation'
+  );
+
+  perform assert_true(
+    (select metadata->>'previous_reason' from audit_log
+      where action = 'student.reactivate' and target_id = v_chidera::text) = 'withdrawn',
+    'reactivating carries the old reason into the audit row before clearing it'
+  );
+
+  perform assert_true(
+    (select status from students where id = v_chidera) = 'active'
+      and (select deactivation_reason from students where id = v_chidera) is null,
+    'a reactivated student is active again with no deactivation reason left behind'
+  );
+
+  -- ==== resolve_registration_dispute ====
+
+  insert into registration_disputes (matric_no, academic_session_id, reporter_phone)
+  values ('CMP/2021/112', v_session, '+2348031234567')
+  returning id into v_dispute;
+
+  update whitelist_entries set claimed = true, claimed_by = v_halima, claimed_at = now()
+   where matric_no = 'CMP/2021/112' and academic_session_id = v_session;
+
+  begin
+    perform resolve_registration_dispute(v_dispute, v_admin, true, 'nope');
+    v_ok := false;
+  exception when others then v_ok := true;
+  end;
+  perform assert_true(v_ok, 'a registration dispute cannot be resolved without a substantive reason');
+
+  perform assert_true(
+    resolve_registration_dispute(v_dispute, v_admin, true, 'Impostor claim confirmed at the department office with student ID.') = 'revoked',
+    'the admin can revoke a fraudulent registration'
+  );
+
+  perform assert_true(
+    (select status from students where id = v_halima) = 'deactivated',
+    'revoking deactivates the claiming account'
+  );
+
+  perform assert_true(
+    (select claimed from whitelist_entries
+      where matric_no = 'CMP/2021/112' and academic_session_id = v_session) = false,
+    'revoking frees the register row, so the real student can register'
+  );
+
+  perform assert_true(
+    resolve_registration_dispute(v_dispute, v_admin, false, 'Trying to resolve it a second time.') = 'already_resolved',
+    'a resolved registration dispute cannot be resolved again'
+  );
+
+  -- Dismissal leaves the account alone but is still recorded.
+  insert into registration_disputes (matric_no, academic_session_id, reporter_phone)
+  values ('MTH/2022/018', v_session, '+2348039999999')
+  returning id into v_dispute;
+
+  perform assert_true(
+    resolve_registration_dispute(v_dispute, v_admin, false, 'Caller could not produce a student ID; claim stands.') = 'dismissed',
+    'the admin can dismiss a registration dispute'
+  );
+
+  perform assert_true(
+    (select status from students where id = v_tunde) <> 'deactivated',
+    'dismissing changes nothing about the account'
+  );
+
+  perform assert_true(
+    (select count(*) from audit_log
+      where action = 'registration.dispute_dismissed' and target_id = v_dispute::text) = 1,
+    'dismissing is written down too — a rejection with no record is asked about again'
+  );
+
+  perform assert_true(
+    (select count(*) from audit_log
+      where action = 'student.deactivate' and target_id = v_halima::text) = 1,
+    'revoking goes through deactivate_student, so the closure is recorded where anyone would look for it'
+  );
+
+  -- ==== run_level_rollover ====
+
+  perform reactivate_student(v_halima, v_admin, 'Restoring for the rollover assertions below.');
+
+  insert into academic_sessions (id, name, starts_on, ends_on, is_active)
+  values (v_next, '2026/2027', date '2026-09-14', date '2027-07-30', false);
+
+  begin
+    perform run_level_rollover(v_session, v_admin, 'Rolling a session into itself.');
+    v_ok := false;
+  exception when others then v_ok := true;
+  end;
+  perform assert_true(v_ok, 'a session cannot be rolled over into itself');
+
+  begin
+    perform run_level_rollover(v_next, null, 'End of the 2025/2026 session.');
+    v_ok := false;
+  exception when others then v_ok := true;
+  end;
+  perform assert_true(v_ok, 'a rollover with no actor is refused');
+
+  -- Counted rather than hardcoded: earlier assertions in this suite add
+  -- students, and a fixed number here would break on that rather than on
+  -- anything to do with the rollover.
+  select count(*) filter (where level = 400), count(*) filter (where level < 400)
+    into v_was_final, v_was_junior
+  from students where status = 'active';
+
+  select promoted, graduating into v_promoted, v_graduating
+  from run_level_rollover(v_next, v_admin, 'End of the 2025/2026 session, senate minute 14.');
+
+  perform assert_true(
+    v_graduating = v_was_final and v_promoted = v_was_junior and v_was_final > 0 and v_was_junior > 0,
+    'the 400s graduate and everyone else moves up — counted before the promotion, not after'
+  );
+
+  perform assert_true(
+    (select level from students where id = v_tunde) = 400,
+    'a 300-level student is now 400 level'
+  );
+
+  perform assert_true(
+    (select status from students where id = v_chidera) = 'graduating'
+      and (select level from students where id = v_chidera) = 400,
+    'a 400-level student graduates rather than being promoted to a level that does not exist'
+  );
+
+  perform assert_true(
+    (select is_active from academic_sessions where id = v_next)
+      and not (select is_active from academic_sessions where id = v_session),
+    'the new session becomes the current one in the same transaction'
+  );
+
+  perform assert_true(
+    (select state from compliance_statuses
+      where student_id = v_tunde and academic_session_id = v_next) = 'uncleared',
+    'a continuing student starts the new session owing dues'
+  );
+
+  perform assert_true(
+    (select students_promoted from level_rollovers
+      where to_academic_session_id = v_next) = v_promoted,
+    'the rollover is recorded with its counts'
+  );
+
+  begin
+    perform run_level_rollover(v_next, v_admin, 'Running the very same rollover twice.');
+    v_ok := false;
+  exception when others then v_ok := true;
+  end;
+  perform assert_true(v_ok, 'the same rollover cannot be run twice — the second run would promote everyone again');
+end $$;
+
 -- The readable result. Every row here is an assertion that held; a failure
 -- would have aborted before reaching this point.
 select seq as "#", 'ok' as result, what as assertion from assertion_log order by seq;

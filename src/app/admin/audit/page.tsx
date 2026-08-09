@@ -2,10 +2,12 @@ import type { Metadata } from "next";
 import { AppShell } from "@/components/app-shell";
 import { DataTable, type Column } from "@/components/data-table";
 import { PageHeader } from "@/components/page-header";
-import { getAuditLog, type AuditEntry } from "@/lib/data/queries";
+import { loadAuditLog, type AuditEntry } from "@/lib/data/admin";
 import { formatDateTime } from "@/lib/format";
 
 export const metadata: Metadata = { title: "Audit log" };
+
+export const dynamic = "force-dynamic";
 
 /**
  * Immutable and append-only — no delete, no edit, enforced by a database
@@ -57,7 +59,7 @@ const columns: Column<AuditEntry>[] = [
 ];
 
 export default async function AuditLogPage() {
-  const entries = await getAuditLog();
+  const entries = await loadAuditLog();
 
   return (
     <AppShell role="admin">

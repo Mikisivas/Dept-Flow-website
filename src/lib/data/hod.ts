@@ -637,3 +637,72 @@ export async function loadDisputes(): Promise<AttendanceDispute[]> {
     };
   });
 }
+
+// ---------------------------------------------------------------------------
+// One student, in full
+// ---------------------------------------------------------------------------
+
+export type StudentRecord = {
+  standing: StudentStanding;
+  trail: Array<{
+    id: string;
+    action: string;
+    actor: string;
+    reason: string | null;
+    createdAt: string;
+  }>;
+};
+
+/**
+ * The HOD's view of a single student.
+ *
+ * Built from `loadStandings` rather than its own query, so the percentage on
+ * this page is the same number the at-risk list and the eligibility list show.
+ * Three screens computing the same figure three ways is how they end up
+ * disagreeing in front of the student it is about.
+ */
+export async function loadStudentRecord(matricNo: string): Promise<StudentRecord | null> {
+  await requireHod();
+  const db = createUserClient(await currentAccessToken());
+
+  const standings = await loadStandings(db);
+  const standing = standings.find(
+    (student) => student.matricNo.toUpperCase() === matricNo.toUpperCase(),
+  );
+  if (!standing) return null;
+
+  // Matched on the student's id, not their matric number. Audit rows record
+  // whichever key the action was about — a waiver row carries the waiver's id —
+  // so the student id in the metadata is the only field common to all of them.
+  const { data: rows } = await db
+    .from("audit_log")
+    .select("id, actor_id, action, reason, created_at, target_id, metadata")
+    .order("created_at", { ascending: false })
+    .limit(200);
+
+  const mine = (rows ?? []).filter(
+    (row) =>
+      row.target_id === standing.studentId ||
+      (row.metadata as { student_id?: string } | null)?.student_id === standing.studentId,
+  );
+
+  const actorIds = [...new Set(mine.map((row) => row.actor_id).filter(Boolean))];
+  const { data: people } = actorIds.length
+    ? await db.from("profiles").select("id, surname, first_name").in("id", actorIds)
+    : { data: [] };
+
+  const nameById = new Map(
+    (people ?? []).map((person) => [person.id, `${person.first_name} ${person.surname}`]),
+  );
+
+  return {
+    standing,
+    trail: mine.map((row) => ({
+      id: row.id,
+      action: row.action,
+      actor: row.actor_id ? (nameById.get(row.actor_id) ?? "Unknown account") : "Scheduled task",
+      reason: row.reason,
+      createdAt: row.created_at,
+    })),
+  };
+}

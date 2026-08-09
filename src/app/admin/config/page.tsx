@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
 import { AppShell } from "@/components/app-shell";
 import { PageHeader } from "@/components/page-header";
-import { getSystemConfig } from "@/lib/data/queries";
+import { loadSystemConfig } from "@/lib/data/admin";
 import { formatDate, naira } from "@/lib/format";
 
 export const metadata: Metadata = { title: "Configuration" };
+
+export const dynamic = "force-dynamic";
 
 /**
  * Every value here changes how the system treats every student, so each one is
@@ -13,7 +15,7 @@ export const metadata: Metadata = { title: "Configuration" };
  * as well as by this page's absence from their nav.
  */
 export default async function ConfigPage() {
-  const config = await getSystemConfig();
+  const config = await loadSystemConfig();
 
   return (
     <AppShell role="admin">
@@ -22,6 +24,16 @@ export default async function ConfigPage() {
         subtitle="Every change is confirmed and written to the audit log."
       />
 
+      {config.resumptionDate === null ? (
+        <p
+          role="alert"
+          className="mt-6 rounded-lg border border-danger bg-danger-tint p-4 text-[14px] leading-relaxed text-ink"
+        >
+          No dues period is set for the active session. Until one is, there is no day 0 to count
+          from — nobody enters the buffer, nobody locks, and the payment portal never closes.
+        </p>
+      ) : null}
+
       <section aria-labelledby="dues-heading" className="mt-6">
         <h2 id="dues-heading" className="text-[13px] font-semibold text-slate">
           Dues and the compliance window
@@ -29,12 +41,12 @@ export default async function ConfigPage() {
         <dl className="mt-3 divide-y divide-line overflow-hidden rounded-lg border border-line bg-surface">
           <Row
             label="Dues amount"
-            value={naira(config.duesAmountKobo)}
+            value={config.duesAmountKobo === null ? "Not set" : naira(config.duesAmountKobo)}
             detail="What every student is asked to pay this session."
           />
           <Row
             label="Resumption date"
-            value={formatDate(config.resumptionDate)}
+            value={config.resumptionDate === null ? "Not set" : formatDate(config.resumptionDate)}
             detail="Day 0. The provisional window is counted from here."
           />
           <Row
@@ -51,6 +63,34 @@ export default async function ConfigPage() {
             label="Grace window"
             value={`${config.graceWindowDays} days`}
             detail="Default length the HOD is offered when opening a grace period."
+          />
+        </dl>
+      </section>
+
+      <section aria-labelledby="rules-heading" className="mt-8">
+        <h2 id="rules-heading" className="text-[13px] font-semibold text-slate">
+          Eligibility and registration
+        </h2>
+        <dl className="mt-3 divide-y divide-line overflow-hidden rounded-lg border border-line bg-surface">
+          <Row
+            label="Exam eligibility threshold"
+            value={`${config.attendanceThresholdPct}%`}
+            detail="Counted attendance below this bars a student from the paper."
+          />
+          <Row
+            label="Credit unit cap"
+            value={`${config.maxCreditUnits} units`}
+            detail="Per semester, counting core, electives and carry-overs alike."
+          />
+          <Row
+            label="Checkpoint code lifetime"
+            value={`${config.tokenTtlSeconds} seconds`}
+            detail="How long an issued code stays valid. Short enough that it cannot usefully be sent to someone outside."
+          />
+          <Row
+            label="Timetable tolerance"
+            value={`${config.timetableToleranceMinutes} minutes`}
+            detail="How far from the scheduled slot a lecture may be opened before it counts as a reschedule."
           />
         </dl>
       </section>

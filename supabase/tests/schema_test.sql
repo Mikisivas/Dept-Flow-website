@@ -712,6 +712,82 @@ select assert_true(
 );
 
 -- ---------------------------------------------------------------------------
+-- Grace periods
+-- ---------------------------------------------------------------------------
+
+-- Grace suspends the consequence of being locked; it does not rewrite the
+-- state. Flipping locked students back to `uncleared` would destroy the record
+-- of who was locked, leaving revocation to guess who to re-lock, and would make
+-- a student under grace indistinguishable from one who never reached day 31.
+
+do $$
+declare
+  v_session uuid := '11111111-1111-1111-1111-111111111111';
+  v_hod     uuid := '33333333-3333-3333-3333-333333333302';
+  v_tunde   uuid := '44444444-4444-4444-4444-444444444403'; -- locked, level 300
+  v_grace   uuid;
+  v_count   integer;
+begin
+  perform assert_true(
+    is_attendance_locked(v_tunde, v_session),
+    'a locked student cannot record attendance'
+  );
+
+  select students_affected into v_count from grace_period_impact(v_session, 'department', null);
+  perform assert_true(v_count >= 1, 'the impact preview counts the locked students in scope');
+
+  v_grace := open_grace_period(v_session, 'department', null, current_date + 14,
+                               'Payment portal was unreachable for four days.', v_hod);
+
+  perform assert_true(
+    not is_attendance_locked(v_tunde, v_session),
+    'an open grace period lets a locked student record attendance again'
+  );
+
+  perform assert_true(
+    (select state from compliance_statuses
+      where student_id = v_tunde and academic_session_id = v_session) = 'locked',
+    'and it does so without rewriting the compliance state'
+  );
+
+  perform assert_true(
+    (select count(*) from audit_log where action = 'grace_period.opened') = 1,
+    'opening a grace period writes an audit row naming who and why'
+  );
+
+  perform assert_rejects(
+    format('select open_grace_period(%L, %L, 300, current_date + 7, %L, %L)',
+           v_session, 'level', 'A different reason entirely.', v_hod),
+    'a second grace period covering the same students is refused'
+  );
+
+  perform assert_rejects(
+    format('select revoke_grace_period(%L, %L, %L)', v_grace, v_hod, 'nope'),
+    'revoking without a substantive reason is refused'
+  );
+
+  perform assert_true(
+    revoke_grace_period(v_grace, v_hod, 'Portal is back up and confirmed working.'),
+    'the HOD can end a grace period early'
+  );
+
+  perform assert_true(
+    is_attendance_locked(v_tunde, v_session),
+    'revoking re-applies the lock immediately — nothing had to be undone'
+  );
+
+  perform assert_true(
+    not revoke_grace_period(v_grace, v_hod, 'Trying to revoke the same one twice.'),
+    'revoking an already-revoked period is a no-op rather than a second audit row'
+  );
+
+  perform assert_true(
+    (select count(*) from audit_log where action = 'grace_period.revoked') = 1,
+    'exactly one revocation is recorded'
+  );
+end $$;
+
+-- ---------------------------------------------------------------------------
 -- Course registration
 -- ---------------------------------------------------------------------------
 

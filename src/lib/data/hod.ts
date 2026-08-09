@@ -402,3 +402,94 @@ export async function loadEligibilityList(courseId?: string): Promise<Eligibilit
     authorizedAt: list?.status === "authorized" ? (list.authorized_at ?? null) : null,
   };
 }
+
+export type GracePeriodRecord = {
+  id: string;
+  scope: string;
+  expiresOn: string;
+  reason: string;
+  grantedBy: string;
+  grantedAt: string;
+  studentsAffected: number;
+  revokedAt: string | null;
+};
+
+export type GraceScreen = {
+  active: GracePeriodRecord | null;
+  history: GracePeriodRecord[];
+  impact: { lockedStudents: number; sessionsWaiting: number };
+  levelCounts: Record<string, number>;
+};
+
+function scopeLabel(scope: string, level: number | null): string {
+  return scope === "department" ? "The whole department" : `Level ${level} only`;
+}
+
+export async function loadGraceScreen(): Promise<GraceScreen> {
+  await requireHod();
+  const db = createUserClient(await currentAccessToken());
+
+  const { data: session } = await db
+    .from("academic_sessions")
+    .select("id")
+    .eq("is_active", true)
+    .single();
+
+  const [{ data: periods }, { data: locked }, { data: waiting }] = await Promise.all([
+    db
+      .from("grace_periods")
+      .select(
+        "id, scope, level, expires_on, reason, granted_at, students_affected, revoked_at, profiles:granted_by(surname, first_name)",
+      )
+      .eq("academic_session_id", session?.id ?? "")
+      .order("granted_at", { ascending: false }),
+    db
+      .from("compliance_statuses")
+      .select("student_id, students(level)")
+      .eq("academic_session_id", session?.id ?? "")
+      .eq("state", "locked"),
+    db.from("session_scores").select("student_id, score").eq("status", "provisional"),
+  ]);
+
+  const lockedIds = new Set((locked ?? []).map((row) => row.student_id));
+
+  // Only the marks belonging to locked students. The total across everyone
+  // would be a bigger, more persuasive number and would not be the one the
+  // HOD is deciding about.
+  const sessionsWaiting = (waiting ?? [])
+    .filter((row) => lockedIds.has(row.student_id))
+    .reduce((sum, row) => sum + Number(row.score), 0);
+
+  const levelCounts: Record<string, number> = { "100": 0, "200": 0, "300": 0, "400": 0 };
+  for (const row of locked ?? []) {
+    const student = one(row.students as unknown as { level: number });
+    const key = String(student?.level ?? "");
+    if (key in levelCounts) levelCounts[key] += 1;
+  }
+
+  const today = new Date().toISOString().slice(0, 10);
+
+  const records: GracePeriodRecord[] = (periods ?? []).map((row) => {
+    const person = one(row.profiles as unknown as { surname: string; first_name: string });
+    return {
+      id: row.id,
+      scope: scopeLabel(row.scope, row.level),
+      expiresOn: row.expires_on,
+      reason: row.reason,
+      grantedBy: person ? `${person.first_name} ${person.surname}` : "—",
+      grantedAt: row.granted_at,
+      studentsAffected: row.students_affected,
+      revokedAt: row.revoked_at,
+    };
+  });
+
+  const active =
+    records.find((record) => !record.revokedAt && record.expiresOn >= today) ?? null;
+
+  return {
+    active,
+    history: records.filter((record) => record.id !== active?.id),
+    impact: { lockedStudents: lockedIds.size, sessionsWaiting: Math.round(sessionsWaiting) },
+    levelCounts,
+  };
+}

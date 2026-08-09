@@ -21,9 +21,10 @@ supabase/
     ..._function_grants.sql          stop PostgREST publishing the functions
     ..._venue_directory.sql          venue names without venue coordinates
     ..._course_registration.sql      core/elective/carry-over, and the credit cap
+    ..._grace_periods.sql            opening and revoking, with the audit trail
   seed.sql                           development data
   seed_today.sql                     a class on today's weekday, for testing
-  tests/schema_test.sql              97 assertions
+  tests/schema_test.sql              108 assertions
 ```
 
 ## Running it

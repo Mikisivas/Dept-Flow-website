@@ -1,12 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { ShieldAlert } from "lucide-react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import type { GracePeriodRecord } from "@/lib/data/queries";
+import type { GracePeriodRecord } from "@/lib/data/hod";
 import { formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -36,7 +37,45 @@ export function GraceControl({
   const [level, setLevel] = useState("400");
   const [expiresOn, setExpiresOn] = useState("");
   const [error, setError] = useState<string | null>(null);
+  /** Kept apart from `error`: one is about this field, the other about the request. */
+  const [dateError, setDateError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
+  const [revoking, setRevoking] = useState(false);
+  const [working, setWorking] = useState(false);
+  const router = useRouter();
+
+  /**
+   * Both directions go through the same endpoint, and neither decides
+   * anything: the database refuses an overlapping period, a date in the past,
+   * or a reason too short to be one, and its sentence is what appears here.
+   */
+  async function send(payload: Record<string, unknown>) {
+    setWorking(true);
+    setError(null);
+
+    try {
+      const response = await fetch("/api/hod/grace", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const body = await response.json();
+
+      if (!response.ok) {
+        setError(body.error ?? "That didn't work.");
+        setWorking(false);
+        return false;
+      }
+
+      router.refresh();
+      setWorking(false);
+      return true;
+    } catch {
+      setError("No connection. Nothing was changed.");
+      setWorking(false);
+      return false;
+    }
+  }
 
   const affected = scope === "department" ? impact.lockedStudents : (levelCounts[level] ?? 0);
   const sessionsWaiting =
@@ -53,8 +92,57 @@ export function GraceControl({
         </p>
         <p className="mt-2 text-[15px] leading-relaxed text-slate">
           {active.scope}, until{" "}
-          <strong className="font-semibold text-ink">{formatDate(active.expiresOn)}</strong>.
+          <strong className="font-semibold text-ink">{formatDate(active.expiresOn)}</strong>.{" "}
+          <span className="tabular">{active.studentsAffected}</span> students were locked when it
+          was opened.
         </p>
+        <p className="mt-2 text-[14px] leading-relaxed text-slate">{active.reason}</p>
+        <p className="mt-1 text-[12px] text-muted">
+          Opened by {active.grantedBy} on {formatDate(active.grantedAt)}
+        </p>
+
+        {error ? (
+          <p role="alert" className="mt-3 text-[14px] font-medium text-danger">
+            {error}
+          </p>
+        ) : null}
+
+        <Button
+          variant="secondary"
+          className="mt-4"
+          onClick={() => setRevoking(true)}
+          aria-disabled={working}
+        >
+          End it early
+        </Button>
+
+        {/* Ending early re-locks everyone it was covering, so it demands the
+            same reason and writes the same kind of audit row as opening it. */}
+        <ConfirmDialog
+          open={revoking}
+          onOpenChange={setRevoking}
+          variant="destructive"
+          title="End this grace period now?"
+          description={
+            <>
+              Students it covers go back to being locked out of recording attendance immediately.
+              Nothing already recorded is lost.
+            </>
+          }
+          impact={[
+            { label: "Scope", value: active.scope },
+            { label: "Was due to end", value: formatDate(active.expiresOn) },
+            { label: "Students affected", value: String(active.studentsAffected) },
+          ]}
+          reasonLabel="Why is it ending early?"
+          reasonHint="Required. Senior staff can see who ended this and why."
+          confirmLabel="End grace period"
+          working={working}
+          onConfirm={async (reason) => {
+            await send({ action: "revoke", graceId: active.id, reason });
+            setRevoking(false);
+          }}
+        />
       </section>
     );
   }
@@ -70,6 +158,15 @@ export function GraceControl({
           sessions waiting to be counted.
         </p>
       </section>
+
+      {error ? (
+        <p
+          role="alert"
+          className="mt-4 rounded-lg border border-danger bg-danger-tint p-4 text-[15px] text-ink"
+        >
+          {error}
+        </p>
+      ) : null}
 
       <section className="mt-6 flex flex-col gap-5">
         <fieldset>
@@ -121,7 +218,7 @@ export function GraceControl({
           label="Open until"
           htmlFor="expires"
           hint="Attendance access returns immediately and ends at the close of this day."
-          error={error ?? undefined}
+          error={dateError ?? undefined}
         >
           <Input
             type="date"
@@ -149,9 +246,10 @@ export function GraceControl({
           size="lg"
           onClick={() => {
             if (!expiresOn) {
-              setError("Choose the date the grace period ends.");
+              setDateError("Choose the date the grace period ends.");
               return;
             }
+            setDateError(null);
             setError(null);
             setConfirming(true);
           }}
@@ -205,7 +303,11 @@ export function GraceControl({
         ]}
         reasonHint="Required. Senior staff can see who granted this and why."
         confirmLabel="Open grace period"
-        onConfirm={() => setConfirming(false)}
+        working={working}
+        onConfirm={async (reason) => {
+          await send({ action: "open", scope, level: Number(level), expiresOn, reason });
+          setConfirming(false);
+        }}
       />
     </>
   );

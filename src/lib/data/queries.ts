@@ -172,46 +172,6 @@ export async function getNotifications(): Promise<NotificationItem[]> {
    Attendance
    --------------------------------------------------------------------------- */
 
-export type GracePeriodRecord = {
-  id: string;
-  scope: string;
-  expiresOn: string;
-  reason: string;
-  grantedBy: string;
-  grantedAt: string;
-  studentsAffected: number;
-};
-
-export async function getGracePeriods(): Promise<{
-  active: GracePeriodRecord | null;
-  history: GracePeriodRecord[];
-  impact: { lockedStudents: number; sessionsWaiting: number };
-}> {
-  return {
-    active: null,
-    history: [
-      {
-        id: "g1",
-        scope: "Level 400 only",
-        expiresOn: "2025-11-30",
-        reason: "Payment portal was unreachable for four days during the deadline week.",
-        grantedBy: "Dr Nnamdi Eze",
-        grantedAt: "2025-11-14",
-        studentsAffected: 96,
-      },
-    ],
-    impact: { lockedStudents: 143, sessionsWaiting: 1204 },
-  };
-}
-
-/* ---------------------------------------------------------------------------
-   Admin
-
-   Aggregate signals only. Individual student risk is HOD scope, and surfacing
-   it here would break separation of duties — the database refuses admin the
-   risk_predictions table for the same reason.
-   --------------------------------------------------------------------------- */
-
 export type AdminOverview = {
   byLevel: Array<{ level: number; cleared: number; provisional: number; locked: number }>;
   reconciliation: { failedWebhooks: number; unverified: number };

@@ -227,6 +227,21 @@ export async function loadStudentDashboard(): Promise<StudentDashboard> {
     };
   });
 
+  // The grace period the HOD actually opened, not the static column on
+  // dues_periods. Without this the HOD unlocks a level and the students it
+  // covers see nothing on the screen that told them they were locked.
+  const { data: grace } = await db
+    .from("grace_periods")
+    .select("expires_on, scope, level")
+    .eq("academic_session_id", activeSession.id)
+    .is("revoked_at", null)
+    .gte("expires_on", new Date().toISOString().slice(0, 10))
+    .order("expires_on", { ascending: false });
+
+  const covering = (grace ?? []).find(
+    (row) => row.scope === "department" || row.level === student.level,
+  );
+
   const today = await loadToday(db, session.profileId, courses);
 
   const { data: risk } = await db
@@ -255,7 +270,7 @@ export async function loadStudentDashboard(): Promise<StudentDashboard> {
       resumptionDate: resumption,
       // Day 30 of the provisional window, counted from resumption.
       deadline: new Date(new Date(resumption).getTime() + 30 * 86_400_000).toISOString(),
-      gracePeriodEnd: dues?.grace_period_end ?? null,
+      gracePeriodEnd: covering?.expires_on ?? dues?.grace_period_end ?? null,
     },
     courses,
     today,

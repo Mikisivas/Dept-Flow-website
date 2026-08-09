@@ -339,6 +339,36 @@ table needs a backfill, because a default that is right for new rows is wrong
 for old ones. `supabase/backfill_course_registration.sql` exists for exactly
 that and is documented in `setup.md`.
 
+## Grace periods
+
+A grace period is the HOD saying: for these students, start recording
+attendance again until this date, even though they have not paid. Locking is
+blunt and the cause is often not the student's — a bursary disburses late, a
+bank is down for three days — and those lectures cannot be attended
+retroactively.
+
+**It restores recording, not counting.** Marks come back provisional exactly as
+before. The student still has to pay for them to count towards the 75%. What
+the grace period buys is the chance not to lose the lectures while the money is
+sorted out.
+
+**It suspends the consequence rather than rewriting the state.** The obvious
+implementation — flip every locked student back to `uncleared` — is wrong
+twice: it destroys the record of who was locked, so revoking would have to
+guess who to re-lock, and it makes a student under grace indistinguishable from
+one who never reached day 31. Instead the state stays `locked` and
+`is_attendance_locked()` consults the grace period. Revocation is then
+immediate and needs no compensating update, because nothing was written to
+undo.
+
+**One at a time per scope.** Two overlapping periods make "when does this end"
+unanswerable, which is the only question a student inside one will ask.
+
+Opening and revoking are both authority actions: they confirm, demand a written
+reason, and write an audit row naming the actor. Enforced in the database
+functions rather than in the API, so the rule holds for anything that ever
+writes these tables.
+
 ## Palette
 
 `#FF9935`, eyedropped from the crest, superseding the `#F0952B` visual estimate

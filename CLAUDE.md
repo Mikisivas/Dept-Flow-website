@@ -114,11 +114,18 @@ screens — that order has held throughout.
 `fixtures.ts` holds only type definitions — two sources for one screen is how a
 demo quietly shows invented data.
 
-**Not built:** the scikit-learn advisory model, SMS delivery (the OTP seam
-throws in production), deployment.
+**The advisory signal is a computed rule, not scikit-learn.**
+`compute_risk_predictions()` carries a student's own attendance rate forward,
+per course, and the nightly job refreshes it. It is a rule because there is no
+history to train on — one session and three students is a training set to
+memorise, not learn from — and because a rule can tell a student *why* they were
+flagged. The table is the seam: swap the writer, change no reader. Advisory
+only, and `attendance_pct()` has never been allowed to consult it.
+
+**Not built:** SMS delivery (the OTP seam throws in production), deployment.
 
 **Checks:** `npm test` (12 Paystack + 33 account assertions, no
-network) and `supabase/tests/schema_test.sql` (197 assertions, run in the SQL
+network) and `supabase/tests/schema_test.sql` (205 assertions, run in the SQL
 Editor).
 `/api/health` is the first thing to open when something misbehaves: it reports
 **which migrations are missing by name**, which tables the signed-in user can

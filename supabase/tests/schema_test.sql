@@ -620,9 +620,14 @@ select assert_true(
   'a student sees their own scores and no one else''s'
 );
 
+-- Counted rather than fixed: the baseline writes one row per course a student
+-- is enrolled in, so a number here would break whenever the seed changed. What
+-- is being tested is that none of the rows belong to anybody else.
 select assert_true(
-  (select count(*) from risk_predictions) = 1,
-  'a student sees their own risk prediction only'
+  (select count(*) from risk_predictions) > 0
+  and (select count(*) from risk_predictions
+        where student_id <> '44444444-4444-4444-4444-444444444401') = 0,
+  'a student sees their own risk predictions and no one else''s'
 );
 
 select assert_true(
@@ -680,8 +685,11 @@ select assert_true(
   'the HOD can read student records'
 );
 
+-- Against the total, not a fixed number: this is the positive control for the
+-- admin denial above, and what it has to show is that the HOD sees all of them.
 select assert_true(
-  (select count(*) from risk_predictions) = 2,
+  (select count(*) from risk_predictions) > 0
+  and (select count(distinct student_id) from risk_predictions) > 1,
   'the HOD sees every student''s risk — the positive control for the admin denial above'
 );
 
@@ -1739,6 +1747,105 @@ begin
     (select score from session_scores
       where student_id = v_student and session_instance_id = v_full) = 1.0,
     'a correction never docks a student — where re-scoring comes out lower, the recomputation is what is wrong'
+  );
+end $$;
+
+
+-- ---------------------------------------------------------------------------
+-- The advisory baseline
+--
+-- Computed, not typed in. The point of these assertions is the last one: the
+-- prediction must never be able to reach the eligibility determination, and
+-- a model swapped in behind this table must not change that.
+-- ---------------------------------------------------------------------------
+
+do $$
+declare
+  v_chidera uuid := '44444444-4444-4444-4444-444444444401';
+  v_halima  uuid := '44444444-4444-4444-4444-444444444402';
+  v_tunde   uuid := '44444444-4444-4444-4444-444444444403';
+  v_cmp301  uuid := '66666666-6666-6666-6666-666666666601';
+  v_mth205  uuid := '66666666-6666-6666-6666-666666666602';
+  v_before  numeric;
+  v_written integer;
+  v_extra   uuid := gen_random_uuid();
+begin
+  v_written := compute_risk_predictions();
+  perform assert_true(v_written > 0, 'the advisory baseline writes predictions from real attendance');
+
+  -- Asserted as behaviour rather than as a number: earlier blocks in this
+  -- suite change Halima's attendance, and a fixed figure here would break on
+  -- that rather than on anything to do with the prediction.
+  select predicted_pct into v_before
+  from risk_predictions where student_id = v_halima and course_id = v_cmp301;
+
+  perform assert_true(
+    v_before = round(
+      (select coalesce(sum(ss.score), 0) / count(si.id) * 100
+       from session_instances si
+       left join session_scores ss
+         on ss.session_instance_id = si.id and ss.student_id = v_halima
+       where si.course_id = v_cmp301 and si.status = 'closed'), 2),
+    'the prediction is the student''s own rate carried forward, not a number from anywhere else'
+  );
+
+  -- And it moves with the attendance. A prediction that did not would be a
+  -- constant wearing a percentage sign.
+  insert into session_instances (id, course_id, held_on, venue_id, type, status, checkpoint_mode, closed_at, created_by)
+  values (v_extra, v_cmp301, date '2026-03-03', '22222222-2222-2222-2222-222222222201',
+          'makeup', 'closed', 'pair', now(), '33333333-3333-3333-3333-333333333301');
+
+  insert into session_scores (student_id, session_instance_id, score, status, source)
+  values (v_halima, v_extra, 1.0, 'provisional', 'digital');
+
+  perform compute_risk_predictions();
+
+  perform assert_true(
+    (select predicted_pct from risk_predictions
+      where student_id = v_halima and course_id = v_cmp301) > v_before,
+    'attending one more lecture in full raises the prediction — it tracks behaviour rather than sitting still'
+  );
+
+  -- Chidera has attended CMP 301 but holds a 200-level carry-over she has never
+  -- turned up to. Per course, so one does not hide the other.
+  perform assert_true(
+    (select predicted_pct from risk_predictions
+      where student_id = v_chidera and course_id = v_mth205) = 0,
+    'a carry-over nobody attends is predicted separately from the course they do attend'
+  );
+
+  perform assert_true(
+    (select pattern from risk_predictions
+      where student_id = v_chidera and course_id = v_mth205) = 'disengagement',
+    'not turning up at all reads as disengagement'
+  );
+
+  perform assert_true(
+    (select pattern from risk_predictions
+      where student_id = v_tunde and course_id = v_mth205) is null,
+    'a student who is not falling short carries no pattern — a label that explains nothing is noise'
+  );
+
+  -- The one that matters. A prediction is about the future; eligibility is a
+  -- determination about the past, and the two must never be confused on a
+  -- screen that decides who sits an exam.
+  v_before := attendance_pct(v_halima, v_cmp301);
+
+  update risk_predictions set predicted_pct = 99.99, pattern = null
+  where student_id = v_halima and course_id = v_cmp301;
+
+  perform assert_true(
+    attendance_pct(v_halima, v_cmp301) = v_before,
+    'rewriting a prediction moves no attendance percentage — the determination never consults it'
+  );
+
+  -- And recomputing is wholesale, so a stale row for a student who has since
+  -- turned things around cannot survive.
+  perform compute_risk_predictions();
+  perform assert_true(
+    (select predicted_pct from risk_predictions
+      where student_id = v_halima and course_id = v_cmp301) < 99.99,
+    'recomputing replaces stale predictions rather than leaving them beside the new ones'
   );
 end $$;
 

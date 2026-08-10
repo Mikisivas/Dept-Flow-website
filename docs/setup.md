@@ -26,7 +26,7 @@ how to point the geo-fence at wherever you are actually testing from.
 
 To confirm it worked, paste
 [`supabase/tests/schema_test.sql`](../supabase/tests/schema_test.sql) and run
-it. It returns a grid of 197 assertions — one row each, in plain English — then
+it. It returns a grid of 205 assertions — one row each, in plain English — then
 rolls back, changing nothing. A failure aborts with the assertion that broke.
 
 The SQL Editor may warn that a transaction is already in progress. That is

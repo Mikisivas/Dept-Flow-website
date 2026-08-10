@@ -180,16 +180,6 @@ begin
 end $$;
 
 -- ---------------------------------------------------------------------------
--- Advisory risk signals
--- ---------------------------------------------------------------------------
-
--- Second-order only. The HOD's at-risk list reads these; the authoritative
--- eligibility determination never does.
-insert into risk_predictions (student_id, course_id, predicted_pct, pattern) values
-  ('44444444-4444-4444-4444-444444444401', '66666666-6666-6666-6666-666666666601', 58.00, 'partial_attendance'),
-  ('44444444-4444-4444-4444-444444444402', '66666666-6666-6666-6666-666666666601', 44.00, 'disengagement');
-
--- ---------------------------------------------------------------------------
 -- Enough for every screen to have something on it
 -- ---------------------------------------------------------------------------
 
@@ -324,5 +314,20 @@ begin
     end if;
   end loop;
 end $$;
+
+-- ---------------------------------------------------------------------------
+-- Advisory risk signals
+-- ---------------------------------------------------------------------------
+
+-- Second-order only. The HOD's at-risk list reads these; the authoritative
+-- eligibility determination never does.
+--
+-- Computed rather than written out. These used to be two numbers typed in by
+-- hand, which meant the at-risk list showed figures with no relationship to the
+-- attendance beside them — and which would not have moved if a student's did.
+--
+-- Last in the file, and it has to be: it reads every lecture and every mark, so
+-- running it before the sections above would predict from half a term.
+select compute_risk_predictions();
 
 commit;

@@ -40,6 +40,10 @@ Come back and the same ten sessions now read **76.92%**. Nothing was added.
 Thirteen provisional scores were confirmed in one transaction, and she crossed
 the 75% line without attending anything further.
 
+Scroll down. Her **MTH 205 is still 0%** — a 200-level course she is carrying
+and has never attended. Eligibility is per course, not per student: paying
+fixed the course she turned up to and did nothing for the one she did not.
+
 ---
 
 ## 2. A lecture, start to finish
@@ -133,9 +137,13 @@ Log in as the **admin** (`STF/ADM/007`).
 
 Say so rather than being asked.
 
-- **The scikit-learn advisory model.** The schema and screens carry it as
-  advisory only, and the projection is hidden rather than invented — the
-  eligibility determination has never been allowed to consult it.
+- **A trained model.** The advisory signal is computed — a student's own
+  attendance rate carried forward, per course — rather than fitted. Say why if
+  asked: the department has one session of history, and a classifier trained on
+  three students has memorised them rather than learned anything. The rule also
+  has the property a first-deployment model could not: a student flagged by it
+  can be told exactly why. `risk_predictions` is the seam, and swapping the
+  writer changes no reader.
 - **SMS delivery.** The OTP seam throws in production; in development the code
   is printed to the server terminal. Registration and password reset are
   otherwise complete.

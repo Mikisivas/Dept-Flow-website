@@ -665,6 +665,41 @@ It is `SECURITY DEFINER` because it reads the catalog, and granted to
 `service_role` alone. It takes no arguments, so there is nothing to point at
 another user's data.
 
+## The paper register
+
+The one route into attendance with no token, no geo-fence and no device check
+behind it. A lecturer transcribing a sign-in sheet can mark anybody present, so
+what makes it a monitored path rather than a silent backdoor is that it leaves
+a trail nobody has to remember to leave.
+
+**The batch row is created before any score.** Every mark it writes carries
+`manual_batch_id` and `source = 'manually_entered'`, so a paper mark can always
+be told apart from one a student submitted. A manually-entered score with no
+batch behind it would be an untraceable mark, which is the thing the table
+exists to prevent — so the order is not incidental.
+
+**It asks for twenty characters of justification, not ten.** The HOD reads this
+one while deciding whether a lecturer is leaning on the paper route, and
+"network" is not an account of anything.
+
+**A paper mark is gated on dues exactly like a digital one.** A transcription
+for an unpaid student stays provisional. The fallback exists for the network,
+not for the money.
+
+**Everyone in the batch must be enrolled in the course.** Without the check a
+mistyped id awards attendance on a course the student never took, and it would
+surface at the exam board.
+
+**Transcribing closes the lecture**, so the digital path cannot later overwrite
+the sheet.
+
+`resolve_session_score` gained an optional score override rather than the
+manual path getting its own writer: the rule deciding whether a score lands
+confirmed or provisional lives in one place, and two copies of it would drift.
+Adding the parameter meant dropping the old four-argument version explicitly —
+a `create or replace` with a new parameter creates an overload, and every
+existing two-argument call would then fail as ambiguous.
+
 ## Palette
 
 `#FF9935`, eyedropped from the crest, superseding the `#F0952B` visual estimate

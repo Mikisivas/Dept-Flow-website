@@ -6,6 +6,8 @@ import { loadSessionRoster } from "@/lib/data/lecturer";
 import { formatDateShort } from "@/lib/format";
 import { ManualBatch } from "./manual-batch";
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Paper register",
 };
@@ -25,7 +27,12 @@ export default async function ManualBatchPage({ params }: { params: Promise<{ id
         subtitle="Copy the two columns from your sign-in sheet."
       />
       <div className="mt-6">
-        <ManualBatch roster={roster} courseCode={courseCode} heldOn={formatDateShort(heldOn)} />
+        <ManualBatch
+          sessionInstanceId={id}
+          roster={roster}
+          courseCode={courseCode}
+          heldOn={formatDateShort(heldOn)}
+        />
       </div>
     </AppShell>
   );

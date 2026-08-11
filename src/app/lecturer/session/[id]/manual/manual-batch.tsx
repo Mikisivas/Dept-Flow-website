@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { TriangleAlert } from "lucide-react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { StickyActionBar } from "@/components/sticky-action-bar";
@@ -24,20 +25,57 @@ import { cn } from "@/lib/utils";
  */
 
 export function ManualBatch({
+  sessionInstanceId,
   roster,
   courseCode,
   heldOn,
 }: {
+  sessionInstanceId: string;
   roster: RosterEntry[];
   courseCode: string;
   heldOn: string;
 }) {
+  const router = useRouter();
   const [marks, setMarks] = useState<Record<string, { one: boolean; two: boolean }>>(() =>
     Object.fromEntries(roster.map((entry) => [entry.studentId, { one: false, two: false }])),
   );
   const [note, setNote] = useState("");
   const [noteTouched, setNoteTouched] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [working, setWorking] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit(justification: string) {
+    setWorking(true);
+    setError(null);
+
+    try {
+      const response = await fetch(`/api/lecturer/sessions/${sessionInstanceId}/manual`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          justification,
+          marks: scored.map((row) => ({ studentId: row.entry.studentId, score: row.score })),
+        }),
+      });
+      const result = await response.json();
+
+      if (!response.ok) {
+        setError(result.error ?? "That did not go through. Try again.");
+        return;
+      }
+
+      setConfirming(false);
+      // Back to the session, and re-read: the transcription closed the lecture
+      // and the scores it wrote are now the record.
+      router.push(`/lecturer/session/${sessionInstanceId}`);
+      router.refresh();
+    } catch {
+      setError("Could not reach the server. Check the connection and try again.");
+    } finally {
+      setWorking(false);
+    }
+  }
 
   function toggle(studentId: string, which: "one" | "two") {
     setMarks((current) => ({
@@ -53,7 +91,9 @@ export function ManualBatch({
 
   const withMarks = scored.filter((row) => row.score > 0);
   const total = scored.reduce((sum, row) => sum + row.score, 0);
-  const noteMissing = note.trim().length < 10;
+  // Twenty, matching what the database demands. Ten would let a note through
+  // here and have the server reject it, which reads as the button being broken.
+  const noteMissing = note.trim().length < 20;
 
   return (
     <div className="flex flex-col gap-6">
@@ -134,7 +174,9 @@ export function ManualBatch({
         htmlFor="justification"
         hint="Required, and recorded in the audit log. The HOD reads this."
         error={
-          noteTouched && noteMissing ? "Give a real explanation — at least a sentence." : undefined
+          noteTouched && noteMissing
+            ? "Give a real explanation — at least a sentence. The HOD reads this."
+            : undefined
         }
       >
         <textarea
@@ -167,7 +209,10 @@ export function ManualBatch({
 
       <ConfirmDialog
         open={confirming}
-        onOpenChange={setConfirming}
+        onOpenChange={(open) => {
+          setConfirming(open);
+          if (!open) setError(null);
+        }}
         title={`Submit ${withMarks.length} paper entries for ${courseCode}?`}
         description={
           <>
@@ -181,10 +226,20 @@ export function ManualBatch({
           { label: "Marks awarded", value: formatScore(total) },
           { label: "Not marked", value: String(roster.length - withMarks.length) },
         ]}
-        reasonLabel="Confirm your justification"
-        reasonHint="This is what the HOD sees next to the batch."
+        extra={
+          <div className="rounded-md border border-line bg-surface-sunken p-3">
+            <p className="text-[12px] text-muted">What the HOD will see</p>
+            <p className="mt-1 text-[14px] leading-relaxed text-ink">{note.trim()}</p>
+          </div>
+        }
+        // Not asked for a second time: the justification is the field on the
+        // page, beside the warning that explains why it is needed. Asking again
+        // here meant the first one was typed and then thrown away.
+        requireReason={false}
+        error={error}
+        working={working}
         confirmLabel="Submit paper entries"
-        onConfirm={() => setConfirming(false)}
+        onConfirm={() => submit(note.trim())}
       />
     </div>
   );

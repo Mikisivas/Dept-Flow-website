@@ -589,7 +589,7 @@ select assert_true(
 );
 
 select assert_true(
-  not has_function_privilege('anon', 'resolve_session_score(uuid, uuid, score_source, uuid)', 'execute'),
+  not has_function_privilege('anon', 'resolve_session_score(uuid, uuid, score_source, uuid, numeric)', 'execute'),
   'nobody but the API can score a session'
 );
 
@@ -1849,6 +1849,127 @@ begin
   );
 end $$;
 
+
+-- ---------------------------------------------------------------------------
+-- The paper register
+--
+-- The one route with no token, no geo-fence and no device check behind it, so
+-- what is asserted here is mostly what it refuses.
+-- ---------------------------------------------------------------------------
+
+do $$
+declare
+  v_lect    uuid := '33333333-3333-3333-3333-333333333301';
+  v_hod     uuid := '33333333-3333-3333-3333-333333333302';
+  v_cmp301  uuid := '66666666-6666-6666-6666-666666666601';
+  v_venue   uuid := '22222222-2222-2222-2222-222222222201';
+  v_chidera uuid := '44444444-4444-4444-4444-444444444401';  -- unpaid
+  v_halima  uuid := '44444444-4444-4444-4444-444444444402';  -- cleared
+  -- Created here rather than borrowed: earlier blocks in this suite enrol the
+  -- seeded students in extra courses, so "not enrolled" has to be guaranteed
+  -- rather than assumed.
+  v_outsider uuid := gen_random_uuid();
+  v_inst    uuid := gen_random_uuid();
+  v_batch   uuid;
+  v_n       integer;
+  v_ok      boolean;
+begin
+  insert into profiles (id, role, surname, first_name, phone)
+  values (v_outsider, 'student', 'Outside', 'Course', '+2348057777777');
+  insert into students (id, matric_no, level) values (v_outsider, 'STA/2021/333', 300);
+
+  insert into session_instances (id, course_id, held_on, venue_id, type, status, checkpoint_mode, created_by)
+  values (v_inst, v_cmp301, current_date, v_venue, 'makeup', 'open', 'pair', v_lect);
+
+  begin
+    perform submit_manual_batch(v_inst, v_lect, 'network down',
+      jsonb_build_array(jsonb_build_object('student_id', v_chidera, 'score', 1.0)));
+    v_ok := false;
+  exception when others then v_ok := true;
+  end;
+  perform assert_true(v_ok, 'a paper batch needs a real account of why, not one word');
+
+  begin
+    perform submit_manual_batch(v_inst, v_hod, 'The network was down in the hall for the whole hour.',
+      jsonb_build_array(jsonb_build_object('student_id', v_chidera, 'score', 1.0)));
+    v_ok := false;
+  exception when others then v_ok := true;
+  end;
+  perform assert_true(v_ok, 'only the course''s own lecturer can enter a paper register for it');
+
+  begin
+    perform submit_manual_batch(v_inst, v_lect, 'The network was down in the hall for the whole hour.',
+      jsonb_build_array(jsonb_build_object('student_id', v_outsider, 'score', 1.0)));
+    v_ok := false;
+  exception when others then v_ok := true;
+  end;
+  perform assert_true(v_ok, 'a student not enrolled in the course cannot be marked present in it');
+
+  select recorded, batch_id into v_n, v_batch
+  from submit_manual_batch(v_inst, v_lect,
+    'The network was down in Lecture Theatre A for the whole hour; register taken on paper.',
+    jsonb_build_array(
+      jsonb_build_object('student_id', v_chidera, 'score', 1.0),
+      jsonb_build_object('student_id', v_halima,  'score', 0.5)
+    ));
+
+  perform assert_true(v_n = 2, 'the batch records every student marked present');
+  perform assert_true(v_batch is not null, 'and returns the batch it created');
+
+  perform assert_true(
+    (select count(*) from session_scores
+      where manual_batch_id = v_batch and source = 'manually_entered') = 2,
+    'every score it wrote is traceable to the batch and tagged as paper'
+  );
+
+  -- Compared against each student's actual compliance rather than against a
+  -- fixed expectation: earlier blocks in this suite clear students, and what is
+  -- being tested is the rule, not who happens to have paid by now.
+  perform assert_true(
+    not exists (
+      select 1
+      from session_scores ss
+      left join compliance_statuses cs
+        on cs.student_id = ss.student_id
+       and cs.academic_session_id = '11111111-1111-1111-1111-111111111111'
+      where ss.session_instance_id = v_inst
+        and ss.status <> (case when cs.state = 'cleared' then 'confirmed' else 'provisional' end)::score_status
+    ),
+    'a paper mark is gated on dues exactly like a digital one — the fallback is for the network, not the money'
+  );
+
+  perform assert_true(
+    (select score from session_scores where student_id = v_halima and session_instance_id = v_inst) = 0.5,
+    'the transcribed score is what is stored — there are no checkpoint marks to derive it from'
+  );
+
+  perform assert_true(
+    (select status from session_instances where id = v_inst) = 'closed',
+    'the lecture is closed by the act of transcribing it, so the digital path cannot overwrite the sheet'
+  );
+
+  perform assert_true(
+    (select count(*) from audit_log
+      where action = 'manual_batch.submit' and target_id = v_batch::text) = 1,
+    'the batch is audited — this is the route with no geo-fence behind it'
+  );
+
+  -- The whole point of the batch row: the HOD's oversight screen counts them.
+  perform assert_true(
+    (select count(*) from manual_attendance_batches
+      where session_instance_id = v_inst and submitted_by = v_lect) = 1,
+    'the HOD''s lecturer oversight can see it, which is what makes this a monitored path'
+  );
+
+  begin
+    perform submit_manual_batch(v_inst, v_lect, 'Trying to award a score that is not on the scale.',
+      jsonb_build_array(jsonb_build_object('student_id', v_chidera, 'score', 0.75)));
+    v_ok := false;
+  exception when others then v_ok := true;
+  end;
+  perform assert_true(v_ok, 'a score is 0, 0.5 or 1.0 — a paper entry cannot invent one between');
+end $$;
+
 -- ---------------------------------------------------------------------------
 -- Security posture
 --
@@ -1914,7 +2035,8 @@ begin
       'resolve_registration_dispute', 'run_level_rollover', 'cancel_session',
       'schedule_makeup', 'reschedule_session', 'authorize_eligibility_list',
       'advance_compliance_states', 'write_audit', 'notify_enrolled',
-      'resolve_session_score', 'enrol_in_core_courses'
+      'resolve_session_score', 'enrol_in_core_courses',
+      'submit_manual_batch', 'compute_risk_predictions', 'dept_flow_schema_report'
     )
     and (
       has_function_privilege('authenticated', p.oid, 'execute')

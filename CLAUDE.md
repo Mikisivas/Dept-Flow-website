@@ -106,7 +106,7 @@ screens — that order has held throughout.
 | Dues | Paystack redirect → verify → `clear_student()` flips compliance and confirms every provisional score. |
 | Course registration | Admin uploads the list; students pick electives and carry-overs against a 24-unit cap. |
 | HOD | Overview, at-risk list, exam eligibility (authorizing snapshots and freezes the list), grace periods, waivers, disputes, the per-student record and lecturer oversight. |
-| Admin | Overview, students (deactivate and reverse it), payments, the register (preview-then-commit upload), registration disputes, timetable, configuration, audit log, level rollover. |
+| Admin | Overview, students (deactivate and reverse it), payments, the register and the timetable (both preview-then-commit uploads), courses, registration disputes, configuration, audit log, level rollover. |
 | Lecturer | Dashboard, schedule (cancel, reschedule, add a makeup — each notifies every enrolled student), course list, paper register. |
 | Student | Dashboard, course detail, notifications, password reset, and changing their own password or phone number. |
 
@@ -124,7 +124,7 @@ only, and `attendance_pct()` has never been allowed to consult it.
 
 **Not built:** SMS delivery (the OTP seam throws in production), deployment.
 
-**Checks:** `npm test` (12 Paystack + 33 account assertions, no
+**Checks:** `npm test` (12 Paystack + 33 account + 28 timetable assertions, no
 network) and `supabase/tests/schema_test.sql` (217 assertions, run in the SQL
 Editor).
 `/api/health` is the first thing to open when something misbehaves: it reports

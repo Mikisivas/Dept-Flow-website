@@ -4,6 +4,15 @@ import { redirect } from "next/navigation";
 import { createServiceClient, createUserClient } from "@/lib/supabase/client";
 import { currentAccessToken, currentUser } from "@/lib/auth/current-user";
 import type { SessionClaims } from "@/lib/auth/session";
+import { weekdayName } from "@/lib/data/weekdays";
+import {
+  parseTimetableCsv,
+  slotKey,
+  type TimetableUploadRow,
+} from "@/lib/timetable-csv";
+
+export { weekdayName };
+export type { TimetableUploadRow };
 
 /**
  * What the administrator sees, read as the administrator.
@@ -526,12 +535,6 @@ export type TimetableRow = {
   lecturer: string | null;
 };
 
-const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-
-export function weekdayName(dayOfWeek: number): string {
-  return WEEKDAYS[dayOfWeek] ?? "—";
-}
-
 /**
  * The recurring weekly baseline, not a list of dates.
  *
@@ -648,17 +651,25 @@ function parseRegisterRow(line: string): { row?: RegisterRow; reason?: string } 
 }
 
 function parseRegister(csv: string) {
-  const lines = csv
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    // Tolerate a header row, since a spreadsheet export always has one.
-    .filter((line, index) => !(index === 0 && /^matric/i.test(line)));
-
   const rows: RegisterRow[] = [];
   const rejected: RegisterPreview["rejected"] = [];
 
-  lines.forEach((line, index) => {
+  // Numbered by PHYSICAL line, blank lines included. Somebody reading "line 7"
+  // counts down their spreadsheet to row 7, and an error pointing at a
+  // different row than the one that caused it is worse than no line number.
+  let seenContent = false;
+
+  csv.split(/\r?\n/).forEach((raw, index) => {
+    const line = raw.trim();
+    if (!line) return;
+
+    // Tolerate a header row, since a spreadsheet export always has one.
+    if (!seenContent && /^matric/i.test(line)) {
+      seenContent = true;
+      return;
+    }
+    seenContent = true;
+
     const { row, reason } = parseRegisterRow(line);
     if (row) rows.push(row);
     else rejected.push({ line: index + 1, reason: reason ?? "could not read that line" });
@@ -788,6 +799,250 @@ export async function commitRegisterUpload(csv: string): Promise<RegisterUploadR
     created: preview.created.length,
     changed: preview.changed.length,
     skippedClaimed: preview.claimedConflicts.length,
+    rejected: preview.rejected,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Uploading the timetable
+// ---------------------------------------------------------------------------
+
+export type TimetablePreview = {
+  created: TimetableUploadRow[];
+  changed: Array<TimetableUploadRow & { was: { endsAt: string; venue: string } }>;
+  unchanged: number;
+  /** On the timetable, absent from the upload, and safe to remove. */
+  removable: TimetableUploadRow[];
+  /**
+   * Absent from the upload but has already held lectures. Never removed — see
+   * `commitTimetableUpload`.
+   */
+  protectedSlots: Array<TimetableUploadRow & { lecturesHeld: number }>;
+  rejected: Array<{ line: number; reason: string }>;
+};
+
+export async function previewTimetableUpload(csv: string): Promise<TimetablePreview> {
+  const db = await adminDb();
+  const sessionId = await activeSessionId(db);
+
+  const { rows, rejected } = parseTimetableCsv(csv);
+
+  const [{ data: courses }, { data: venues }, { data: existing }] = await Promise.all([
+    db.from("courses").select("id, code").eq("academic_session_id", sessionId ?? ""),
+    db.from("venues").select("id, name"),
+    db
+      .from("timetable_entries")
+      .select("id, course_id, day_of_week, start_time, end_time, venue_id")
+      .eq("academic_session_id", sessionId ?? ""),
+  ]);
+
+  const courseByCode = new Map((courses ?? []).map((course) => [course.code, course.id]));
+  const codeById = new Map((courses ?? []).map((course) => [course.id, course.code]));
+  const venueByName = new Map(
+    (venues ?? []).map((venue) => [venue.name.toLowerCase(), venue.id as string]),
+  );
+  const venueById = new Map((venues ?? []).map((venue) => [venue.id, venue.name as string]));
+
+  // A course or venue that does not exist is rejected rather than created. The
+  // timetable references them; it is not where they are defined, and inventing
+  // a venue here would mean inventing a geo-fence with it.
+  const usable: TimetableUploadRow[] = [];
+  rows.forEach((row, index) => {
+    if (!courseByCode.has(row.courseCode)) {
+      rejected.push({
+        line: index + 1,
+        reason: `${row.courseCode} is not in the course list for this session — upload the courses first`,
+      });
+      return;
+    }
+    if (!venueByName.has(row.venue.toLowerCase())) {
+      rejected.push({
+        line: index + 1,
+        reason: `"${row.venue}" is not a known venue — a venue carries the geo-fence, so it cannot be created here`,
+      });
+      return;
+    }
+    usable.push(row);
+  });
+
+  const current = new Map(
+    (existing ?? []).map((entry) => {
+      const row = {
+        courseCode: codeById.get(entry.course_id) ?? "",
+        dayOfWeek: entry.day_of_week,
+        startsAt: String(entry.start_time).slice(0, 5),
+        endsAt: String(entry.end_time).slice(0, 5),
+        venue: venueById.get(entry.venue_id) ?? "",
+      };
+      return [slotKey(row), { ...row, id: entry.id }];
+    }),
+  );
+
+  const uploaded = new Set(usable.map(slotKey));
+
+  const preview: TimetablePreview = {
+    created: [],
+    changed: [],
+    unchanged: 0,
+    removable: [],
+    protectedSlots: [],
+    rejected,
+  };
+
+  for (const row of usable) {
+    const was = current.get(slotKey(row));
+    if (!was) {
+      preview.created.push(row);
+    } else if (was.endsAt === row.endsAt && was.venue.toLowerCase() === row.venue.toLowerCase()) {
+      preview.unchanged += 1;
+    } else {
+      preview.changed.push({ ...row, was: { endsAt: was.endsAt, venue: was.venue } });
+    }
+  }
+
+  // Slots that have already held lectures cannot be deleted at all: the
+  // foreign key nulls `session_instances.timetable_entry_id`, and a recurring
+  // instance with no entry violates its own check constraint. Detected here so
+  // the screen can explain it, rather than letting the constraint fire with a
+  // message nobody could act on.
+  const absent = [...current.entries()].filter(([key]) => !uploaded.has(key));
+
+  if (absent.length > 0) {
+    const { data: held } = await db
+      .from("session_instances")
+      .select("timetable_entry_id")
+      .in(
+        "timetable_entry_id",
+        absent.map(([, entry]) => entry.id),
+      );
+
+    const heldCount = new Map<string, number>();
+    for (const instance of held ?? []) {
+      const id = instance.timetable_entry_id;
+      if (id) heldCount.set(id, (heldCount.get(id) ?? 0) + 1);
+    }
+
+    for (const [, entry] of absent) {
+      const lectures = heldCount.get(entry.id) ?? 0;
+      const row = {
+        courseCode: entry.courseCode,
+        dayOfWeek: entry.dayOfWeek,
+        startsAt: entry.startsAt,
+        endsAt: entry.endsAt,
+        venue: entry.venue,
+      };
+      if (lectures > 0) preview.protectedSlots.push({ ...row, lecturesHeld: lectures });
+      else preview.removable.push(row);
+    }
+  }
+
+  return preview;
+}
+
+export type TimetableUploadResult = {
+  created: number;
+  changed: number;
+  removed: number;
+  keptWithHistory: number;
+  rejected: TimetablePreview["rejected"];
+};
+
+export async function commitTimetableUpload(csv: string): Promise<TimetableUploadResult> {
+  const session = await requireAdmin();
+  const preview = await previewTimetableUpload(csv);
+
+  const db = createServiceClient();
+  const { data: active } = await db
+    .from("academic_sessions")
+    .select("id")
+    .eq("is_active", true)
+    .maybeSingle();
+
+  if (!active) throw new Error("There is no active academic session.");
+
+  const [{ data: courses }, { data: venues }] = await Promise.all([
+    db.from("courses").select("id, code").eq("academic_session_id", active.id),
+    db.from("venues").select("id, name"),
+  ]);
+
+  const courseByCode = new Map((courses ?? []).map((course) => [course.code, course.id]));
+  const venueByName = new Map(
+    (venues ?? []).map((venue) => [String(venue.name).toLowerCase(), venue.id as string]),
+  );
+
+  const { data: existing } = await db
+    .from("timetable_entries")
+    .select("id, course_id, day_of_week, start_time")
+    .eq("academic_session_id", active.id);
+
+  const codeById = new Map((courses ?? []).map((course) => [course.id, course.code]));
+  const idBySlot = new Map(
+    (existing ?? []).map((entry) => [
+      `${codeById.get(entry.course_id) ?? ""}|${entry.day_of_week}|${String(entry.start_time).slice(0, 5)}`,
+      entry.id as string,
+    ]),
+  );
+
+  for (const row of preview.changed) {
+    const id = idBySlot.get(slotKey(row));
+    if (!id) continue;
+    const { error } = await db
+      .from("timetable_entries")
+      .update({
+        end_time: row.endsAt,
+        venue_id: venueByName.get(row.venue.toLowerCase()),
+      })
+      .eq("id", id);
+    if (error) throw new Error(`Could not update ${row.courseCode}: ${error.message}`);
+  }
+
+  if (preview.created.length > 0) {
+    const { error } = await db.from("timetable_entries").insert(
+      preview.created.map((row) => ({
+        academic_session_id: active.id,
+        course_id: courseByCode.get(row.courseCode),
+        day_of_week: row.dayOfWeek,
+        start_time: row.startsAt,
+        end_time: row.endsAt,
+        venue_id: venueByName.get(row.venue.toLowerCase()),
+      })),
+    );
+    if (error) throw new Error(`Could not add the new slots: ${error.message}`);
+  }
+
+  // Only slots that never held a lecture. The rest are kept and reported —
+  // removing one would either fail on its own constraint or, worse, orphan the
+  // attendance already recorded against it.
+  const removableIds = preview.removable
+    .map((row) => idBySlot.get(slotKey(row)))
+    .filter((id): id is string => Boolean(id));
+
+  if (removableIds.length > 0) {
+    const { error } = await db.from("timetable_entries").delete().in("id", removableIds);
+    if (error) throw new Error(`Could not remove the dropped slots: ${error.message}`);
+  }
+
+  await db.rpc("write_audit", {
+    p_actor_id: session.profileId,
+    p_actor_role: "admin",
+    p_action: "timetable.upload",
+    p_target_table: "timetable_entries",
+    p_target_id: active.id,
+    p_reason: `Timetable upload: ${preview.created.length} added, ${preview.changed.length} changed, ${removableIds.length} removed`,
+    p_metadata: {
+      created: preview.created.length,
+      changed: preview.changed.length,
+      removed: removableIds.length,
+      kept_with_history: preview.protectedSlots.length,
+      rejected: preview.rejected.length,
+    },
+  });
+
+  return {
+    created: preview.created.length,
+    changed: preview.changed.length,
+    removed: removableIds.length,
+    keptWithHistory: preview.protectedSlots.length,
     rejected: preview.rejected,
   };
 }

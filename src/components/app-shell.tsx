@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  ArrowUpRight,
   BadgeCheck,
+  BookOpen,
   CalendarDays,
   ClipboardList,
   CreditCard,
@@ -16,6 +18,7 @@ import {
   ScrollText,
   Settings,
   ShieldAlert,
+  ShieldQuestion,
   TriangleAlert,
   UserRound,
   Users,
@@ -73,10 +76,13 @@ const NAV: Record<AppRole, NavItem[]> = {
     { href: "/admin", label: "Overview", icon: Gauge },
     { href: "/admin/whitelist", label: "Register", icon: ClipboardList },
     { href: "/admin/students", label: "Students", icon: Users },
-    { href: "/admin/payments", label: "Payments", icon: CreditCard },
+    { href: "/admin/courses", label: "Courses", icon: BookOpen },
     { href: "/admin/timetable", label: "Timetable", icon: CalendarDays },
+    { href: "/admin/payments", label: "Payments", icon: CreditCard },
+    { href: "/admin/disputes", label: "Registration disputes", icon: ShieldQuestion },
     { href: "/admin/config", label: "Configuration", icon: Settings },
     { href: "/admin/audit", label: "Audit log", icon: ScrollText },
+    { href: "/admin/rollover", label: "Level rollover", icon: ArrowUpRight },
   ],
 };
 

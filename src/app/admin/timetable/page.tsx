@@ -3,7 +3,9 @@ import { AppShell } from "@/components/app-shell";
 import { DataTable, type Column } from "@/components/data-table";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
-import { loadTimetable, weekdayName, type TimetableRow } from "@/lib/data/admin";
+import { loadTimetable, type TimetableRow } from "@/lib/data/admin";
+import { weekdayName } from "@/lib/data/weekdays";
+import { TimetableUpload } from "./timetable-upload";
 import { CalendarRange } from "lucide-react";
 
 export const metadata: Metadata = { title: "Timetable" };
@@ -61,13 +63,14 @@ export default async function TimetablePage() {
       <PageHeader
         title="Timetable"
         subtitle="The recurring weekly baseline for the active session. A particular Tuesday's lecture lives on the lecturer's schedule, not here."
+        action={<TimetableUpload />}
       />
       {entries.length === 0 ? (
         <div className="mt-6">
           <EmptyState
             icon={CalendarRange}
             headline="No timetable entries for this session"
-            body="Until a course has a weekly slot, its lecturer has nothing to start."
+            body="Until a course has a weekly slot, its lecturer has nothing to start. Upload the timetable above."
           />
         </div>
       ) : (

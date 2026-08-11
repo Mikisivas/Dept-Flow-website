@@ -108,7 +108,7 @@ screens — that order has held throughout.
 | HOD | Overview, at-risk list, exam eligibility (authorizing snapshots and freezes the list), grace periods, waivers, disputes, the per-student record and lecturer oversight. |
 | Admin | Overview, students (deactivate and reverse it), payments, the register and the timetable (both preview-then-commit uploads), courses, registration disputes, configuration, audit log, level rollover. |
 | Lecturer | Dashboard, schedule (cancel, reschedule, add a makeup — each notifies every enrolled student), course list, paper register. |
-| Student | Dashboard, course detail, notifications, password reset, and changing their own password or phone number. |
+| Student | Dashboard, course detail, notifications, the printable exam permit, password reset, and changing their own password or phone number. |
 
 **Nothing is on fixtures any more.** `src/lib/data/queries.ts` is deleted and
 `fixtures.ts` holds only type definitions — two sources for one screen is how a
@@ -125,7 +125,7 @@ only, and `attendance_pct()` has never been allowed to consult it.
 **Not built:** SMS delivery (the OTP seam throws in production), deployment.
 
 **Checks:** `npm test` (12 Paystack + 33 account + 28 timetable assertions, no
-network) and `supabase/tests/schema_test.sql` (217 assertions, run in the SQL
+network) and `supabase/tests/schema_test.sql` (230 assertions, run in the SQL
 Editor).
 `/api/health` is the first thing to open when something misbehaves: it reports
 **which migrations are missing by name**, which tables the signed-in user can

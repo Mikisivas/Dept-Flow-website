@@ -645,6 +645,14 @@ select assert_true(
   'a student cannot read the audit log'
 );
 
+-- Permits are unguessable by reference, but the table is still readable under
+-- RLS, and one student reading another's is a list of who may sit what.
+select assert_true(
+  (select count(*) from exam_permits
+    where student_id <> '44444444-4444-4444-4444-444444444401') = 0,
+  'a student cannot read another student''s exam permit'
+);
+
 select assert_true(
   (select count(*) from my_attendance_marks) >= 0,
   'a student reads their marks through a view with no coordinate columns'
@@ -1970,6 +1978,106 @@ begin
   perform assert_true(v_ok, 'a score is 0, 0.5 or 1.0 — a paper entry cannot invent one between');
 end $$;
 
+
+-- ---------------------------------------------------------------------------
+-- The exam permit
+--
+-- On its own student and course: an earlier block authorizes a list marking
+-- Chidera eligible, so borrowing her would test that collision rather than
+-- this.
+--
+-- What is asserted hardest is that the permit reads the AUTHORIZED list rather
+-- than live attendance. A permit computed from current figures could
+-- contradict the list the exam board sat with, and the system would have
+-- forged it itself.
+-- ---------------------------------------------------------------------------
+
+do $$
+declare
+  v_hod     uuid := '33333333-3333-3333-3333-333333333302';
+  v_admin   uuid := '33333333-3333-3333-3333-333333333303';
+  v_lect    uuid := '33333333-3333-3333-3333-333333333301';
+  v_session uuid := '11111111-1111-1111-1111-111111111111';
+  v_venue   uuid := '22222222-2222-2222-2222-222222222201';
+  v_course  uuid := gen_random_uuid();
+  v_student uuid := gen_random_uuid();
+  v_lecture uuid := gen_random_uuid();
+  v_ref     text;
+  v_again   text;
+  v_check   jsonb;
+begin
+  insert into courses (id, academic_session_id, code, title, level, lecturer_id, kind, credit_units, semester)
+  values (v_course, v_session, 'STA 401', 'Inference', 400, v_lect, 'core', 3, 1);
+
+  insert into profiles (id, role, surname, first_name, phone)
+  values (v_student, 'student', 'Permit', 'Holder', '+2348056666666');
+  insert into students (id, matric_no, level) values (v_student, 'STA/2021/444', 400);
+  insert into enrolments (student_id, course_id, source, enrolled_on)
+  values (v_student, v_course, 'core', date '2025-09-15');
+
+  insert into session_instances (id, course_id, held_on, venue_id, type, status, checkpoint_mode, closed_at, created_by)
+  values (v_lecture, v_course, date '2025-10-07', v_venue, 'makeup', 'closed', 'pair', now(), v_lect);
+
+  insert into session_scores (student_id, session_instance_id, score, status, source)
+  values (v_student, v_lecture, 1.0, 'provisional', 'digital');
+
+  perform assert_true(
+    issue_exam_permit(v_student, v_session) is null,
+    'no permit before the department has authorized anything — not an empty one, none'
+  );
+
+  -- Paying is what makes the attendance count; authorizing is what fixes it.
+  perform clear_student(v_student, v_session, 'payment');
+  perform authorize_eligibility_list(v_course, v_hod, 'Final list for the 2025/2026 first semester.');
+
+  v_ref := issue_exam_permit(v_student, v_session);
+  perform assert_true(v_ref is not null, 'once the list is authorized the permit can be issued');
+  perform assert_true(
+    v_ref ~ '^DF-[0-9]{4}-[A-Z0-9]{6}$',
+    'the reference is in a form somebody can read off paper'
+  );
+
+  v_again := issue_exam_permit(v_student, v_session);
+  perform assert_true(
+    v_again = v_ref,
+    'downloading twice returns one reference — a new one would make every printed copy unverifiable'
+  );
+
+  v_check := verify_exam_permit(v_ref);
+  perform assert_true((v_check->>'found')::boolean, 'the reference verifies');
+  perform assert_true(v_check->>'matric_no' = 'STA/2021/444', 'and names the student it belongs to');
+  perform assert_true(v_check->'courses' ? 'STA 401', 'and the papers it entitles them to');
+  perform assert_true(
+    not (v_check ? 'attendance_pct') and not (v_check ? 'phone'),
+    'and nothing else — a permit check is not a records request'
+  );
+
+  perform assert_true(
+    not (verify_exam_permit('DF-2025-ZZZZZZ')->>'found')::boolean,
+    'an invented reference does not verify'
+  );
+
+  perform assert_true(
+    (verify_exam_permit(lower(v_ref))->>'found')::boolean,
+    'case does not matter — it will be typed by hand'
+  );
+
+  perform assert_true(
+    (verify_exam_permit(v_ref)->>'account_active')::boolean,
+    'a live account reads as live'
+  );
+
+  -- Deactivated afterwards: the document is genuine, the account is not.
+  perform deactivate_student(v_student, v_admin, 'withdrawn',
+    'Withdrew from the programme after the list was authorized.');
+
+  v_check := verify_exam_permit(v_ref);
+  perform assert_true(
+    (v_check->>'found')::boolean and not (v_check->>'account_active')::boolean,
+    'a permit held by a deactivated student still verifies, and says the account is closed'
+  );
+end $$;
+
 -- ---------------------------------------------------------------------------
 -- Security posture
 --
@@ -2036,7 +2144,8 @@ begin
       'schedule_makeup', 'reschedule_session', 'authorize_eligibility_list',
       'advance_compliance_states', 'write_audit', 'notify_enrolled',
       'resolve_session_score', 'enrol_in_core_courses',
-      'submit_manual_batch', 'compute_risk_predictions', 'dept_flow_schema_report'
+      'submit_manual_batch', 'compute_risk_predictions', 'dept_flow_schema_report',
+      'issue_exam_permit', 'verify_exam_permit'
     )
     and (
       has_function_privilege('authenticated', p.oid, 'execute')

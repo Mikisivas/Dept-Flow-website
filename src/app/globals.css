@@ -170,3 +170,49 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Printing
+   ---------------------------------------------------------------------------
+
+   The exam permit and the eligibility list are documents somebody carries on
+   paper. There is no PDF generator: every browser prints to PDF, the output
+   carries the page's own typography, and a server-side renderer would be a
+   second place for the numbers to come from.
+
+   `print:hidden` on navigation, and ink-on-white for everything else — a dark
+   theme sent to a printer wastes a cartridge and produces something unreadable
+   at a hall door. */
+@media print {
+  :root {
+    --surface: #ffffff;
+    --surface-sunken: #ffffff;
+    --ink: #000000;
+    --slate: #000000;
+    --muted: #333333;
+    --line: #999999;
+  }
+
+  body {
+    background: #ffffff;
+    color: #000000;
+  }
+
+  /* Links print as text; a URL in brackets after every word is noise on a
+     document that is going to be looked at, not clicked. */
+  a {
+    text-decoration: none;
+    color: inherit;
+  }
+
+  /* Nothing that only makes sense on screen. */
+  nav,
+  header[data-app-header],
+  [data-print-hidden] {
+    display: none !important;
+  }
+
+  @page {
+    margin: 16mm;
+  }
+}

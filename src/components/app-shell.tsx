@@ -9,6 +9,7 @@ import {
   CalendarDays,
   ClipboardList,
   CreditCard,
+  FileCheck,
   Gauge,
   GraduationCap,
   House,
@@ -55,6 +56,7 @@ const NAV: Record<AppRole, NavItem[]> = {
     { href: "/dashboard", label: "Home", icon: House },
     { href: "/attend", label: "Enter code", icon: KeySquare },
     { href: "/dues", label: "Dues", icon: CreditCard },
+    { href: "/permit", label: "Permit", icon: FileCheck },
     { href: "/profile", label: "You", icon: UserRound },
   ],
   lecturer: [

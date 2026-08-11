@@ -488,3 +488,147 @@ export async function markNotificationsRead(): Promise<number> {
 
   return data?.length ?? 0;
 }
+
+// ---------------------------------------------------------------------------
+// The exam permit
+// ---------------------------------------------------------------------------
+
+export type ExamPermit = {
+  reference: string;
+  issuedAt: string;
+  session: string;
+  student: { matricNo: string; name: string; level: number };
+  courses: Array<{ code: string; title: string; attendancePct: number }>;
+  /** Authorized lists that decided against them. Shown, never hidden. */
+  refused: Array<{ code: string; title: string; attendancePct: number }>;
+};
+
+export type PermitStatus =
+  | { state: "issued"; permit: ExamPermit }
+  /** Cleared for at least one paper, but no reference allocated yet. */
+  | { state: "needs_issue"; eligibleCourses: string[] }
+  /** Authorized, and it decided against them everywhere. */
+  | { state: "not_eligible"; refused: Array<{ code: string; title: string; attendancePct: number }> }
+  /** The HOD has not authorized any list this student is on. */
+  | { state: "not_authorized"; pendingCourses: string[] };
+
+/**
+ * The student's own exam permit.
+ *
+ * Everything on it comes from AUTHORIZED eligibility lists, never from live
+ * attendance. A permit computed from current figures could contradict the list
+ * the exam board sat with — a student clearing dues after authorization would
+ * print a document saying they may sit a paper the department's record says
+ * they may not, and the system would have forged it itself.
+ */
+export async function loadExamPermit(): Promise<PermitStatus> {
+  const session = await currentUser();
+  if (!session) throw new DashboardUnavailable("Not signed in");
+
+  const db = createUserClient(await currentAccessToken());
+
+  const { data: activeSession } = await db
+    .from("academic_sessions")
+    .select("id, name")
+    .eq("is_active", true)
+    .maybeSingle();
+
+  if (!activeSession) throw new DashboardUnavailable("academic_sessions");
+
+  const [{ data: student }, { data: profile }, { data: enrolments }] = await Promise.all([
+    db.from("students").select("matric_no, level").eq("id", session.profileId).maybeSingle(),
+    db
+      .from("profiles")
+      .select("surname, first_name, other_names")
+      .eq("id", session.profileId)
+      .maybeSingle(),
+    db
+      .from("enrolments")
+      .select("course_id, courses(code, title)")
+      .eq("student_id", session.profileId)
+      .is("dropped_at", null),
+  ]);
+
+  const courseInfo = new Map(
+    (enrolments ?? []).map((row) => {
+      const course = one(row.courses as unknown as { code: string; title: string });
+      return [row.course_id, { code: course?.code ?? "", title: course?.title ?? "" }];
+    }),
+  );
+
+  const { data: entries } = await db
+    .from("eligibility_entries")
+    .select("attendance_pct, eligible, eligibility_lists(course_id, status, academic_session_id)")
+    .eq("student_id", session.profileId);
+
+  const decided = (entries ?? [])
+    .map((entry) => {
+      const list = one(
+        entry.eligibility_lists as unknown as {
+          course_id: string;
+          status: string;
+          academic_session_id: string;
+        },
+      );
+      return { entry, list };
+    })
+    .filter(
+      (row) =>
+        row.list?.status === "authorized" && row.list.academic_session_id === activeSession.id,
+    );
+
+  const toRow = (row: (typeof decided)[number]) => ({
+    code: courseInfo.get(row.list!.course_id)?.code ?? "",
+    title: courseInfo.get(row.list!.course_id)?.title ?? "",
+    attendancePct: Number(row.entry.attendance_pct),
+  });
+
+  const eligible = decided.filter((row) => row.entry.eligible).map(toRow);
+  const refused = decided.filter((row) => !row.entry.eligible).map(toRow);
+
+  if (decided.length === 0) {
+    return {
+      state: "not_authorized",
+      pendingCourses: [...courseInfo.values()].map((course) => course.code).sort(),
+    };
+  }
+
+  if (eligible.length === 0) return { state: "not_eligible", refused };
+
+  // Issuing needs to write, so it goes through the API rather than here. The
+  // page asks for the permit; the route allocates the reference.
+  const { data: existing } = await db
+    .from("exam_permits")
+    .select("reference, issued_at")
+    .eq("student_id", session.profileId)
+    .eq("academic_session_id", activeSession.id)
+    .maybeSingle();
+
+  // Eligible, but nobody has asked for the document yet. Allocating the
+  // reference is a write, so it goes through the API rather than a page load —
+  // opening a screen should not create a record.
+  if (!existing) {
+    return { state: "needs_issue", eligibleCourses: eligible.map((course) => course.code).sort() };
+  }
+
+  return {
+    state: "issued",
+    permit: {
+      reference: existing.reference,
+      issuedAt: existing.issued_at,
+      session: activeSession.name,
+      student: {
+        matricNo: student?.matric_no ?? "",
+        name: profile
+          ? [profile.surname?.toUpperCase(), profile.first_name, profile.other_names]
+              .filter(Boolean)
+              .join(", ")
+              .replace(",", ",")
+          : "",
+        level: student?.level ?? 0,
+      },
+      courses: eligible.sort((a, b) => a.code.localeCompare(b.code)),
+      refused: refused.sort((a, b) => a.code.localeCompare(b.code)),
+    },
+  };
+}

@@ -700,6 +700,52 @@ Adding the parameter meant dropping the old four-argument version explicitly —
 a `create or replace` with a new parameter creates an overload, and every
 existing two-argument call would then fail as ambiguous.
 
+## The exam permit
+
+The document a student carries into the hall, and the end of every path in this
+system: dues cleared, attendance counted, the list authorized.
+
+**It reads the authorized eligibility list, never live attendance.** This is
+the whole design. A permit computed from current figures could disagree with
+the list the exam board sat with — a student who clears their dues the week
+after authorization would print a document saying they may sit a paper the
+department's own record says they may not, and the system would have forged it
+itself.
+
+So a course appears on a permit only when its list is `authorized` and the
+snapshot inside it marks the student eligible. Before that there is no permit —
+not an empty one and not a provisional one. The department has not decided yet,
+and saying otherwise on a printed document is worse than saying nothing.
+
+**Three states, and the last two are not the same thing.** "Not authorized yet"
+is the department not having decided; "not eligible" is the department having
+decided against you. Collapsing them into one message leaves a student unable
+to tell whether to wait or to appeal.
+
+**One reference per student per session, allocated once.** Re-issuing on every
+download would make every previously printed copy unverifiable, which is the
+opposite of what a reference is for.
+
+**Refused papers are printed on the permit, not omitted.** A student who thinks
+the document covers everything and is turned away at one door has been misled
+by it rather than informed.
+
+**Verification is unauthenticated, and narrow.** An invigilator holding the
+paper will not be issued an account, so `/check/permit` takes the reference and
+answers with the name, the matric number and the papers. No attendance
+percentages, no dues history. A permit check is not a records request, and a
+hall door is not the place to disclose one. The reference is unguessable, and
+whoever holds it already holds the document.
+
+**A permit belonging to a since-deactivated account still verifies, and says
+so.** The document was genuinely issued; the account is closed. Showing a
+valid-looking permit with no further word would get that student admitted.
+
+**Printed, not generated as a PDF.** Every browser prints to PDF, the output
+keeps the page's own typography, and a server-side renderer would be a second
+place for the numbers to come from — which is how two versions of one permit
+start disagreeing.
+
 ## Palette
 
 `#FF9935`, eyedropped from the crest, superseding the `#F0952B` visual estimate

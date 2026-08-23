@@ -2,24 +2,31 @@
 
 Specifies **screens, contents, and states only** — no backend logic.
 
+**Revised August 2026** for the supervisor's operational flow. The core mechanic
+changed underneath this document: no GPS, no checkpoint pair, and dues no longer
+decide whether a lecture counts. Where anything here still reads as though they do,
+`operational-flow.md` and `system-operation-and-logic.md` win.
+
 ---
 
 ## 0. CONTEXT
 
-**What Dept-Flow is:** a departmental compliance and attendance website for a Nigerian university department (SAMACOSS — Student Association of Mathematics, Computer Science & Statistics). It links payment of departmental dues to whether a student's lecture attendance counts toward the 75% exam-eligibility threshold.
+**What Dept-Flow is:** an attendance and eligibility website for a Nigerian university department (SAMACOSS — Student Association of Mathematics, Computer Science & Statistics). Its job is to make sure no student reaches exam week surprised: it forecasts where each of them will finish, per course, and warns them early enough and specifically enough to act.
 
-**Delivery model:** a responsive **website** in a browser. No installed app, no app store. Students use phones almost exclusively; HOD and admin may use desktop. Must load fast on Nigerian cellular data inside lecture halls.
+**Delivery model:** a responsive **website** in a browser, installable as a PWA on top of that. No app store, no native build; every screen works with no service worker at all. Students use phones almost exclusively; HOD and admin may use desktop. Must load fast on Nigerian cellular data inside lecture halls.
 
-**Four roles:** Student, Lecturer, HOD, Admin. Strict separation — admin manages the system, HOD manages students. Neither can do the other's job.
+**Four roles:** Student, Lecturer, HOD, Admin. Strict separation — admin manages the system, HOD manages students. Neither can do the other's job, and **admin sees no individual student's academic risk at all**.
 
 **Core mechanic (must be understood to design correctly):**
-- A lecture = one **session**. The lecturer triggers **two checkpoints** during it.
-- A student submits a 4-digit token at each checkpoint, verified by GPS geo-fence.
-- Score: both checkpoints = **1.0**, one = **0.5**, none = **0**.
-- Attendance % = (sum of session scores ÷ total sessions held) × 100.
-- For the first 30 days, scores are stored **PROVISIONAL** — recorded but NOT counted.
-- Paying dues (or HOD clearance) converts all provisional scores to **CONFIRMED**.
-- On Day 31, unpaid students are **LOCKED** out of recording new attendance.
+- A lecture = one **session**. The lecturer issues **one** short-lived 4-digit code.
+- A student enters it. That is the whole mechanism — **no location, ever.**
+- Score is binary: present = **1**, absent = **0**. There are no half marks.
+- Attendance % = (sum of session scores ÷ lectures held while enrolled) × 100.
+- **Semester registration gates attendance.** Past the deadline an unconfirmed student cannot record it, and confirming late backfills an absence for every lecture missed in between.
+- **Dues gate nothing here.** A lecture counts whether or not a naira has been paid.
+- Dues and attendance meet in exactly one place: **the exam permit needs both** — paid in full, and 75% in the course.
+
+**The product is the forecast, not the tally.** A student on 76.92% today who has missed the last three lectures is projected to finish at 66% — a scoreboard calls that green. Every screen that shows a percentage should be asked whether it ought to be showing the projection beside it.
 
 ---
 
@@ -27,12 +34,12 @@ Specifies **screens, contents, and states only** — no backend logic.
 
 ### Colors
 ```
---brand         #F0952B   Crest orange. Fills, primary buttons, checkpoint motif.
---brand-hover   #D67A0F
---brand-pressed #BF6D0D
---brand-text    #A75F0C   The ONLY orange allowed as text on white.
---brand-tint    #FDF3E7   Subtle panel background
---brand-tint-2  #FCE7CF   Selected rows
+--brand         #FF9935   Crest orange, EYEDROPPED. Fills, primary buttons.
+--brand-hover   #E58419
+--brand-pressed #C96E10
+--brand-text    #A85E0A   The ONLY orange allowed as text on white. 4.92:1
+--brand-tint    #FFF4E8   Subtle panel background
+--brand-tint-2  #FFE7CE   Selected rows
 
 --ink           #0A0A0A   Primary text
 --slate         #525252   Secondary text
@@ -46,33 +53,50 @@ Specifies **screens, contents, and states only** — no backend logic.
 --danger        #B91C1C   Locked / Error
 ```
 
-**CRITICAL RULE: never put white text on orange.** Orange is a fill that carries **BLACK** text (8.52:1 contrast). White on orange is 2.32:1 and fails accessibility. Orange as text on white must use `#A75F0C`.
+**CRITICAL RULE: never put white text on orange.** Orange is a fill that carries **BLACK** text (9.30:1, AAA). White on `#FF9935` is **2.13:1** — worse than the older `#F0952B` estimate suggested, so the rule is harder than it looks, not softer. Orange as text on white must darken to `#A85E0A`.
+
+These values are sampled from the crest rather than estimated. Earlier drafts of this
+document carried `#F0952B`, which is close enough to look right beside the real thing
+and wrong enough to be visibly off on a printed permit.
 
 **Orange is the brand, not a warning.** Never use orange, amber, or yellow to signal a status. Status colors are green / blue / red / neutral only.
 
 ### Status treatments
 | State | Treatment | Label |
 |---|---|---|
-| Confirmed | Green fill | "Counted" |
-| Provisional | **Neutral, dashed outline, no fill** | "Not yet counted" |
+| Counted | Green fill | "Counted" |
+| Absent | Outline, no fill | "Absent" |
 | Pending verification | Blue | "Checking payment…" |
 | Locked | Red fill | "Attendance locked" |
 | At risk | Red **outline** (not filled) | "At risk" |
 
 Never signal state by color alone — always pair with an icon and a text label.
 
+**The forecast tiers are not a fourth colour scheme.** Safe is green, Critical is the
+at-risk outline, and **Watch carries no alarm colour at all** — neutral border, muted
+text. Watch means "you have no room left", not "you are failing, but less"; dressing
+it in red leaves nothing louder for the students who actually are.
+
+The `provisional` treatment is gone. It existed to render a score that had been
+recorded but did not count, and there is no longer such a thing.
+
 ### Typography
 - One family (Inter or system stack). 16px base, never below 14px.
 - Scale: 12 / 14 / 16 / 20 / 24 / 32.
 - **`font-variant-numeric: tabular-nums`** on all stacked numbers.
 
-### Visual signature — the checkpoint pair
-Every session renders as two cells:
+### Visual signature — the attendance strip
+Every lecture renders as one cell:
 ```
-▮▮  Full (1.0)    ▮▯  Half (0.5)    ▯▯  Absent (0)    ⌐⌐  Provisional (dashed)
+▮  Present (1)    ▯  Absent (0)
 ```
-Orange fill = checkpoint captured. Outline = missed. Dashed = provisional.
-A single-checkpoint session renders as ONE WIDE CELL so it is visibly not a pair.
+Orange fill = present. Outline = missed.
+
+The strip is the one thing on a screen that a percentage cannot say. Two students on
+76.92% can be in completely different trouble — one missed three lectures at the
+start and has been perfect since, the other attended ten straight and then stopped —
+and the shape is what tells them apart. It is why the at-risk list is a table and not
+a list of numbers.
 
 ### Imagery
 **No stock photos. No generic illustrations.** Only: the SAMACOSS crest (login/landing), a simplified shield+monitor mark (header, favicon), and `lucide-react` icons. Empty states are typographic + one icon.
@@ -95,11 +119,13 @@ Plain, second person, active voice, never apologetic or punitive.
 
 **AppShell** — header with site mark + role-appropriate nav + account menu. Bottom tab bar on mobile for students; sidebar on desktop for HOD/admin.
 
-**CheckpointStrip** — the signature component. Renders one session as a checkpoint pair, or a semester as a row of pairs. Each cell needs an accessible label.
+**AttendanceStrip** — the signature component. Renders a term as a row of one-cell-per-lecture. Each cell needs an accessible label.
 
-**StatusBadge** — icon + label + color. Variants: confirmed, provisional, pending, locked, at-risk.
+**StatusBadge** — icon + label + color. Variants: counted, pending, locked, at-risk.
 
-**AttendanceMeter** — horizontal bar with orange fill AND a hard tick mark at 75% with a label. Provisional sessions shown as a dashed segment beyond the solid fill. Below it, the actionable sentence: "You need 4 more full sessions to reach 75%." A percentage without the 75% line is a failed design.
+**AttendanceMeter** — horizontal bar with orange fill AND a hard tick mark at 75% with a label. Below it, the actionable sentence: "You need 4 more lectures to reach 75%." A percentage without the 75% line is a failed design.
+
+**ForecastPanel** — the projection for one course: where they are headed, the number of lectures that would fix it, and the what-if slider. Two rules its copy keeps. Every sentence names the course and a count — never "your attendance is low", which a student cannot act on. And the good case gets a sentence too: a panel that only appears when something is wrong is one students dread and then avoid.
 
 **ConfirmDialog** — for all destructive/authority actions. Must state exactly what will happen, how many records are affected, and require a typed reason where noted.
 
@@ -199,74 +225,117 @@ Plain, second person, active voice, never apologetic or punitive.
 **Route:** `/dashboard` · **Role:** student
 **Purpose:** the most-used screen in the system. Answer "am I on track?" instantly.
 **Contents, in this priority order:**
-1. **Compliance banner** — ONLY if locked, provisional, or pending. First thing on screen with the fix action attached. Never bury it under a greeting.
-   - Locked: red, "Attendance locked — your dues aren't cleared." + "Pay dues"
-   - Provisional: neutral dashed, "12 sessions recorded but not yet counted." + "Pay dues"
-   - Pending: blue, "Checking your payment… this can take a few hours."
-2. **Overall attendance summary** — AttendanceMeter across all courses, with 75% line
-3. **Per-course cards** — course code + name, AttendanceMeter, CheckpointStrip, sessions attended / sessions held
-4. **Risk nudge** (if any) — worded by pattern:
-   - trending 0s: "You've missed 3 full classes. Attend the next 4 to reach 75%."
-   - trending 0.5s: "You're only catching one checkpoint. Try to stay till the end."
-5. **Today's classes** — from the timetable, with an "Enter code" action when a session is live
-**States:** loading (skeleton) · empty ("No classes recorded yet. Your attendance appears here after your first lecture.") · locked · normal
+1. **Registration banner** — if the window is open and unconfirmed, or the deadline has passed and they never confirmed. This is the one that stops attendance working, so it outranks everything.
+   - Open: "Confirm your registration for this semester." + "Confirm"
+   - Missed: "You can't record attendance until you confirm. Lectures held since the deadline will be marked absent." — say the cost before they click, not after.
+2. **Dues banner** — only if something is outstanding, and it must say what it does NOT affect: "Your dues don't affect whether a lecture counts. They're needed for your exam permit." A student who thinks their attendance is at stake will be quietly wrong about their standing for a term.
+3. **Forecast, per course** — the ForecastPanel. Where they are headed, and the number of lectures that would fix it.
+4. **Overall attendance summary** — AttendanceMeter across all courses, with 75% line
+5. **Per-course cards** — course code + name, AttendanceMeter, AttendanceStrip, lectures attended / lectures held
+6. **Today's classes** — from the timetable, with an "Enter code" action when a session is live
+**States:** loading (skeleton) · empty ("No classes recorded yet. Your attendance appears here after your first lecture.") · not registered · normal
+
+**The forecast outranks the meter.** The meter answers "where am I", which the student
+usually already knows; the panel answers "where am I going", which is the thing they
+came for and the only one they can still change.
 
 ### 4.2 Attendance code entry
 **Route:** `/attend` (also a bottom sheet from the dashboard) · **Role:** student
 **Purpose:** highest-frequency, most time-pressured interaction. Noisy hall, 3–5 minute window.
 **Contents:**
-- Course + lecturer name, so they know which session they're marking
-- **Which checkpoint this is** (1st or 2nd) — clearly stated
+- Course + lecturer name, so they know which lecture they're marking
 - Large 4-digit input, `inputmode="numeric"`, big touch targets, **paste must work**, auto-advance
-- Countdown to token expiry, visible
+- Countdown to code expiry, visible
 - Primary button: "Submit"
-- Small note: "Your location is checked once, now."
+- **No location step, no permission prompt, no note about either.** The screen asks for one thing and asks for it once.
 **States:**
 - idle
 - **submitting: "Sending…" — NEVER "Recorded"** until the server confirms
-- accepted: green, states which checkpoint was captured and what the session is currently worth ("Checkpoint 1 captured. Attend the second to earn a full mark.")
+- accepted: green, "Attendance recorded. You're counted for this lecture of CMP 301."
+- **queued (offline): the state to be most careful with.** It looks like success — the student did everything asked of them — and it is not: nothing has reached the server. No tick, no green. "Waiting for a connection — you are not recorded yet", with "leave this tab open" and "if the lecture ends first, tell your lecturer".
 - rejected — **each with its own specific message, never a generic error:**
-  - outside geo-fence: "You're not in the lecture hall. Move closer and try again."
-  - expired token: "This code has expired. Ask your lecturer for the new one."
+  - expired code: "This code has expired. Ask your lecturer for the new one."
   - wrong code: "That code isn't right. Check the board."
-  - locked account: "Your attendance is locked until your dues are cleared."
-  - location blocked in browser: "Allow location access to record attendance." + instructions to enable it
-  - already submitted: "You've already recorded this checkpoint."
-- offline/failed: loud failure while they're still in the hall, with retry
+  - not registered: "You aren't registered for this course." + where to fix it
+  - locked account: "Your account is not active for this session."
+  - already submitted: "You've already recorded this lecture."
+- failed: loud failure while they're still in the hall, with retry
+
+**Rejections a student cannot act on lose the retry button.** Offering "Try again"
+against an unregistered course teaches them to distrust the screen; the button becomes
+a link to the thing that would actually help.
 
 ### 4.3 Course detail
 **Route:** `/courses/[code]` · **Role:** student
 **Contents:**
 - Course header, lecturer, schedule
 - AttendanceMeter with 75% line
-- Full session history table: date, checkpoint pair, score, status (confirmed/provisional), source (digital / recorded from paper register)
-- Projection: "At your current rate you'll finish at 68%."
+- Full lecture history table: date, present/absent, source (digital / recorded from paper register)
+- The ForecastPanel for this course, including the what-if slider
 **States:** loading · empty · normal
 
 ### 4.4 Dues & payment
 **Route:** `/dues` · **Role:** student
 **Contents:**
-- Amount due, deadline date, days remaining (prominent countdown before Day 30)
-- **What clearing unlocks** — "This will count your 12 waiting sessions."
+- Amount due, **balance outstanding**, deadline date, days remaining
+- **What paying is for, said plainly** — "Your dues don't affect whether a lecture counts. They're needed for your exam permit." The old screen promised that paying would count waiting sessions; it no longer does, and a student left believing it would be wrong about their standing all term.
+- **Instalments are first class.** A part payment reduces the balance rather than being refused for not matching. Show paid-of-total, not a paid/unpaid flag.
 - Payment method choice: **Card** or **Pay with Transfer** (no other methods)
 - Primary button: "Pay ₦X,XXX"
 - Payment history table: date, amount, method, reference, status
-**States:** unpaid · **pending verification** (blue, "Checking payment…") · paid (green, with receipt link) · waived (HOD granted) · locked + grace period active (show grace expiry date)
+**States:** unpaid · part paid (balance running down) · **pending verification** (blue, "Checking payment…") · paid in full (green, with receipt link) · waived (HOD granted) · **reversed** — a charged-back payment re-locks, and the student is told, rather than discovering it at the permit screen
 
 ### 4.5 Payment result
 **Route:** `/dues/result` · **Role:** student
-**Contents:** outcome, amount, reference number, and — critically — what changed: "12 sessions are now counted. Your attendance is 78%."
+**Contents:** outcome, amount, reference number, and what changed — which is the dues balance and the permit, never the attendance. "Paid in full. Your exam permit is available once the department authorizes the eligibility list."
 **States:** success · pending (still verifying) · failed (with retry)
 
 ### 4.6 Notifications
 **Route:** `/notifications` · **Role:** student
-**Contents:** chronological list — payment reminders, risk nudges, grace period announcements, schedule changes (makeup/cancelled classes). Unread indicator.
+**Contents:**
+- **Push toggle, above the list.** Asked once, from behind a button, next to a sentence saying what will arrive — a permission prompt fired on page load gets denied, and a denied prompt cannot be asked again. When it is blocked or unsupported, say what still covers them: warnings escalate to WhatsApp regardless, which is what makes declining a real choice.
+- Chronological list — attendance warnings, pre-lecture reminders, payment notices, registration announcements, HOD messages, schedule changes. Unread indicator.
 **States:** empty · list
+
+The list is usually empty at the moment it matters most, which is the point of the
+toggle: a warning read three days later, on a visit made for some other reason, is a
+warning that arrived too late to change anything.
 
 ### 4.7 Profile & settings
 **Route:** `/profile` · **Role:** student
-**Contents:** name, matric number, level (all read-only), phone number (editable, re-verified by OTP), change password, notification preferences, link to privacy notice, log out.
-**Never displays raw GPS coordinates or location history.**
+**Contents:** name, matric number, level (all read-only), primary phone number and the optional separate WhatsApp number (both editable, each re-verified by OTP), change password, link to privacy notice, log out.
+**There is no location history to display, and no screen anywhere that could show one.**
+
+### 4.8 Semester registration
+**Route:** `/courses/register` · **Role:** student
+**Purpose:** the screen that decides whether attendance works at all.
+**Contents:**
+- The window and its deadline, stated plainly
+- Core courses, already enrolled; electives and carry-overs to choose, against a 24-unit cap with a live running total
+- **Confirm**, with the cost of being late stated BEFORE the click, not after: "Lectures held since the deadline will be marked absent."
+**States:** window not open · open and unconfirmed · confirmed · **past the deadline and unconfirmed** (the state that blocks attendance, with what to do about it) · confirmed late (showing what was backfilled)
+
+### 4.9 Reports
+**Route:** `/reports` · **Role:** student
+**Contents:** three windows on the same term — this week, this month, the semester. Each shows lectures held, attended, the percentage, and the change from the previous window. The semester view is per course and shares its generator with the exam permit, so the two cannot disagree.
+**States:** loading · empty (no lectures in the window — which is not the same as zero attended, and must not be shown as zero) · normal
+
+### 4.10 Exam permit
+**Route:** `/permit` · **Role:** student
+**Purpose:** the end of every path in the system.
+**Contents:**
+- **The live eligibility panel, above everything and in every state.** Per course: the percentage, and either "above the line" or "attend 3 more classes of the 9 left" or "attending all 9 still finishes below 75%". Plus the dues line, in naira. Whatever the outcome, the question the student came to ask is "what do I still have to do", and a verdict without an answer to that is a door with no handle.
+- The document itself, once both conditions are met: crest, name, matric number, papers covered, papers excluded and why, reference, and a **QR code** to the verification endpoint with the reference printed beside it in full.
+**States, all four distinct and never collapsed:**
+- **not authorized** — the department has not decided
+- **not eligible** — the department decided against them
+- **dues outstanding** — the one they can clear themselves, this afternoon
+- **issued** — with print/save-as-PDF
+
+### 4.11 Offline
+**Route:** `/offline` · **Role:** anyone
+**Purpose:** what the service worker serves when a navigation cannot reach the server.
+**Contents:** no data of any kind — which is what makes it the only page safe to cache. It says that nothing of theirs is stored on the phone, and, critically, that an attendance code they were entering has **not** been recorded and the tab must stay open.
 
 ---
 
@@ -286,29 +355,30 @@ Plain, second person, active voice, never apologetic or punitive.
 **Purpose:** operated while standing in front of a class. One primary action at a time, very large touch targets.
 **Contents:**
 - Course, venue, start time, elapsed timer
-- **"Generate checkpoint code"** — single prominent button
-- When generated: the **4-digit code displayed VERY LARGE** (it gets written on a whiteboard), with an expiry countdown
-- Clear indicator: "Checkpoint 1 of 2" / "Checkpoint 2 of 2"
+- **"Issue the code"** — single prominent button
+- When issued: the **4-digit code displayed VERY LARGE** (it gets written on a whiteboard), with an expiry countdown
 - Live submission counter, updating: "34 students recorded"
 - Live list of who has submitted (searchable)
-- Rejected-submission counter with reasons (flags possible spoofing)
 - "End session" button
-**States:** session open, no checkpoint yet · checkpoint live (countdown) · checkpoint expired, awaiting next · both checkpoints done · ending
-**Special:** ending with only ONE checkpoint issued must confirm: "This session will be scored present/absent, not out of two checkpoints. Continue?"
+**States:** session open, no code yet · code live (countdown) · code expired · ending
+
+**One code per lecture.** There is no pair to be half of, no "checkpoint 1 of 2", and
+no rejected-submission panel — the rejections that remain are a mistyped code and an
+unregistered student, neither of which is a lecturer's problem to watch in real time.
 
 ### 5.3 Session detail (closed)
 **Route:** `/lecturer/session/[id]/review` · **Role:** lecturer
-**Contents:** full roster with each student's checkpoint pair and resulting score; counts of full/half/absent; flagged submissions listed for review.
+**Contents:** full roster with each student present or absent; counts of present/absent.
 **Action:** "Enter paper register" (only if the session had no or partial digital capture).
 
 ### 5.4 Manual attendance batch (paper fallback)
 **Route:** `/lecturer/session/[id]/manual` · **Role:** lecturer
 **Purpose:** transcribe a paper sign-in sheet after a network outage.
-**This screen must feel heavier than the normal flow** — it bypasses the anti-proxy checks.
+**This screen must feel heavier than the normal flow** — it is the one path with no code behind it, and it is the one an HOD's oversight screen counts.
 **Contents:**
-- Prominent warning explaining that entries are flagged and reviewable by the HOD
-- Roster with **two checkboxes per student** (Checkpoint 1, Checkpoint 2), mirroring the paper sheet's two columns
-- Live preview of the resulting score per student (1.0 / 0.5 / 0)
+- Prominent warning explaining that entries are recorded as manually entered and are reviewable by the HOD
+- Roster with **one checkbox per student** — present or absent, mirroring a sign-in sheet
+- Live count of the roster marked present
 - **Mandatory justification note** (textarea, cannot submit empty)
 - Confirm dialog before submitting
 **States:** editing · confirming · submitted
@@ -337,43 +407,55 @@ All three notify enrolled students automatically. Must be created BEFORE the ses
 **Route:** `/hod` · **Role:** HOD
 **Contents:**
 - Department-wide attendance distribution
-- Count of students below 75% and trending below
-- Compliance summary (cleared / provisional / locked counts)
-- Active grace period status (if any) with expiry
+- Count of students below 75% now, and **the count projected to finish below** — the second number is the one that can still be acted on
+- Compliance summary (cleared / uncleared / pending / locked counts)
+- Active registration exception (if any) with expiry
 - Pending items: dispute count, waiver requests
 **States:** loading · normal
 
 ### 6.2 At-risk students
 **Route:** `/hod/risk` · **Role:** HOD
-**Contents:** table sorted by severity — student, matric, level, course, current %, predicted final %, CheckpointStrip (so the pattern is readable at a glance), risk pattern label (disengagement vs partial attendance). Filter by level/course. Export action.
+**Contents:** table sorted by severity — student, matric, level, course, current %, projected final %, tier, AttendanceStrip (so the pattern is readable at a glance), risk pattern label (disengagement vs partial attendance), and **what would fix it** ("13 of the 17 remaining"). Filter by level/course.
+
+**Every row is a link to the student's record.** A row here starts a conversation, it
+does not end one: "Chidera is projected at 66.5% in CMP 301" is not enough to act on,
+and an HOD about to call a student in needs to see whether they stopped coming in
+week four or have been at half marks all term — the same number on this screen, and
+two different meetings.
+
+**Filtered to Watch and Critical.** The forecast table holds a row for every
+enrolment, Safe ones included, because the student's own dashboard needs the good
+news too. A list headed "at-risk students" that read it unfiltered would put the whole
+department on it, which is the same as putting nobody on it.
 **States:** empty ("No students currently at risk.") · list
 
 ### 6.3 Student detail
 **Route:** `/hod/students/[matric]` · **Role:** HOD
-**Contents:** profile summary, per-course attendance meters, full session history with CheckpointStrips, payment/clearance status, audit trail of any overrides applied to this student.
+**Contents:** profile summary, per-course attendance meters, full lecture history with AttendanceStrips, dues balance, audit trail of any decision applied to this record.
 **Actions:** grant clearance/waiver, resolve a dispute.
-**Never shows raw GPS coordinates.**
 
-### 6.4 Grace period control
+### 6.4 Registration exceptions
 **Route:** `/hod/grace` · **Role:** HOD
-**Purpose:** the highest-consequence control on the site.
+**Purpose:** the highest-consequence control on the site. Same mechanism as the old
+grace period, repointed: it used to restore attendance to students locked out by
+dues, and it now restores it to students shut out by the registration deadline.
 **Contents:**
-- Current state: active grace period (with expiry) or none
-- Form: new expiry date, scope (whole department or a level), **mandatory reason**
-- **Impact preview before confirming: "This will restore attendance access for 143 locked students until 12 May."**
+- Current state: active exception (with expiry) or none
+- Form: new expiry date, scope (whole department, a level, or one student), **mandatory reason**
+- **Impact preview before confirming: "This will let 143 students who missed the registration deadline record attendance until 12 May."**
 - Confirm dialog
-- History of previous grace periods with who granted them and why
+- History of previous exceptions with who granted them and why
 **States:** none active · active · creating · confirming
 
 ### 6.5 Waivers & clearances
 **Route:** `/hod/waivers` · **Role:** HOD
 **Contents:** list of hardship/waiver requests and manually cleared students.
-**Action:** grant clearance with mandatory reason — states the effect: "This will count this student's 9 provisional sessions."
+**Action:** grant clearance with mandatory reason — states the effect on the dues balance and the permit, never on attendance, which a waiver does not touch.
 **States:** empty · pending list · history
 
 ### 6.6 Attendance disputes
 **Route:** `/hod/disputes` · **Role:** HOD
-**Contents:** student-raised disputes ("I was present but was rejected"), each showing the session, the rejection reason recorded, and whether the session was digital or a paper batch.
+**Contents:** student-raised disputes ("I was present but was marked absent"), each showing the lecture, the rejection reason recorded if there was a submission at all, and whether the lecture was scored digitally or from a paper batch.
 **Actions:** uphold or correct the record (correction requires a reason, writes to the audit log).
 **States:** empty · open · resolved
 
@@ -388,23 +470,43 @@ All three notify enrolled students automatically. Must be created BEFORE the ses
 
 ### 6.8 Lecturer oversight
 **Route:** `/hod/lecturers` · **Role:** HOD
-**Contents:** per lecturer — sessions held, **manual/paper batch usage rate** (a lecturer who "loses network" weekly is worth a conversation), single-checkpoint session rate, cancelled sessions. This turns the paper fallback into a monitored path rather than a silent backdoor.
+**Contents:** per lecturer — lectures held, **manual/paper batch usage rate** (a lecturer who "loses network" weekly is worth a conversation), cancelled sessions. This turns the paper fallback into a monitored path rather than a silent backdoor.
+
+### 6.9 Message students
+**Route:** `/hod/messages` · **Role:** HOD
+**Purpose:** one message, three audiences — an individual, a whole level, or everyone currently registered for a course.
+**Contents:**
+- Scope picker, then the field that scope needs (matric number / level / course)
+- **Live audience count, above the message box and repeated in the confirmation.** "Message 412 students" is a different decision from "message 12", and an HOD should be making the one they think they are making. Fetched from the server on every scope change — counted in the browser it would be a guess.
+- Subject and body, with a floor on the body: a message reaching four hundred phones that says "see me" is a summons nobody can act on
+- Recently sent, with audience and recipient count
+- The screen states where messages arrive: the same channels as an attendance warning, **never SMS**
+**States:** composing · confirming · sent · error
+
+### 6.10 Payment compliance
+**Route:** `/hod/payments` · **Role:** HOD
+**Purpose:** exists BECAUSE payment was decoupled. Dues used to be readable off the attendance screens as a side effect of gating them; they gate nothing now, so the department's money is invisible unless there is somewhere to look.
+**Contents:** by level — students, paid in full, **part paid**, nothing paid, outstanding total. Three columns rather than paid/unpaid, because instalments made "has not paid" stop being one fact.
+**States:** empty (no dues configured) · normal
 
 ---
 
 ## 7. ADMIN PAGES
 
-*Operations and infrastructure. Aggregate signals only — **no individual student risk alerts** (that is HOD scope; showing it here breaks separation of duties).*
+*Operations and infrastructure. Aggregate signals only — **no individual student risk data of any kind** (that is HOD scope; showing it here breaks separation of duties). This is a role boundary rather than a screen layout: `risk_predictions` is unreadable as the admin, so the data is absent rather than hidden.*
 
 ### 7.1 Admin dashboard
 **Route:** `/admin` · **Role:** admin
 **Contents:**
-- Aggregate compliance: % cleared, % provisional, % locked, by level
-- Payment reconciliation health: failed webhooks, unverified transactions
-- **GPS rejection rate** with spike detection (possible spoofing attempts)
-- Registration queue: pending disputes, unclaimed whitelist rows
+- Aggregate compliance: % cleared, % part paid, % locked, by level
+- Payment reconciliation health: failed webhooks, unverified transactions, **payment-integrity anomalies** (one card fingerprint paying for many students, a reference verified twice)
+- Registration queue: pending disputes, unclaimed register rows, semester registration confirmations against the window
 - Days remaining in the current dues window
 **States:** loading · normal · alert (anomaly detected)
+
+There is no GPS rejection rate, because there are no GPS rejections. The anomaly
+signal that replaced it is about money, which is the thing this role is actually
+responsible for.
 
 ### 7.2 Whitelist management
 **Route:** `/admin/whitelist` · **Role:** admin
@@ -419,7 +521,7 @@ All three notify enrolled students automatically. Must be created BEFORE the ses
 **Route:** `/admin/disputes` · **Role:** admin
 **Contents:** reported impostor claims. Each shows the matric number, when it was claimed, and the phone number on the account (partially masked).
 **Action: revoke registration** — freezes the existing account (does NOT delete it), unclaims the whitelist row, requires a reason, writes to the audit log. Confirm dialog explains both effects.
-**Flag automatically:** the same phone number or device claiming multiple matric numbers.
+**Flag automatically:** the same phone number claiming multiple matric numbers. (Not device — there is no device id to flag on, and there will not be one.)
 **States:** empty · open · resolved
 
 ### 7.4 Student management
@@ -444,11 +546,15 @@ All three notify enrolled students automatically. Must be created BEFORE the ses
 **Contents:**
 - Dues amount
 - Resumption date (starts the 30-day window)
+- **Semester registration window** — opens_on and deadline, per semester. The control that decides who can record attendance, so it belongs to the operations role and not the academic one.
 - Grace window length (default 30 days)
 - Pending-verification buffer length (6–12h)
-- **Geo-fence editor** — venue coordinates/polygon per lecture hall, with a radius setting (30–50m) and a map preview
-- GPS retention period (days before raw coordinates are purged)
+- Attendance code lifetime
 **Every change requires confirmation and is audit-logged.**
+
+There is no geo-fence editor and no GPS retention setting. Both were removed with
+location enforcement, along with the venue coordinate columns they edited — venues are
+now names.
 **States:** viewing · editing · confirming
 
 ### 7.7 Timetable management
@@ -461,8 +567,8 @@ All three notify enrolled students automatically. Must be created BEFORE the ses
 **Route:** `/admin/payments` · **Role:** admin
 **Contents:** all transactions — student, amount, channel (card/transfer), reference, status, timestamp. Filter by status.
 **Highlight:** pending/failed/unverified transactions needing attention.
-**Action:** manually re-verify a transaction against the payment gateway.
-**States:** list · re-verifying · resolved
+**Actions:** manually re-verify a transaction against the payment gateway; **record a manual payment** (a student who paid at the bursary, or uploaded a receipt) with a mandatory reason and an audit row, flagged as manually verified so reconciliation can tell it from Paystack's own; **reverse a payment**, which re-locks the student and notifies them.
+**States:** list · re-verifying · recording · confirming · resolved
 
 ### 7.9 Courses & lecturers
 **Route:** `/admin/courses` · **Role:** admin
@@ -472,7 +578,7 @@ All three notify enrolled students automatically. Must be created BEFORE the ses
 ### 7.10 Audit log
 **Route:** `/admin/audit` · **Role:** admin
 **Contents:** immutable chronological record — actor, role, action, target, reason, timestamp. Filterable by actor, action type, date range.
-**Covers:** grace periods, waivers, clearances, deactivations, registration revokes, config changes, manual attendance batches, eligibility authorizations.
+**Covers:** registration exceptions, waivers, clearances, deactivations, registration revokes, config changes, manual attendance batches, manual and reversed payments, eligibility authorizations, level rollovers, and **every HOD message** — reaching four hundred phones is an authority action and leaves a record like one.
 **Read-only. No delete, no edit.** Export action.
 **States:** list · filtered · empty
 
@@ -489,12 +595,17 @@ All three notify enrolled students automatically. Must be created BEFORE the ses
 - Semantic headings in order; skip link
 - Async updates announced to screen readers
 
-**Confirmation required** (with a reason field where noted) for: grace period, waiver/clearance, student deactivation, registration revoke, level rollover, manual attendance batch, session cancellation, eligibility authorization, config changes.
+**Confirmation required** (with a reason field where noted) for: registration exceptions, waiver/clearance, student deactivation, registration revoke, level rollover, manual attendance batch, session cancellation, eligibility authorization, manual and reversed payments, HOD messages, config changes.
 
 **Never in the UI:**
 - White text on orange
-- Raw GPS coordinates shown to any user
+- **Any location interface at all** — no coordinates, no map, no distance, no permission prompt. There is nothing to show, and a request that carried coordinates would be recording something this system has undertaken not to keep.
 - Any biometric/fingerprint/selfie interface (not part of this system)
 - Stock photography or generic illustrations
-- "Recorded ✓" before the server has confirmed
+- **"Recorded ✓" before the server has confirmed.** This now has a second, subtler form: the offline queue's held state must not read as success either. No tick, no green, and the words "you are not recorded yet".
 - Invented states — the only compliance states are: provisional, confirmed, pending verification, locked, cleared
+
+**Never cached by the service worker:** any page. Every screen is somebody's record and
+phones get shared and resold; a cached dashboard is one student's attendance served
+from disk to whoever picks the phone up next. Navigations are network-only, and
+`/offline` — which carries no data — is the only exception.

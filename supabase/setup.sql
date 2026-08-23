@@ -3,6 +3,8 @@
 -- Generated from supabase/migrations/. Paste the whole file into the Supabase
 -- SQL Editor and run it once, on a fresh project.
 --
+-- Do not edit by hand: run `npm run build:setup` instead.
+--
 -- This exists so the schema can be applied without sharing a database password
 -- or a service-role key with anyone. Nothing in here needs either.
 --
@@ -2848,6 +2850,10 @@ grant execute on function advance_compliance_states() to service_role;
 -- the same function, and both are safe to run repeatedly — the transitions are
 -- idempotent by their own conditions rather than by remembering they ran.
 
+-- ===========================================================================
+-- 20260728001700_waivers_and_disputes.sql
+-- ===========================================================================
+
 -- Dept-Flow — deciding waivers and resolving disputes
 --
 -- Both are authority actions in the same shape as a grace period: an actor, a
@@ -3011,6 +3017,10 @@ revoke all on function decide_waiver(uuid, uuid, boolean, text) from public, ano
 revoke all on function resolve_dispute(uuid, uuid, boolean, text) from public, anon, authenticated;
 grant execute on function decide_waiver(uuid, uuid, boolean, text) to service_role;
 grant execute on function resolve_dispute(uuid, uuid, boolean, text) to service_role;
+
+-- ===========================================================================
+-- 20260728001800_admin_actions.sql
+-- ===========================================================================
 
 -- Dept-Flow — the administrator's authority actions
 --
@@ -3342,6 +3352,10 @@ grant execute on function deactivate_student(uuid, uuid, deactivation_reason, te
 grant execute on function reactivate_student(uuid, uuid, text) to service_role;
 grant execute on function resolve_registration_dispute(uuid, uuid, boolean, text) to service_role;
 grant execute on function run_level_rollover(uuid, uuid, text) to service_role;
+
+-- ===========================================================================
+-- 20260728001900_schedule_changes.sql
+-- ===========================================================================
 
 -- Dept-Flow — cancelling a lecture and scheduling a makeup
 --
@@ -3722,6 +3736,10 @@ comment on function reschedule_session(uuid, uuid, date, date, time, time, uuid,
 revoke all on function reschedule_session(uuid, uuid, date, date, time, time, uuid, uuid, text) from public, anon, authenticated;
 grant execute on function reschedule_session(uuid, uuid, date, date, time, time, uuid, uuid, text) to service_role;
 
+-- ===========================================================================
+-- 20260728002000_authorize_eligibility.sql
+-- ===========================================================================
+
 -- Dept-Flow — authorizing an exam eligibility list
 --
 -- The department's formal record of who may sit a paper. The screen for it has
@@ -3867,6 +3885,10 @@ comment on function authorize_eligibility_list(uuid, uuid, text) is
 revoke all on function authorize_eligibility_list(uuid, uuid, text) from public, anon, authenticated;
 grant execute on function authorize_eligibility_list(uuid, uuid, text) to service_role;
 
+-- ===========================================================================
+-- 20260728002100_schema_report.sql
+-- ===========================================================================
+
 -- Dept-Flow — is this database actually up to date?
 --
 -- The migrations are applied by hand, in the SQL Editor, one file at a time.
@@ -3955,6 +3977,10 @@ comment on function dept_flow_schema_report() is
 
 revoke all on function dept_flow_schema_report() from public, anon, authenticated;
 grant execute on function dept_flow_schema_report() to service_role;
+
+-- ===========================================================================
+-- 20260728002200_correction_never_lowers.sql
+-- ===========================================================================
 
 -- Dept-Flow — a correction must never lower a score
 --
@@ -4083,6 +4109,10 @@ comment on function resolve_dispute(uuid, uuid, boolean, text) is
 
 revoke all on function resolve_dispute(uuid, uuid, boolean, text) from public, anon, authenticated;
 grant execute on function resolve_dispute(uuid, uuid, boolean, text) to service_role;
+
+-- ===========================================================================
+-- 20260728002300_risk_baseline.sql
+-- ===========================================================================
 
 -- Dept-Flow — the advisory signal, computed
 --
@@ -4241,6 +4271,10 @@ $$;
 
 revoke all on function compute_risk_predictions() from public, anon, authenticated;
 grant execute on function compute_risk_predictions() to service_role;
+
+-- ===========================================================================
+-- 20260728002400_manual_batch.sql
+-- ===========================================================================
 
 -- Dept-Flow — the paper register
 --
@@ -4478,6 +4512,10 @@ comment on function submit_manual_batch(uuid, uuid, text, jsonb) is
 
 revoke all on function submit_manual_batch(uuid, uuid, text, jsonb) from public, anon, authenticated;
 grant execute on function submit_manual_batch(uuid, uuid, text, jsonb) to service_role;
+
+-- ===========================================================================
+-- 20260728002500_exam_permits.sql
+-- ===========================================================================
 
 -- Dept-Flow — the exam permit
 --

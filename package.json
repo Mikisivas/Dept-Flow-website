@@ -6,6 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "build:setup": "node scripts/build-setup.mjs",
     "lint": "eslint",
     "test:paystack": "node --conditions=react-server --experimental-strip-types tests/paystack.mts",
     "test:reset": "node --conditions=react-server --experimental-strip-types --experimental-test-module-mocks --import ./tests/register-hooks.mjs tests/password-reset.mts",

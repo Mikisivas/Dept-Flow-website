@@ -30,33 +30,20 @@ const CELL_SIZE: Record<Size, string> = {
 function describe(session: SessionCell): string {
   const when = `${session.label}, ${formatDateShort(session.heldOn)}`;
   const capture = session.attended ? "present" : "absent";
-  const counted = session.status === "provisional" ? ", recorded but not yet counted" : "";
   const paper = session.source === "manually_entered" ? ", recorded from paper register" : "";
 
-  return `${when}: ${capture}${counted}${paper}`;
+  return `${when}: ${capture}${paper}`;
 }
 
-function Cell({
-  attended,
-  provisional,
-  size,
-}: {
-  attended: boolean;
-  provisional: boolean;
-  size: Size;
-}) {
+function Cell({ attended, size }: { attended: boolean; size: Size }) {
   return (
     <span
       className={cn(
         CELL_SIZE[size],
         "rounded-[2px] border transition-colors duration-300",
-        provisional
-          ? // Hollow with a dashed edge. Provisional is not a warning, just
-            // "not yet counted", so it carries no colour of its own.
-            "border-dashed border-cell-provisional bg-transparent"
-          : attended
-            ? "border-transparent bg-brand"
-            : "border-solid border-cell-missed bg-transparent",
+        attended
+          ? "border-transparent bg-brand"
+          : "border-solid border-cell-missed bg-transparent",
       )}
     />
   );
@@ -80,11 +67,7 @@ export function AttendanceStrip({
           // The motif is never the only carrier of meaning.
           aria-label={describe(session)}
         >
-          <Cell
-            attended={session.attended}
-            provisional={session.status === "provisional"}
-            size={size}
-          />
+          <Cell attended={session.attended} size={size} />
 
           {/* Paper batches carry a corner mark, so a roster of them is
               visible at a glance rather than buried in a source column. */}
@@ -103,9 +86,8 @@ export function AttendanceStrip({
 /** The key that makes the motif legible the first time someone meets it. */
 export function AttendanceLegend({ className }: { className?: string }) {
   const items = [
-    { label: "Present", attended: true, provisional: false },
-    { label: "Absent", attended: false, provisional: false },
-    { label: "Not yet counted", attended: false, provisional: true },
+    { label: "Present", attended: true },
+    { label: "Absent", attended: false },
   ];
 
   return (
@@ -113,7 +95,7 @@ export function AttendanceLegend({ className }: { className?: string }) {
       {items.map((item) => (
         <li key={item.label} className="flex items-center gap-2">
           <span aria-hidden="true" className="flex">
-            <Cell attended={item.attended} provisional={item.provisional} size="sm" />
+            <Cell attended={item.attended} size="sm" />
           </span>
           <span className="text-[13px] text-slate">{item.label}</span>
         </li>

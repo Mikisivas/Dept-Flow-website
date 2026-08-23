@@ -170,7 +170,7 @@ export async function loadStudentDashboard(): Promise<StudentDashboard> {
           .order("held_on"),
         db
           .from("session_scores")
-          .select("session_instance_id, score, status, source")
+          .select("session_instance_id, score, source")
           .eq("student_id", session.profileId),
       ])
     : [{ data: [] }, { data: [] }];
@@ -203,25 +203,18 @@ export async function loadStudentDashboard(): Promise<StudentDashboard> {
         // The stored score is the source of truth; the cell is drawn from it
         // rather than from a second read of attendance_marks.
         attended: value > 0,
-        status: score?.status === "confirmed" ? "confirmed" : "provisional",
         source: score?.source === "manually_entered" ? "manually_entered" : "digital",
         score: value,
       };
     });
 
-    const confirmedScore = sessions
-      .filter((s) => s.status === "confirmed")
-      .reduce((sum, s) => sum + s.score, 0);
-    const provisionalScore = sessions
-      .filter((s) => s.status === "provisional")
-      .reduce((sum, s) => sum + s.score, 0);
+    const attendedCount = sessions.reduce((sum, s) => sum + s.score, 0);
 
     return {
       courseId: course.id,
       code: course.code,
       title: course.title,
-      confirmedScore,
-      provisionalScore,
+      attendedCount,
       sessionsHeld: held.length,
       sessions,
     };
@@ -254,6 +247,19 @@ export async function loadStudentDashboard(): Promise<StudentDashboard> {
 
   const resumption = dues?.resumption_date ?? new Date().toISOString();
 
+  // Instalments, summed by the database rather than here: dues_balance_kobo()
+  // is what apply_payment() uses to decide whether a payment clears a student,
+  // and a screen that added up the payments itself would eventually disagree
+  // with the decision that was actually made.
+  const { data: paid } = await db.rpc("dues_paid_kobo", {
+    p_student_id: session.profileId,
+    p_academic_session_id: activeSession.id,
+  });
+  const { data: balance } = await db.rpc("dues_balance_kobo", {
+    p_student_id: session.profileId,
+    p_academic_session_id: activeSession.id,
+  });
+
   return {
     student: {
       id: student.id,
@@ -268,8 +274,10 @@ export async function loadStudentDashboard(): Promise<StudentDashboard> {
     paymentOpen: (compliance?.state ?? "uncleared") !== "locked" || covering != null,
     dues: {
       duesAmountKobo: Number(dues?.dues_amount_kobo ?? 0),
+      paidKobo: Number(paid ?? 0),
+      balanceKobo: Number(balance ?? 0),
       resumptionDate: resumption,
-      // Day 30 of the provisional window, counted from resumption.
+      // Day 30 of the payment window, counted from resumption.
       deadline: new Date(new Date(resumption).getTime() + 30 * 86_400_000).toISOString(),
       gracePeriodEnd: covering?.expires_on ?? dues?.grace_period_end ?? null,
     },
@@ -354,7 +362,7 @@ export async function loadCourseDetail(code: string): Promise<CourseDetail | nul
       .order("held_on"),
     db
       .from("session_scores")
-      .select("session_instance_id, score, status, source")
+      .select("session_instance_id, score, source")
       .eq("student_id", session.profileId),
     db
       .from("timetable_entries")
@@ -374,7 +382,6 @@ export async function loadCourseDetail(code: string): Promise<CourseDetail | nul
       label: `Week ${index + 1}`,
       heldOn: instance.held_on,
       attended: value > 0,
-      status: score?.status === "confirmed" ? "confirmed" : "provisional",
       source: score?.source === "manually_entered" ? "manually_entered" : "digital",
       score: value,
     };
@@ -400,12 +407,7 @@ export async function loadCourseDetail(code: string): Promise<CourseDetail | nul
       courseId: course.id,
       code: course.code,
       title: course.title,
-      confirmedScore: sessions
-        .filter((s) => s.status === "confirmed")
-        .reduce((sum, s) => sum + s.score, 0),
-      provisionalScore: sessions
-        .filter((s) => s.status === "provisional")
-        .reduce((sum, s) => sum + s.score, 0),
+      attendedCount: sessions.reduce((sum, s) => sum + s.score, 0),
       sessionsHeld: sessions.length,
       sessions,
     },

@@ -563,7 +563,7 @@ export async function loadLecturerCourses(): Promise<LecturerCourse[]> {
       .select("id, course_id, held_on")
       .in("course_id", courseIds)
       .eq("status", "closed"),
-    db.from("session_scores").select("student_id, session_instance_id, score, status"),
+    db.from("session_scores").select("student_id, session_instance_id, score"),
   ]);
 
   const scoreByKey = new Map(
@@ -585,12 +585,12 @@ export async function loadLecturerCourses(): Promise<LecturerCourse[]> {
       const mine = held.filter((instance) => instance.held_on >= enrolment.enrolled_on);
       if (mine.length === 0) continue;
 
-      const confirmed = mine.reduce((sum, instance) => {
+      const attended = mine.reduce((sum, instance) => {
         const score = scoreByKey.get(`${enrolment.student_id}|${instance.id}`);
-        return sum + (score?.status === "confirmed" ? Number(score.score) : 0);
+        return sum + Number(score?.score ?? 0);
       }, 0);
 
-      totalPct += (confirmed / mine.length) * 100;
+      totalPct += (attended / mine.length) * 100;
       counted += 1;
     }
 

@@ -254,7 +254,7 @@ export function CourseRegistration({ registration }: { registration: StudentRegi
                   ) : (
                     // Compulsory, so there is no button — an offer that can
                     // only ever be refused is worse than no offer.
-                    <StatusBadge className="shrink-0" variant="confirmed" label="Compulsory" />
+                    <StatusBadge className="shrink-0" variant="counted" label="Compulsory" />
                   )}
                 </div>
               </li>

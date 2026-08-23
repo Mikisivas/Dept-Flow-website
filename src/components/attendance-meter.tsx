@@ -5,14 +5,16 @@ import { cn } from "@/lib/utils";
  * The 75% threshold is the whole point, so the meter draws the line. A
  * percentage with no threshold marker is a failed design here.
  *
- * Provisional sessions render as a dashed segment beyond the solid fill, so a
- * student can see what clearing their dues would gain them — the meter is the
- * argument for paying.
+ * There used to be a second, dashed segment beyond the fill: attendance
+ * recorded but not counted, which clearing your dues would have released. It
+ * was the meter's argument for paying. Payment no longer decides whether a
+ * lecture counts, so the segment went — and with it the only place on a
+ * student's screen where their attendance and their debt were drawn as one
+ * number.
  */
 
 type AttendanceMeterProps = {
-  confirmedScore: number;
-  provisionalScore?: number;
+  attendedCount: number;
   sessionsHeld: number;
   thresholdPct?: number;
   /** Suppresses the sentence when the caller supplies its own. */
@@ -21,17 +23,14 @@ type AttendanceMeterProps = {
 };
 
 export function AttendanceMeter({
-  confirmedScore,
-  provisionalScore = 0,
+  attendedCount,
   sessionsHeld,
   thresholdPct = 75,
   showSentence = true,
   className,
 }: AttendanceMeterProps) {
-  const pct = attendancePct(confirmedScore, sessionsHeld);
-  const potentialPct = attendancePct(confirmedScore + provisionalScore, sessionsHeld);
-  const needed = fullSessionsNeeded(confirmedScore, sessionsHeld, thresholdPct);
-  const hasProvisional = provisionalScore > 0;
+  const pct = attendancePct(attendedCount, sessionsHeld);
+  const needed = fullSessionsNeeded(attendedCount, sessionsHeld, thresholdPct);
 
   /**
    * Nothing held yet is not the same as nothing attended.
@@ -59,8 +58,7 @@ export function AttendanceMeter({
             "no classes yet"
           ) : (
             <>
-              {formatScore(confirmedScore)} of {sessionsHeld} sessions
-              {hasProvisional ? ` · ${formatScore(provisionalScore)} waiting` : ""}
+              {formatScore(attendedCount)} of {sessionsHeld} attended
             </>
           )}
         </p>
@@ -84,18 +82,6 @@ export function AttendanceMeter({
           style={{ width: `${Math.min(pct, 100)}%` }}
         />
 
-        {/* What clearing would add. Dashed, hollow — never solid, or it reads
-            as attendance the student already has. */}
-        {hasProvisional ? (
-          <div
-            className="absolute inset-y-0 rounded-full border border-dashed border-cell-provisional"
-            style={{
-              left: `${Math.min(pct, 100)}%`,
-              width: `${Math.max(0, Math.min(potentialPct, 100) - Math.min(pct, 100))}%`,
-            }}
-          />
-        ) : null}
-
         {/* The hard tick. This is the component's reason to exist. */}
         <div
           className="absolute -top-1 -bottom-1 w-0.5 bg-ink"
@@ -104,8 +90,7 @@ export function AttendanceMeter({
         />
       </div>
 
-      <div className="flex justify-between text-[12px] text-muted">
-        <span>{hasProvisional ? "counted" : ""}</span>
+      <div className="flex justify-end text-[12px] text-muted">
         <span
           className="tabular"
           style={{ marginRight: `${Math.max(0, 100 - thresholdPct - 8)}%` }}
@@ -116,15 +101,7 @@ export function AttendanceMeter({
 
       {showSentence ? (
         <p className="text-[15px] leading-relaxed text-slate">
-          {sentence({
-            pct,
-            needed,
-            nothingHeld,
-            hasProvisional,
-            provisionalScore,
-            potentialPct,
-            thresholdPct,
-          })}
+          {sentence({ pct, needed, nothingHeld, thresholdPct })}
         </p>
       ) : null}
     </div>
@@ -139,35 +116,17 @@ function sentence({
   pct,
   needed,
   nothingHeld,
-  hasProvisional,
-  provisionalScore,
-  potentialPct,
   thresholdPct,
 }: {
   pct: number;
   needed: number;
   nothingHeld: boolean;
-  hasProvisional: boolean;
-  provisionalScore: number;
-  potentialPct: number;
   thresholdPct: number;
 }) {
   // Comes first: with no denominator every branch below is arithmetically true
   // and wrong to say out loud.
   if (nothingHeld) {
     return "No classes have been held yet, so there is nothing to measure.";
-  }
-
-  if (hasProvisional) {
-    const sessions = formatScore(provisionalScore);
-    const reaches = potentialPct >= thresholdPct;
-    return (
-      <>
-        The dashed segment is <strong className="font-semibold text-ink">{sessions} sessions</strong>{" "}
-        already recorded. Clearing your dues counts them
-        {reaches ? ` and puts you at ${formatPercent(potentialPct)}.` : "."}
-      </>
-    );
   }
 
   if (pct >= thresholdPct) {
@@ -177,16 +136,17 @@ function sentence({
   if (needed === 1) {
     return (
       <>
-        You need <strong className="font-semibold text-ink">1 more full session</strong> to reach{" "}
-        {thresholdPct}%.
+        You need to attend <strong className="font-semibold text-ink">1 more lecture</strong> to
+        reach {thresholdPct}%.
       </>
     );
   }
 
   return (
     <>
-      You need <strong className="font-semibold text-ink">{needed} more full sessions</strong> to
-      reach {thresholdPct}%.
+      You need to attend{" "}
+      <strong className="font-semibold text-ink">{needed} more lectures in a row</strong> to reach{" "}
+      {thresholdPct}%.
     </>
   );
 }

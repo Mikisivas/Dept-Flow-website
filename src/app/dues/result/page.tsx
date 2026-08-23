@@ -51,16 +51,15 @@ export default async function PaymentResultPage({
     }
   }
 
-  const confirmedScore = courses.reduce((sum, course) => sum + course.confirmedScore, 0);
-  const provisionalScore = courses.reduce((sum, course) => sum + course.provisionalScore, 0);
+  const attendedCount = courses.reduce((sum, course) => sum + course.attendedCount, 0);
   const sessionsHeld = courses.reduce((sum, course) => sum + course.sessionsHeld, 0);
 
-  // requireStudent() ran before the settle, so its scores are the pre-payment
-  // ones. On success the provisional marks have just been confirmed, which is
-  // exactly the sum of the two.
+  // This page used to lead with the percentage the payment had just unlocked,
+  // and it was the best moment in the product. There is nothing to unlock now:
+  // the attendance below counted before the payment and counts the same after
+  // it. What a payment changes is the permit, so that is what it says.
   const succeeded = outcome?.status === "success";
-  const counted = succeeded ? confirmedScore + provisionalScore : confirmedScore;
-  const newPct = attendancePct(counted, sessionsHeld);
+  const pct = attendancePct(attendedCount, sessionsHeld);
 
   return (
     <AppShell role="student">
@@ -71,14 +70,20 @@ export default async function PaymentResultPage({
           <p className="mt-2 text-[16px] leading-relaxed text-slate">
             {sessionsHeld > 0 ? (
               <>
+                That&apos;s one of the two things an exam permit needs. The other is 75%
+                attendance, and yours is{" "}
+                <span className="font-semibold text-ink tabular">{formatPercent(pct)}</span>{" "}
+                across{" "}
                 <strong className="font-semibold text-ink">
-                  {formatScore(counted)} sessions are now counted.
+                  {formatScore(attendedCount)} of {sessionsHeld}
                 </strong>{" "}
-                Your attendance is{" "}
-                <span className="font-semibold text-ink tabular">{formatPercent(newPct)}</span>.
+                lectures.
               </>
             ) : (
-              <>You&apos;re cleared. Every class from here counts as soon as it&apos;s recorded.</>
+              <>
+                That&apos;s one of the two things an exam permit needs. The other is 75%
+                attendance, and no classes have been held yet.
+              </>
             )}
           </p>
         </section>
@@ -86,34 +91,13 @@ export default async function PaymentResultPage({
 
       {outcome?.status === "pending" ? (
         <section className="rounded-lg border border-info bg-info-tint p-5">
-          {outcome.mismatch ? (
-            <TriangleAlert className="h-7 w-7 text-info" aria-hidden="true" />
-          ) : (
-            <Loader2 className="h-7 w-7 text-info motion-safe:animate-spin" aria-hidden="true" />
-          )}
+          <Loader2 className="h-7 w-7 text-info motion-safe:animate-spin" aria-hidden="true" />
           <h1 className="mt-3 text-2xl font-semibold tracking-[-0.02em] text-ink">
-            {outcome.mismatch ? "That didn't cover the full amount" : "Checking your payment…"}
+            Checking your payment…
           </h1>
           <p className="mt-2 text-[16px] leading-relaxed text-slate">
-            {outcome.mismatch ? (
-              <>
-                You paid{" "}
-                <span className="font-semibold text-ink tabular">
-                  {naira(outcome.mismatch.paidKobo)}
-                </span>{" "}
-                of{" "}
-                <span className="font-semibold text-ink tabular">
-                  {naira(outcome.mismatch.dueKobo)}
-                </span>
-                . Nothing has been lost — take the reference below to the department office and
-                they will sort it out.
-              </>
-            ) : (
-              <>
-                Bank transfers can take a few minutes to confirm. You can leave this page —
-                we&apos;ll keep checking, and your sessions will count as soon as it clears.
-              </>
-            )}
+            Bank transfers can take a few minutes to confirm. You can leave this page — we&apos;ll
+            keep checking. Your attendance is unaffected either way.
           </p>
         </section>
       ) : null}
@@ -125,8 +109,8 @@ export default async function PaymentResultPage({
             That payment didn&apos;t go through
           </h1>
           <p className="mt-2 text-[16px] leading-relaxed text-slate">
-            Nothing was taken from your account. Your {formatScore(provisionalScore)} recorded
-            sessions are still waiting — try again when you&apos;re ready.
+            Nothing was taken from your account, and nothing about your attendance has changed —
+            try again when you&apos;re ready.
           </p>
         </section>
       ) : null}

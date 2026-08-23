@@ -8,7 +8,7 @@ import { StickyActionBar } from "@/components/sticky-action-bar";
 import { Button } from "@/components/ui/button";
 import type { DuesPeriod } from "@/lib/data/fixtures";
 import type { ComplianceState, PaymentChannel, PaymentRecord } from "@/lib/types";
-import { formatDate, formatDateTime, formatDaysLeft, formatScore, naira } from "@/lib/format";
+import { formatDate, formatDateTime, formatDaysLeft, naira } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 /**
@@ -42,13 +42,13 @@ const CHANNELS: Array<{ id: Channel; label: string; hint: string; icon: typeof C
 export function DuesPayment({
   compliance,
   dues,
-  provisionalScore,
+  balanceKobo,
   paymentOpen,
   payments,
 }: {
   compliance: ComplianceState;
   dues: DuesPeriod;
-  provisionalScore: number;
+  balanceKobo: number;
   paymentOpen: boolean;
   payments: PaymentRecord[];
 }) {
@@ -119,7 +119,7 @@ export function DuesPayment({
               {naira(dues.duesAmountKobo)}
             </p>
           </div>
-          {cleared ? <StatusBadge variant="confirmed" label="Paid" /> : null}
+          {cleared ? <StatusBadge variant="counted" label="Paid in full" /> : null}
         </div>
 
         {!cleared ? (
@@ -130,20 +130,19 @@ export function DuesPayment({
           </p>
         ) : null}
 
-        {/* What clearing actually buys.
-            The number is the marks waiting, not the count of lectures sat
-            through — a lecture the student missed is a zero and clearing buys
-            nothing for it. This is the same figure the dashboard banner
-            quotes, and the two must never disagree. */}
-        {provisionalScore > 0 ? (
-          <div className="mt-4 rounded-md border border-dashed border-cell-provisional p-3.5">
+        {/* This block used to say what clearing bought: the recorded sessions
+            it would release. It buys none of them now. What it buys is the
+            other half of the permit condition, and a part-payer needs to know
+            the balance rather than the headline figure. */}
+        {!cleared && balanceKobo > 0 && balanceKobo !== dues.duesAmountKobo ? (
+          <div className="mt-4 rounded-md border border-line bg-surface-sunken p-3.5">
             <p className="text-[15px] leading-relaxed text-slate">
-              This will count your{" "}
-              <strong className="font-semibold text-ink">
-                {formatScore(provisionalScore)} waiting{" "}
-                {provisionalScore === 1 ? "session" : "sessions"}
+              You&apos;ve paid{" "}
+              <strong className="font-semibold text-ink tabular">
+                {naira(dues.paidKobo)}
               </strong>{" "}
-              — recorded already, but not counted until you clear.
+              so far. <strong className="font-semibold text-ink tabular">{naira(balanceKobo)}</strong>{" "}
+              is still outstanding — you can pay it in one go or in parts.
             </p>
           </div>
         ) : null}
@@ -154,15 +153,12 @@ export function DuesPayment({
           <Lock className="h-7 w-7 text-danger" aria-hidden="true" />
           <h2 className="mt-3 text-[19px] font-semibold text-ink">Payment has closed</h2>
           <p className="mt-2 text-[15px] leading-relaxed text-slate">
-            The deadline for this session passed, so dues can no longer be paid here and new
-            attendance isn&apos;t being recorded.{" "}
-            {provisionalScore > 0 ? (
+            The deadline for this session passed, so dues can no longer be paid here. Your
+            attendance is unaffected and is still being recorded and counted in full.{" "}
+            {balanceKobo > 0 ? (
               <>
-                Your{" "}
-                <strong className="font-semibold text-ink">
-                  {formatScore(provisionalScore)} recorded {provisionalScore === 1 ? "session" : "sessions"}
-                </strong>{" "}
-                have not been lost.{" "}
+                <strong className="font-semibold text-ink tabular">{naira(balanceKobo)}</strong> is
+                still outstanding, and an exam permit needs it settled.{" "}
               </>
             ) : null}
             The department office can reopen payment — speak to them.
@@ -305,7 +301,7 @@ const HISTORY_LABEL: Record<PaymentRecord["status"], string> = {
  * stale — so a row still saying "Checking" really is still in flight.
  */
 function historyVariant(status: PaymentRecord["status"]) {
-  if (status === "success") return "confirmed" as const;
+  if (status === "success") return "counted" as const;
   if (status === "pending") return "pending" as const;
   return "locked" as const;
 }

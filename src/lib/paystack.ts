@@ -168,6 +168,16 @@ export type VerifiedTransaction = {
   amountKobo: number;
   channel: "card" | "transfer" | null;
   paidAt: string | null;
+  /**
+   * Paystack's fingerprint for the card, and its last four digits.
+   *
+   * Not identifying on their own, and stored for one purpose: the integrity
+   * check flags the same card funding several different matric numbers. That
+   * anomaly cannot be seen without something stable to compare, and the
+   * signature is the least revealing thing that is stable.
+   */
+  cardSignature: string | null;
+  last4: string | null;
   raw: unknown;
 };
 
@@ -194,7 +204,15 @@ export async function verifyTransaction(reference: string): Promise<VerifiedTran
   // unknown reference with 400, not the 404 the shape of the call suggests.
   // Assuming 404 left two rows spinning on "Checking payment…" for ever.
   if (isUnknownReference(response.status, body?.message)) {
-    return { status: "abandoned", amountKobo: 0, channel: null, paidAt: null, raw: body };
+    return {
+      status: "abandoned",
+      amountKobo: 0,
+      channel: null,
+      paidAt: null,
+      cardSignature: null,
+      last4: null,
+      raw: body,
+    };
   }
 
   if (!response.ok || !body?.status) {
@@ -203,11 +221,16 @@ export async function verifyTransaction(reference: string): Promise<VerifiedTran
 
   const data = body.data ?? {};
 
+  const authorization = (data.authorization ?? {}) as { signature?: unknown; last4?: unknown };
+
   return {
     status: normaliseStatus(data.status),
     amountKobo: Number(data.amount ?? 0),
     channel: normaliseChannel(data.channel),
     paidAt: data.paid_at ?? null,
+    cardSignature:
+      typeof authorization.signature === "string" ? authorization.signature : null,
+    last4: typeof authorization.last4 === "string" ? authorization.last4 : null,
     raw: data,
   };
 }

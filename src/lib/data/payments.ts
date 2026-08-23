@@ -140,10 +140,10 @@ export type SettleOutcome = {
   status: "success" | "pending" | "failed";
   reference: string;
   amountKobo: number;
-  /** Sessions confirmed by this payment. Null when it did not clear anyone. */
-  sessionsCounted: number | null;
-  /** Set when the money arrived but does not match what is owed. */
-  mismatch?: { paidKobo: number; dueKobo: number };
+  /** Whether this payment took the balance to zero. */
+  cleared: boolean;
+  /** What is still owed after it. Null when nothing was applied. */
+  balanceKobo: number | null;
 };
 
 /**
@@ -182,7 +182,8 @@ export async function settlePayment(
       status: "success",
       reference,
       amountKobo: Number(payment.amount_kobo),
-      sessionsCounted: null,
+      cleared: false,
+      balanceKobo: null,
     };
   }
 
@@ -198,7 +199,8 @@ export async function settlePayment(
       status: "pending",
       reference,
       amountKobo: Number(payment.amount_kobo),
-      sessionsCounted: null,
+      cleared: false,
+      balanceKobo: null,
     };
   }
 
@@ -212,72 +214,59 @@ export async function settlePayment(
       status: "failed",
       reference,
       amountKobo: Number(payment.amount_kobo),
-      sessionsCounted: null,
+      cleared: false,
+      balanceKobo: null,
     };
   }
 
-  // Float-safe, via the database's own comparison so there is one rule.
-  const { data: matches } = await db.rpc("payment_matches_dues", {
-    paid_kobo: verified.amountKobo,
-    due_kobo: Number(payment.amount_kobo),
-  });
-
-  if (matches !== true) {
-    // Money arrived and does not settle the debt. Recorded, not cleared, and
-    // not silently accepted — an underpayment is a thing a person has to look
-    // at, and the payload is kept so they can.
-    await db
-      .from("payments")
-      .update({
-        status: "pending",
-        verification_payload: verified.raw,
-      })
-      .eq("id", payment.id);
-
-    return {
-      status: "pending",
-      reference,
-      amountKobo: verified.amountKobo,
-      sessionsCounted: null,
-      mismatch: { paidKobo: verified.amountKobo, dueKobo: Number(payment.amount_kobo) },
-    };
-  }
-
+  // The amount that actually arrived is what is recorded, not the amount the
+  // student was invited to pay. This used to refuse anything that did not match
+  // the dues figure exactly and park it as "pending" for a human — which meant
+  // a student paying half their dues at the start of term had their money
+  // recorded as a problem. Instalments are the normal case, so a short payment
+  // is a payment: it reduces the balance and clears nobody.
   const { error: paidError } = await db
     .from("payments")
     .update({
       status: "success",
       channel: verified.channel,
+      amount_kobo: verified.amountKobo,
       verified_at: verified.paidAt ?? new Date().toISOString(),
       verification_payload: verified.raw,
+      card_signature: verified.cardSignature,
+      last4: verified.last4,
     })
     .eq("id", payment.id);
 
   if (paidError) throw new Error(`Could not record the payment: ${paidError.message}`);
 
-  // One transaction: the state flips and every provisional score for this
-  // academic session becomes confirmed together. Partially confirmed is not a
-  // state this system has.
-  const { data: counted, error: clearError } = await db.rpc("clear_student", {
-    p_student_id: payment.student_id,
-    p_academic_session_id: payment.academic_session_id,
-    p_route: "payment",
+  // What a successful payment does is decided in one place, so this route and
+  // the bursary counter's manual route cannot drift. It clears the student only
+  // when the BALANCE reaches zero.
+  const { data: applied, error: applyError } = await db.rpc("apply_payment", {
+    p_payment_id: payment.id,
     p_actor_id: null,
   });
 
-  if (clearError) {
-    // The money is recorded but the student is not cleared, which is the one
-    // outcome nobody can see from the outside. Loud, not swallowed.
+  if (applyError) {
+    // The money is recorded but nothing acted on it, which is the one outcome
+    // nobody can see from the outside. Loud, not swallowed.
     throw new Error(
-      `Payment ${reference} verified but clearing failed: ${clearError.message}`,
+      `Payment ${reference} verified but applying failed: ${applyError.message}`,
     );
   }
+
+  const { data: balance } = await db.rpc("dues_balance_kobo", {
+    p_student_id: payment.student_id,
+    p_academic_session_id: payment.academic_session_id,
+  });
 
   return {
     status: "success",
     reference,
     amountKobo: verified.amountKobo,
-    sessionsCounted: typeof counted === "number" ? counted : null,
+    cleared: applied === "cleared",
+    balanceKobo: Number(balance ?? 0),
   };
 }
 

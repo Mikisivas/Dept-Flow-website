@@ -13,12 +13,9 @@ export const metadata: Metadata = { title: "Student" };
 
 export const dynamic = "force-dynamic";
 
-const COMPLIANCE_VARIANT: Record<
-  ComplianceState,
-  "confirmed" | "provisional" | "pending" | "locked"
-> = {
-  cleared: "confirmed",
-  uncleared: "provisional",
+const COMPLIANCE_VARIANT: Record<ComplianceState, "counted" | "pending" | "locked"> = {
+  cleared: "counted",
+  uncleared: "pending",
   pending_verification: "pending",
   locked: "locked",
 };
@@ -53,7 +50,7 @@ export default async function StudentDetailPage({
         }
         action={
           <StatusBadge
-            variant={COMPLIANCE_VARIANT[standing.compliance as ComplianceState] ?? "provisional"}
+            variant={COMPLIANCE_VARIANT[standing.compliance as ComplianceState] ?? "pending"}
           />
         }
       />
@@ -77,12 +74,11 @@ export default async function StudentDetailPage({
                 <p className="mt-1 text-[13px] text-muted tabular">
                   {course.sessionsHeld === 0
                     ? "No classes held yet"
-                    : `${formatScore(course.confirmedScore + course.provisionalScore)} of ${course.sessionsHeld} sessions recorded`}
+                    : `${formatScore(course.attendedCount)} of ${course.sessionsHeld} lectures attended`}
                 </p>
                 <AttendanceMeter
                   className="mt-4"
-                  confirmedScore={course.confirmedScore}
-                  provisionalScore={course.provisionalScore}
+                  attendedCount={course.attendedCount}
                   sessionsHeld={course.sessionsHeld}
                   showSentence={false}
                 />

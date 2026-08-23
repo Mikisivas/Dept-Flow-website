@@ -48,14 +48,6 @@ const COLUMNS: Column<SessionCell>[] = [
     cell: (session) => <span className="tabular">{formatScore(session.score)}</span>,
   },
   {
-    key: "status",
-    header: "Status",
-    mobile: "meta",
-    cell: (session) => (
-      <StatusBadge variant={session.status === "provisional" ? "provisional" : "confirmed"} />
-    ),
-  },
-  {
     key: "source",
     header: "Source",
     mobile: "hidden",
@@ -77,7 +69,6 @@ export default async function CourseDetailPage({
   if (!detail) notFound();
 
   const { course, lecturer, schedule, venue, projectedPct } = detail;
-  const recorded = course.confirmedScore + course.provisionalScore;
 
   return (
     <AppShell role="student">
@@ -87,9 +78,7 @@ export default async function CourseDetailPage({
         action={
           // Nothing held means nothing to badge. Showing "Counted" against an
           // empty course reads as a clean record rather than an absent one.
-          course.sessionsHeld === 0 ? undefined : (
-            <StatusBadge variant={course.provisionalScore > 0 ? "provisional" : "confirmed"} />
-          )
+          course.sessionsHeld === 0 ? undefined : <StatusBadge variant="counted" />
         }
       />
 
@@ -113,8 +102,7 @@ export default async function CourseDetailPage({
 
       <section className="mt-6 rounded-lg border border-line bg-surface p-4">
         <AttendanceMeter
-          confirmedScore={course.confirmedScore}
-          provisionalScore={course.provisionalScore}
+          attendedCount={course.attendedCount}
           sessionsHeld={course.sessionsHeld}
         />
       </section>
@@ -145,7 +133,7 @@ export default async function CourseDetailPage({
           rows={course.sessions}
           columns={COLUMNS}
           rowKey={(session) => session.id}
-          caption={`${formatScore(recorded)} of ${course.sessionsHeld} sessions recorded`}
+          caption={`${formatScore(course.attendedCount)} of ${course.sessionsHeld} lectures attended`}
         />
           </>
         )}

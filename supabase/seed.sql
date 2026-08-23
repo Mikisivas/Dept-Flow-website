@@ -181,15 +181,11 @@ begin
       v_day + time '10:00', v_day + time '12:00', v_lect
     );
 
-    insert into session_scores (student_id, session_instance_id, score, status, confirmed_at)
-    values (
-      v_chidera, v_session, chidera_scores[i], 'provisional', null
-    );
+    insert into session_scores (student_id, session_instance_id, score)
+    values (v_chidera, v_session, chidera_scores[i]);
 
-    insert into session_scores (student_id, session_instance_id, score, status, confirmed_at)
-    values (
-      v_halima, v_session, halima_scores[i], 'confirmed', now()
-    );
+    insert into session_scores (student_id, session_instance_id, score)
+    values (v_halima, v_session, halima_scores[i]);
   end loop;
 end $$;
 
@@ -286,9 +282,9 @@ select write_audit(
 -- Tunde's MTH 205, so a waiver has something to confirm
 -- ---------------------------------------------------------------------------
 
--- He is locked and has never paid, so every mark he holds is provisional and
--- his counted attendance is zero. Without these he is at zero before a waiver
--- and zero after it, and the screen demonstrates nothing.
+-- He is locked and has never paid, which since payment was decoupled affects
+-- his standing with the department and not his attendance. The waiver screen
+-- still needs him to have a real percentage to argue about.
 --
 -- 6 of 8 is 75.00% — exactly the threshold. Granting his waiver is the
 -- difference between not sitting the paper and sitting it, which is the whole
@@ -324,8 +320,8 @@ begin
     -- A zero is an absence, and an absence is the lack of a row rather than a
     -- row saying nothing — the same way the rest of this schema treats it.
     if v_marks[i] > 0 then
-      insert into session_scores (student_id, session_instance_id, score, status, source)
-      values (v_tunde, v_id, v_marks[i], 'provisional', 'digital');
+      insert into session_scores (student_id, session_instance_id, score, source)
+      values (v_tunde, v_id, v_marks[i], 'digital');
     end if;
   end loop;
 end $$;

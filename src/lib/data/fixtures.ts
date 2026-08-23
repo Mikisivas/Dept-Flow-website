@@ -24,8 +24,16 @@ export type StudentProfile = {
 
 export type DuesPeriod = {
   duesAmountKobo: number;
+  /**
+   * What is still owed after every successful payment. Students pay in
+   * instalments, so "have they paid" is not a question with a yes or a no —
+   * the balance is the fact, and every screen that used to branch on a boolean
+   * reads this instead.
+   */
+  balanceKobo: number;
+  paidKobo: number;
   resumptionDate: string;
-  /** Day 30 of the provisional window — the deadline a student sees. */
+  /** Day 30 of the payment window — the deadline a student sees. */
   deadline: string;
   gracePeriodEnd: string | null;
 };

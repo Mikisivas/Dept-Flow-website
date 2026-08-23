@@ -81,7 +81,7 @@ export function WaiverList({ requests }: { requests: WaiverRequest[] }) {
             <p className="mt-3 rounded-md border border-dashed border-cell-provisional p-3 text-[14px] leading-relaxed text-slate">
               Granting this counts{" "}
               <strong className="font-semibold text-ink tabular">
-                {formatScore(request.provisionalScore)} provisional sessions
+                {formatScore(request.lecturesAttended)} lectures attended
               </strong>{" "}
               immediately.
             </p>
@@ -136,7 +136,7 @@ export function WaiverList({ requests }: { requests: WaiverRequest[] }) {
                 { label: "Level", value: String(deciding.request.level) },
                 {
                   label: deciding.grant ? "Sessions counted" : "Sessions left waiting",
-                  value: formatScore(deciding.request.provisionalScore),
+                  value: formatScore(deciding.request.lecturesAttended),
                 },
               ]
             : undefined

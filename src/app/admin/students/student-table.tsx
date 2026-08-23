@@ -21,9 +21,13 @@ import type { ComplianceState } from "@/lib/types";
  * a database task.
  */
 
-const COMPLIANCE_VARIANT: Record<ComplianceState, "confirmed" | "provisional" | "pending" | "locked"> = {
-  cleared: "confirmed",
-  uncleared: "provisional",
+const COMPLIANCE_VARIANT: Record<ComplianceState, "counted" | "pending" | "locked"> = {
+  cleared: "counted",
+  // No badge of its own: owing dues is the ordinary state for most of a term
+  // and, since payment was decoupled, it costs a student nothing they can see
+  // on this screen. Overstating it here would be the screen making a judgement
+  // the system does not.
+  uncleared: "pending",
   pending_verification: "pending",
   locked: "locked",
 };
@@ -100,7 +104,7 @@ export function StudentTable({ students }: { students: AdminStudent[] }) {
       mobile: "meta",
       cell: (student) => (
         <StatusBadge
-          variant={COMPLIANCE_VARIANT[student.compliance as ComplianceState] ?? "provisional"}
+          variant={COMPLIANCE_VARIANT[student.compliance as ComplianceState] ?? "pending"}
         />
       ),
     },

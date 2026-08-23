@@ -1,7 +1,7 @@
 import Link from "next/link";
-import { Circle, Info, Lock, ShieldCheck } from "lucide-react";
+import { Info, Lock, Wallet } from "lucide-react";
 import type { ComplianceState } from "@/lib/types";
-import { formatDate, formatScore } from "@/lib/format";
+import { naira } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -11,64 +11,27 @@ import { cn } from "@/lib/utils";
  *
  * It renders nothing at all when the student is cleared — a banner saying
  * "everything is fine" is furniture.
+ *
+ * Every message here used to be about attendance: sessions recorded but not
+ * counted, a percentage held hostage to a payment, a grace period that let a
+ * locked student record again. None of that is true now — dues are a debt to
+ * the department and attendance is measured whatever the balance. So the
+ * banner says what is owed, and says plainly that it is not costing the
+ * student their attendance, because a student who half-remembers the old rules
+ * will otherwise assume it is.
  */
 
 type ComplianceBannerProps = {
   state: ComplianceState;
-  /** Sessions recorded but not yet counted. */
-  provisionalScore?: number;
-  /** Set while an HOD grace period is open. */
-  graceEndsOn?: string | null;
+  /** What is still owed, in kobo. */
+  balanceKobo?: number;
   className?: string;
 };
 
-export function ComplianceBanner({
-  state,
-  provisionalScore = 0,
-  graceEndsOn,
-  className,
-}: ComplianceBannerProps) {
+export function ComplianceBanner({ state, balanceKobo = 0, className }: ComplianceBannerProps) {
   if (state === "cleared") return null;
 
-  const waiting = formatScore(provisionalScore);
-  const sessionWord = provisionalScore === 1 ? "session" : "sessions";
-
-  // Locked, but a grace period is open. Two things are true at once and the
-  // student needs both: attendance is being recorded again RIGHT NOW, and it
-  // still will not count until they clear. Leading with "Attendance locked"
-  // here would be the one thing that is no longer the case.
-  if (state === "locked" && graceEndsOn) {
-    return (
-      <Banner
-        tone="info"
-        Icon={ShieldCheck}
-        title={`Your attendance is being recorded again, until ${formatDate(graceEndsOn)}.`}
-        body={
-          provisionalScore > 0
-            ? `The HOD has opened a grace period. Attend as normal — but your ${waiting} waiting ${sessionWord} still won't count until you clear, and recording stops again after that date.`
-            : "The HOD has opened a grace period. Attend as normal — but nothing counts towards the 75% until you clear, and recording stops again after that date."
-        }
-        action={{ href: "/dues", label: "Pay dues" }}
-        className={className}
-      />
-    );
-  }
-
-  // Locked and no grace period: paying is shut too, so this carries no "Pay
-  // dues" button. Offering one would send the student to a screen that can only
-  // refuse them, which reads as the site being broken rather than as the
-  // department's deadline having passed.
-  if (state === "locked") {
-    return (
-      <Banner
-        tone="danger"
-        Icon={Lock}
-        title="Attendance locked — the payment deadline passed."
-        body="New attendance isn't being recorded, and payment for this session has closed. Nothing already recorded has been lost. The department office can reopen payment."
-        className={className}
-      />
-    );
-  }
+  const owed = balanceKobo > 0 ? naira(balanceKobo) : null;
 
   if (state === "pending_verification") {
     return (
@@ -76,38 +39,38 @@ export function ComplianceBanner({
         tone="info"
         Icon={Info}
         title="Checking your payment…"
-        body="This can take a few hours. You don't need to do anything — we'll keep checking and count your sessions as soon as it clears."
+        body="This can take a few hours. You don't need to do anything — we'll keep checking."
         className={className}
       />
     );
   }
 
-  // Uncleared with nothing recorded yet — a student who registered this
-  // morning. "0 sessions recorded but not yet counted" is arithmetically true
-  // and says nothing: there is no loss to point at, so the sentence has to be
-  // about what happens next instead of about a number that is zero.
-  if (provisionalScore <= 0) {
+  // The payment window has closed with a balance outstanding. Deliberately no
+  // "Pay dues" button: paying is shut, and offering a button to a screen that
+  // can only refuse reads as the site being broken rather than as the
+  // department's deadline having passed.
+  if (state === "locked") {
     return (
       <Banner
-        tone="neutral"
-        Icon={Circle}
-        title="Your dues aren't cleared yet."
-        body="Attendance is recorded from your first class. Clearing your dues is what makes it count towards the 75%."
-        action={{ href: "/dues", label: "Pay dues" }}
+        tone="danger"
+        Icon={Lock}
+        title={
+          owed
+            ? `Payment has closed with ${owed} outstanding.`
+            : "Payment for this session has closed."
+        }
+        body="Your attendance is unaffected and is still being recorded in full. Speak to the department office about settling the balance — a permit needs both the dues paid and 75% attendance."
         className={className}
       />
     );
   }
 
-  // Uncleared, inside the first 30 days: recorded, not counted. Neutral and
-  // dashed, because this carries no judgement — it is a statement of fact plus
-  // the action that changes it.
   return (
     <Banner
       tone="neutral"
-      Icon={Circle}
-      title={`${waiting} ${sessionWord} recorded but not yet counted.`}
-      body="Your attendance is being recorded. Clearing your dues counts all of it at once."
+      Icon={Wallet}
+      title={owed ? `You owe ${owed} in departmental dues.` : "Your dues aren't cleared yet."}
+      body="This doesn't affect your attendance, which is recorded and counted either way. It does affect your exam permit, which needs the dues paid in full."
       action={{ href: "/dues", label: "Pay dues" }}
       className={className}
     />
@@ -117,7 +80,7 @@ export function ComplianceBanner({
 const TONES = {
   danger: "border-danger bg-danger-tint text-ink",
   info: "border-info bg-info-tint text-ink",
-  neutral: "border-dashed border-cell-provisional bg-surface text-ink",
+  neutral: "border-line bg-surface text-ink",
 } as const;
 
 const ICON_TONES = {

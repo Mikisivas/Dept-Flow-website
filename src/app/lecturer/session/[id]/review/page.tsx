@@ -26,7 +26,6 @@ function cellOf(entry: RosterEntry, heldOn: string): SessionCell {
     label: "This session",
     heldOn,
     attended: entry.present,
-    status: "confirmed",
     source: "digital",
     score: scoreOf(entry),
   };

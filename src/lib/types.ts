@@ -8,12 +8,17 @@
 
 export type ComplianceState = "uncleared" | "cleared" | "pending_verification" | "locked";
 
-export type ScoreStatus = "provisional" | "confirmed";
-
 export type ScoreSource = "digital" | "manually_entered";
 
-/** The five StatusBadge variants, which are what a student actually sees. */
-export type StatusVariant = "confirmed" | "provisional" | "pending" | "locked" | "atRisk";
+/**
+ * What a student actually sees on a badge.
+ *
+ * `provisional` is gone with the state it named. It meant "recorded but not
+ * counted until you pay", and payment no longer decides whether a lecture
+ * counts — so a badge saying it would be describing a condition the system
+ * cannot produce.
+ */
+export type StatusVariant = "counted" | "pending" | "locked" | "atRisk";
 
 export type AppRole = "student" | "lecturer" | "hod" | "admin";
 
@@ -29,7 +34,6 @@ export type SessionCell = {
   heldOn: string;
   /** Present or absent. There is no third thing a lecture can be. */
   attended: boolean;
-  status: ScoreStatus;
   source: ScoreSource;
   score: number;
 };
@@ -131,10 +135,8 @@ export type CourseAttendance = {
   courseId: string;
   code: string;
   title: string;
-  /** Sum of confirmed scores — the numerator of the one formula. */
-  confirmedScore: number;
-  /** Sum of scores recorded but not yet counted. */
-  provisionalScore: number;
+  /** Lectures attended — the numerator of the one formula. */
+  attendedCount: number;
   sessionsHeld: number;
   sessions: SessionCell[];
 };

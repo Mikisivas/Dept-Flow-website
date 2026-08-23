@@ -92,6 +92,37 @@ check("a successful transfer reads back as success", paid.status === "success");
 check("bank_transfer maps to the one word the product uses", paid.channel === "transfer");
 check("the amount comes back in kobo", paid.amountKobo === 500000);
 
+check("a transfer carries no card fingerprint", paid.cardSignature === null);
+
+// The card fingerprint exists for exactly one thing: the integrity check that
+// flags the same card funding several different matric numbers. It cannot be
+// derived, so if it is not read off the authorization block here it does not
+// exist at all, and that anomaly becomes undetectable.
+stubFetch(200, {
+  status: true,
+  data: {
+    status: "success",
+    amount: 200000,
+    channel: "card",
+    paid_at: "2026-08-03T15:47:00Z",
+    authorization: { signature: "SIG_abc123", last4: "4081", bin: "408108" },
+  },
+});
+const carded = await verifyTransaction("DF-CARD");
+check("a card payment carries the fingerprint the integrity check compares",
+  carded.cardSignature === "SIG_abc123");
+check("and the last four digits, which is what a person reads on the screen",
+  carded.last4 === "4081");
+check("a part payment reads back at the amount that actually arrived",
+  carded.amountKobo === 200000);
+
+stubFetch(200, {
+  status: true,
+  data: { status: "success", amount: 200000, channel: "card", authorization: {} },
+});
+check("an authorization block with nothing in it yields null, never undefined-as-string",
+  (await verifyTransaction("DF-CARD")).cardSignature === null);
+
 stubFetch(200, { status: true, data: { status: "ongoing", amount: 500000, channel: "card" } });
 check("an unrecognised state is pending, never success",
   (await verifyTransaction("DF-REAL")).status === "pending");

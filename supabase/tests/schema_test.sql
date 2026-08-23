@@ -92,19 +92,29 @@ select assert_true(
 -- The attendance formula
 -- ---------------------------------------------------------------------------
 
--- Chidera has 10 of 13 recorded, all provisional. Provisional scores are
--- excluded from the numerator, so her counted attendance is zero — which is
--- the honest number, and the whole reason the dashboard leads with the banner.
+-- Chidera has 10 of 13, Halima 5 of 13. Both count in full and neither has
+-- anything to do with dues: Chidera is cleared and Tunde is locked, and the
+-- formula cannot tell, because payment is not in it.
 select assert_true(
   attendance_pct('44444444-4444-4444-4444-444444444401',
-                 '66666666-6666-6666-6666-666666666601') = 0,
-  'provisional scores count for nothing until the student clears'
+                 '66666666-6666-6666-6666-666666666601') = 76.92,
+  'every recorded lecture counts: 10 of 13 is 76.92%'
 );
 
 select assert_true(
   attendance_pct('44444444-4444-4444-4444-444444444402',
                  '66666666-6666-6666-6666-666666666601') = 38.46,
-  'confirmed scores produce 5/13 = 38.46%'
+  'and 5 of 13 is 38.46%'
+);
+
+-- The assertion that used to be the centre of this suite ran the other way:
+-- an unpaid student's counted attendance was zero however many lectures they
+-- had sat in. Tunde has never paid a kobo and is locked; his percentage is
+-- whatever he attended.
+select assert_true(
+  attendance_pct('44444444-4444-4444-4444-444444444403',
+                 '66666666-6666-6666-6666-666666666602') = 75.00,
+  'a locked student who has never paid still has the attendance he actually has'
 );
 
 -- The worked example the AttendanceMeter states: 9 of 13 is 69%, and three
@@ -125,47 +135,37 @@ select assert_true(
 );
 
 -- ---------------------------------------------------------------------------
--- Clearing — the single transaction
+-- Clearing, which no longer reaches into attendance
 -- ---------------------------------------------------------------------------
 
+-- This section used to prove that clearing confirmed thirteen scores in one
+-- transaction. It now proves the opposite: that clearing touches none of them.
 do $$
 declare
-  v_confirmed integer;
+  v_before numeric;
+  v_after  numeric;
+  v_counted integer;
 begin
-  v_confirmed := clear_student(
-    '44444444-4444-4444-4444-444444444401',
+  v_before := attendance_pct('44444444-4444-4444-4444-444444444403',
+                             '66666666-6666-6666-6666-666666666602');
+
+  v_counted := clear_student(
+    '44444444-4444-4444-4444-444444444403',
     '11111111-1111-1111-1111-111111111111',
     'payment'
   );
-  perform assert_true(v_confirmed = 13, 'clearing confirms all 13 provisional sessions at once');
+
+  v_after := attendance_pct('44444444-4444-4444-4444-444444444403',
+                            '66666666-6666-6666-6666-666666666602');
+
+  perform assert_true(v_counted = 0, 'clearing counts nothing, because nothing was waiting to be counted');
+  perform assert_true(v_before = v_after, 'and a student''s percentage does not move when they pay');
 end $$;
 
 select assert_true(
-  (select count(*) from session_scores
-    where student_id = '44444444-4444-4444-4444-444444444401'
-      and status = 'provisional') = 0,
-  'no session is left provisional after clearing — partially confirmed is not a state'
-);
-
-select assert_true(
-  attendance_pct('44444444-4444-4444-4444-444444444401',
-                 '66666666-6666-6666-6666-666666666601') = 76.92,
-  'after clearing, the same 10 of 13 reads as 76.92%'
-);
-
--- The consequence, stated as the eligibility list states it. She attended
--- exactly as much before as after; the payment is the only thing that changed,
--- and it is what carries her over the line.
-select assert_true(
-  attendance_pct('44444444-4444-4444-4444-444444444401',
-                 '66666666-6666-6666-6666-666666666601') >= 75,
-  'clearing dues alone is what makes her eligible — no attendance was added, only counted'
-);
-
-select assert_true(
   (select state from compliance_statuses
-    where student_id = '44444444-4444-4444-4444-444444444401') = 'cleared',
-  'the compliance state moves with the scores'
+    where student_id = '44444444-4444-4444-4444-444444444403') = 'cleared',
+  'the compliance state still moves — dues are still a real obligation, just not this one'
 );
 
 select assert_rejects($$
@@ -204,8 +204,9 @@ begin
   perform assert_true(v_score = 1.0, 'one accepted code is the whole lecture');
 
   perform assert_true(
-    (select status from session_scores where student_id = v_student and session_instance_id = v_session) = 'confirmed',
-    'a cleared student''s score is written confirmed, not provisional'
+    (select count(*) from session_scores
+      where student_id = v_student and session_instance_id = v_session) = 1,
+    'one score row per student per lecture, whatever their standing with the bursary'
   );
 
   -- A duplicate submission for the same code cannot be raced through.
@@ -931,8 +932,8 @@ begin
   insert into enrolments (student_id, course_id, source, enrolled_on)
   values (v_student, v_course, 'carry_over', date '2025-09-15');
 
-  insert into session_scores (student_id, session_instance_id, score, status)
-  select v_student, si.id, 1.0, 'provisional'
+  insert into session_scores (student_id, session_instance_id, score)
+  select v_student, si.id, 1.0
   from session_instances si
   where si.course_id = v_course and si.status = 'closed'
   limit 4;
@@ -940,9 +941,12 @@ begin
   insert into waivers (id, student_id, academic_session_id, request_note)
   values (v_waiver, v_student, v_session, 'Father lost his job this term.');
 
+  -- A waiver used to be the thing that turned four recorded lectures into four
+  -- counted ones. It no longer touches attendance at all: the four counted the
+  -- moment they were recorded, and what the waiver settles is the debt.
   perform assert_true(
-    attendance_pct(v_student, v_course) = 0,
-    'a student awaiting a waiver counts for nothing, exactly like one awaiting a payment'
+    attendance_pct(v_student, v_course) > 0,
+    'a student awaiting a waiver has whatever attendance they attended'
   );
 
   perform assert_rejects(
@@ -953,11 +957,6 @@ begin
   perform assert_true(
     decide_waiver(v_waiver, v_hod, true, 'Hardship verified with the bursary office.') = 'granted',
     'the HOD can grant a waiver'
-  );
-
-  perform assert_true(
-    attendance_pct(v_student, v_course) > 0,
-    'granting confirms the provisional scores — a waiver that left them waiting would change nothing'
   );
 
   perform assert_true(
@@ -1079,8 +1078,8 @@ begin
   -- since they joined. Against the whole course it would read far lower — this
   -- is the difference between a fair number and one that bars someone from an
   -- exam over classes they could not have attended.
-  insert into session_scores (student_id, session_instance_id, score, status, confirmed_at)
-  select v_late, si.id, 1.0, 'confirmed', now()
+  insert into session_scores (student_id, session_instance_id, score)
+  select v_late, si.id, 1.0
   from session_instances si
   where si.course_id = v_cmp301 and si.status = 'closed'
     and si.held_on >= date '2025-11-18'
@@ -1197,6 +1196,7 @@ declare
   v_course  uuid := gen_random_uuid();
   v_student uuid := gen_random_uuid();
   v_lecture uuid := gen_random_uuid();
+  v_second  uuid := gen_random_uuid();
   v_list    uuid;
   v_e       integer;
   v_n       integer;
@@ -1213,11 +1213,16 @@ begin
   values (v_student, v_course, 'core', date '2025-09-15');
 
   insert into session_instances (id, course_id, held_on, venue_id, type, status, closed_at, created_by)
-  values (v_lecture, v_course, date '2025-10-07', v_venue, 'makeup', 'closed', now(), v_lect);
+  values (v_lecture, v_course, date '2025-10-07', v_venue, 'makeup', 'closed', now(), v_lect),
+         (v_second, v_course, date '2025-10-14', v_venue, 'makeup', 'closed', now(), v_lect);
 
-  -- One lecture, attended in full, but provisional: the student has not paid.
-  insert into session_scores (student_id, session_instance_id, score, status, source)
-  values (v_student, v_lecture, 1.0, 'provisional', 'digital');
+  -- Two lectures held, one attended. 50% — below the line, and below it for a
+  -- reason that has nothing to do with money. This block used to make the
+  -- student ineligible by leaving their score provisional, which is no longer
+  -- a thing a score can be.
+  insert into session_scores (student_id, session_instance_id, score, source)
+  values (v_student, v_lecture, 1.0, 'digital'),
+         (v_student, v_second, 0, 'digital');
 
   begin
     perform authorize_eligibility_list(v_course, v_hod, 'ok');
@@ -1240,7 +1245,7 @@ begin
 
   perform assert_true(
     v_e = 0 and v_n = 1,
-    'a student whose only attendance is provisional is recorded as not eligible — the money is what counts it'
+    'a student below the threshold is recorded as not eligible'
   );
 
   select id into v_list from eligibility_lists where course_id = v_course;
@@ -1264,13 +1269,14 @@ begin
     'authorizing writes an audit row'
   );
 
-  -- The freeze is the whole point: clearing this student afterwards takes them
-  -- from 0% to 100%, and must NOT move the list an exam board already sat with.
-  perform clear_student(v_student, v_session, 'payment');
+  -- The freeze is the whole point: a correction afterwards takes this student
+  -- from 50% to 100%, and must NOT move a list an exam board already sat with.
+  update session_scores set score = 1.0
+   where student_id = v_student and session_instance_id = v_second;
 
   perform assert_true(
     attendance_pct(v_student, v_course) = 100,
-    'clearing takes the student to 100% live'
+    'the correction takes the student to 100% live'
   );
 
   perform assert_true(
@@ -1699,8 +1705,8 @@ begin
   insert into session_instances (id, course_id, held_on, venue_id, type, status, closed_at, created_by)
   values (v_paper, v_course, date '2026-02-10', v_venue, 'makeup', 'closed', now(), v_lect);
 
-  insert into session_scores (student_id, session_instance_id, score, status, source, confirmed_at)
-  values (v_student, v_paper, 0, 'confirmed', 'manually_entered', now());
+  insert into session_scores (student_id, session_instance_id, score, source)
+  values (v_student, v_paper, 0, 'manually_entered');
 
   insert into attendance_disputes (student_id, session_instance_id, student_note)
   values (v_student, v_paper, 'I was there for the whole hour and signed the sheet.')
@@ -1741,8 +1747,8 @@ begin
   insert into checkpoints (id, session_instance_id, token, expires_at, issued_by)
   values (v_cp, v_full, '4417', now() + interval '1 hour', v_lect);
 
-  insert into session_scores (student_id, session_instance_id, score, status, source, confirmed_at)
-  values (v_student, v_full, 1.0, 'confirmed', 'manually_entered', now());
+  insert into session_scores (student_id, session_instance_id, score, source)
+  values (v_student, v_full, 1.0, 'manually_entered');
 
   insert into attendance_disputes (student_id, session_instance_id, student_note)
   values (v_student, v_full, 'The code never appeared on the board where I was sitting.')
@@ -1754,6 +1760,237 @@ begin
     (select score from session_scores
       where student_id = v_student and session_instance_id = v_full) = 1.0,
     'a correction never docks a student — where re-scoring comes out lower, the recomputation is what is wrong'
+  );
+end $$;
+
+
+-- ---------------------------------------------------------------------------
+-- Dues, which are now a debt rather than a gate
+--
+-- The old model was a boolean: paid, or every mark you hold is worth nothing.
+-- What replaces it is a balance, which is the only shape that can hold the way
+-- students actually pay — a bit at a time, sometimes at a bank counter,
+-- occasionally with a card that gets charged back a month later.
+-- ---------------------------------------------------------------------------
+
+do $$
+declare
+  v_session uuid := '11111111-1111-1111-1111-111111111111';
+  v_admin   uuid := '33333333-3333-3333-3333-333333333303';
+  v_student uuid := gen_random_uuid();
+  v_dues    double precision;
+  v_pay1    uuid;
+  v_pay2    uuid;
+  v_before  numeric;
+  v_after   numeric;
+  v_outcome text;
+  v_id      uuid;
+begin
+  select dues_amount_kobo into v_dues from dues_periods where academic_session_id = v_session;
+  perform assert_true(v_dues = 500000, 'the seeded dues figure is ₦5,000');
+
+  insert into profiles (id, role, surname, first_name, phone)
+  values (v_student, 'student', 'Instalment', 'Payer', '+2348050000201');
+  insert into students (id, matric_no, level) values (v_student, 'CMP/2021/801', 300);
+  insert into compliance_statuses (student_id, academic_session_id, state)
+  values (v_student, v_session, 'uncleared');
+  insert into enrolments (student_id, course_id, source, enrolled_on)
+  values (v_student, '66666666-6666-6666-6666-666666666601', 'core', date '2025-09-15');
+
+  perform assert_true(
+    dues_balance_kobo(v_student, v_session) = 500000,
+    'a student who has paid nothing owes the whole figure'
+  );
+
+  -- ------------------------------------------------------------------------
+  -- Half now, half later
+  -- ------------------------------------------------------------------------
+  insert into payments (student_id, academic_session_id, paystack_reference, channel,
+                        status, amount_kobo, verified_at)
+  values (v_student, v_session, 'ref-part-1', 'card', 'success', 200000, now())
+  returning id into v_pay1;
+
+  perform assert_true(
+    dues_balance_kobo(v_student, v_session) = 300000,
+    'a part payment reduces the balance rather than being rejected for not matching'
+  );
+
+  perform assert_true(
+    apply_payment(v_pay1) = 'part_paid',
+    'and does not clear the student, because they still owe'
+  );
+
+  perform assert_true(
+    (select state from compliance_statuses
+      where student_id = v_student and academic_session_id = v_session) = 'uncleared',
+    'part paid is not a compliance state — the balance is the fact, and the ladder still has five rungs'
+  );
+
+  insert into payments (student_id, academic_session_id, paystack_reference, channel,
+                        status, amount_kobo, verified_at)
+  values (v_student, v_session, 'ref-part-2', 'transfer', 'success', 300000, now())
+  returning id into v_pay2;
+
+  perform assert_true(
+    dues_balance_kobo(v_student, v_session) = 0,
+    'the instalments add up'
+  );
+
+  perform assert_true(apply_payment(v_pay2) = 'cleared', 'and the second one clears them');
+
+  perform assert_true(
+    (select state from compliance_statuses
+      where student_id = v_student and academic_session_id = v_session) = 'cleared',
+    'clearing happens when the BALANCE reaches zero, not when one payment matches the dues figure'
+  );
+
+  -- ------------------------------------------------------------------------
+  -- None of which touched attendance
+  -- ------------------------------------------------------------------------
+  v_before := attendance_pct(v_student, '66666666-6666-6666-6666-666666666601');
+  perform clear_student(v_student, v_session, 'payment');
+  v_after := attendance_pct(v_student, '66666666-6666-6666-6666-666666666601');
+  perform assert_true(
+    v_before = v_after,
+    'paying in full moves a student''s percentage by exactly nothing'
+  );
+
+  -- ------------------------------------------------------------------------
+  -- A chargeback reopens the debt, and says so
+  -- ------------------------------------------------------------------------
+  perform assert_rejects(
+    format('select reverse_payment(%L, %L)', v_pay2, 'nope'),
+    'a reversal must record why'
+  );
+
+  v_outcome := reverse_payment(v_pay2, 'Bank reported the transfer as recalled by the sender.', v_admin);
+  perform assert_true(v_outcome = 'reopened', 'reversing a payment that was covering a debt reopens it');
+
+  perform assert_true(
+    dues_balance_kobo(v_student, v_session) = 300000,
+    'and the balance goes back up by exactly what was reversed'
+  );
+
+  perform assert_true(
+    (select state from compliance_statuses
+      where student_id = v_student and academic_session_id = v_session) = 'uncleared',
+    'the clearance goes with it'
+  );
+
+  -- The part that makes this a reversal rather than a silent revoke.
+  perform assert_true(
+    (select count(*) from notifications
+      where recipient_id = v_student and title ilike '%reversed%') = 1,
+    'the student is told — the first they hear of a chargeback must not be an exam hall'
+  );
+
+  perform assert_true(
+    (select count(*) from audit_log
+      where action = 'payment.reversed' and target_id = v_pay2::text) = 1,
+    'and it is audited with the reason'
+  );
+
+  perform assert_true(
+    reverse_payment(v_pay2, 'Trying to reverse the same payment twice.', v_admin)
+      = 'already_reversed',
+    'reversing twice is a no-op rather than a second debt'
+  );
+
+  -- ------------------------------------------------------------------------
+  -- The counter at the bursary, when the gateway is down
+  -- ------------------------------------------------------------------------
+  perform assert_rejects(
+    format('select record_manual_payment(%L, %L, 300000, %L, %L, %L)',
+           v_student, v_session, 'ref-manual-1', 'short', v_admin),
+    'a manual payment must explain why it was accepted without the gateway'
+  );
+
+  perform assert_rejects(
+    format('select record_manual_payment(%L, %L, 300000, %L, %L, null)',
+           v_student, v_session, 'ref-manual-1', 'Paid at the bursary counter; teller receipt 4471.'),
+    'a manual payment must record who accepted it'
+  );
+
+  select payment_id, outcome into v_id, v_outcome
+  from record_manual_payment(v_student, v_session, 300000, 'ref-manual-1',
+                             'Paid at the bursary counter; teller receipt 4471 attached.',
+                             v_admin, 'https://example.invalid/receipt.jpg');
+
+  perform assert_true(v_outcome = 'cleared', 'a manual payment that closes the balance clears the student');
+
+  perform assert_true(
+    (select manually_verified from payments where id = v_id),
+    'and is flagged as manually verified — permanently, so nobody has to work out later why there is no Paystack record'
+  );
+
+  perform assert_true(
+    (select cleared_via from compliance_statuses
+      where student_id = v_student and academic_session_id = v_session) = 'hod_clearance',
+    'the clearance route says a person decided it, not the gateway'
+  );
+
+  perform assert_true(
+    (select count(*) from audit_log
+      where action = 'payment.manual' and target_id = v_id::text) = 1,
+    'a manual payment is audited with a mandatory reason'
+  );
+
+  select payment_id, outcome into v_id, v_outcome
+  from record_manual_payment(v_student, v_session, 100000, 'ref-manual-1',
+                             'Trying to reuse a reference that already exists.', v_admin);
+  perform assert_true(
+    v_outcome = 'duplicate_reference' and v_id is null,
+    'a reference that already exists is refused rather than credited twice'
+  );
+end $$;
+
+-- A resent webhook cannot credit an account twice, and it is the database that
+-- refuses it rather than a check somebody remembered to write.
+do $$
+declare
+  v_ok boolean;
+begin
+  insert into payment_events (event_id, event_type, reference)
+  values ('evt_test_dedupe', 'charge.success', 'ref-part-1');
+
+  begin
+    insert into payment_events (event_id, event_type, reference)
+    values ('evt_test_dedupe', 'charge.success', 'ref-part-1');
+    v_ok := false;
+  exception when unique_violation then v_ok := true;
+  end;
+
+  perform assert_true(v_ok, 'the same Paystack event delivered twice is refused by the primary key');
+end $$;
+
+-- The integrity check reports, and blocks nothing. A family sharing one card
+-- is ordinary; the same card across several matric numbers is worth a look.
+do $$
+declare
+  v_session uuid := '11111111-1111-1111-1111-111111111111';
+  v_a       uuid := gen_random_uuid();
+  v_b       uuid := gen_random_uuid();
+  v_shared  integer;
+begin
+  insert into profiles (id, role, surname, first_name, phone)
+  values (v_a, 'student', 'Sibling', 'One', '+2348050000202'),
+         (v_b, 'student', 'Sibling', 'Two', '+2348050000203');
+  insert into students (id, matric_no, level)
+  values (v_a, 'CMP/2021/802', 300), (v_b, 'CMP/2021/803', 300);
+
+  insert into payments (student_id, academic_session_id, paystack_reference, channel,
+                        status, amount_kobo, verified_at, card_signature, last4)
+  values (v_a, v_session, 'ref-card-a', 'card', 'success', 500000, now(), 'SIG_SHARED', '4081'),
+         (v_b, v_session, 'ref-card-b', 'card', 'success', 500000, now(), 'SIG_SHARED', '4081');
+
+  select count(*) into v_shared
+  from payment_anomalies(v_session) where kind = 'shared_card';
+
+  perform assert_true(v_shared = 2, 'one card funding two matric numbers is flagged on both payments');
+
+  perform assert_true(
+    (select count(*) from payments where card_signature = 'SIG_SHARED' and status = 'success') = 2,
+    'and neither payment is blocked — the flag is for a human to judge'
   );
 end $$;
 
@@ -1995,8 +2232,8 @@ begin
   values (v_extra, v_cmp301, date '2026-03-03', '22222222-2222-2222-2222-222222222201',
           'makeup', 'closed', now(), '33333333-3333-3333-3333-333333333301');
 
-  insert into session_scores (student_id, session_instance_id, score, status, source)
-  values (v_halima, v_extra, 1.0, 'provisional', 'digital');
+  insert into session_scores (student_id, session_instance_id, score, source)
+  values (v_halima, v_extra, 1.0, 'digital');
 
   perform compute_risk_predictions();
 
@@ -2122,20 +2359,14 @@ begin
     'every score it wrote is traceable to the batch and tagged as paper'
   );
 
-  -- Compared against each student's actual compliance rather than against a
-  -- fixed expectation: earlier blocks in this suite clear students, and what is
-  -- being tested is the rule, not who happens to have paid by now.
+  -- This used to check that a paper mark was gated on dues exactly like a
+  -- digital one. Neither is gated on dues any more, so what is left worth
+  -- asserting is that the paper route produces the same KIND of row: a real
+  -- score against a real lecture, tagged so the HOD can tell it apart.
   perform assert_true(
-    not exists (
-      select 1
-      from session_scores ss
-      left join compliance_statuses cs
-        on cs.student_id = ss.student_id
-       and cs.academic_session_id = '11111111-1111-1111-1111-111111111111'
-      where ss.session_instance_id = v_inst
-        and ss.status <> (case when cs.state = 'cleared' then 'confirmed' else 'provisional' end)::score_status
-    ),
-    'a paper mark is gated on dues exactly like a digital one — the fallback is for the network, not the money'
+    (select count(*) from session_scores ss
+      where ss.session_instance_id = v_inst and ss.score > 0) = 2,
+    'a paper mark is a score like any other — the fallback is for the network, not a second scoring rule'
   );
 
   perform assert_true(
@@ -2210,8 +2441,8 @@ begin
   insert into session_instances (id, course_id, held_on, venue_id, type, status, closed_at, created_by)
   values (v_lecture, v_course, date '2025-10-07', v_venue, 'makeup', 'closed', now(), v_lect);
 
-  insert into session_scores (student_id, session_instance_id, score, status, source)
-  values (v_student, v_lecture, 1.0, 'provisional', 'digital');
+  insert into session_scores (student_id, session_instance_id, score, source)
+  values (v_student, v_lecture, 1.0, 'digital');
 
   perform assert_true(
     issue_exam_permit(v_student, v_session) is null,

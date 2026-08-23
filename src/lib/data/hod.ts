@@ -59,8 +59,7 @@ export type StudentStanding = {
   courses: Array<{
     courseId: string;
     code: string;
-    confirmedScore: number;
-    provisionalScore: number;
+    attendedCount: number;
     sessionsHeld: number;
     pct: number;
     /** Per lecture, so the shape of the trouble is visible and not just its size. */
@@ -91,7 +90,7 @@ export async function loadStandings(db: Db, courseId?: string): Promise<StudentS
         .select("id, course_id, held_on, checkpoint_mode")
         .eq("status", "closed")
         .order("held_on"),
-      db.from("session_scores").select("student_id, session_instance_id, score, status"),
+      db.from("session_scores").select("student_id, session_instance_id, score"),
     ]);
 
   const { data: compliance } = await db
@@ -136,12 +135,7 @@ export async function loadStandings(db: Db, courseId?: string): Promise<StudentS
       const heldIds = new Set(held.map((instance) => instance.id));
 
       const relevant = (myScores ?? []).filter((score) => heldIds.has(score.session_instance_id));
-      const confirmedScore = relevant
-        .filter((score) => score.status === "confirmed")
-        .reduce((sum, score) => sum + Number(score.score), 0);
-      const provisionalScore = relevant
-        .filter((score) => score.status === "provisional")
-        .reduce((sum, score) => sum + Number(score.score), 0);
+      const attendedCount = relevant.reduce((sum, score) => sum + Number(score.score), 0);
 
       const scoreByInstance = new Map(relevant.map((score) => [score.session_instance_id, score]));
 
@@ -154,7 +148,6 @@ export async function loadStandings(db: Db, courseId?: string): Promise<StudentS
           label: `Week ${index + 1}`,
           heldOn: instance.held_on,
           attended: value > 0,
-          status: score?.status === "confirmed" ? "confirmed" : "provisional",
           source: "digital",
           score: value,
         };
@@ -163,15 +156,14 @@ export async function loadStandings(db: Db, courseId?: string): Promise<StudentS
       return {
         courseId: enrolment.course_id,
         code: course?.code ?? "",
-        confirmedScore,
-        provisionalScore,
+        attendedCount,
         sessionsHeld: held.length,
-        pct: attendancePct(confirmedScore, held.length),
+        pct: attendancePct(attendedCount, held.length),
         sessions,
       };
     });
 
-    const totalConfirmed = courses.reduce((sum, course) => sum + course.confirmedScore, 0);
+    const totalConfirmed = courses.reduce((sum, course) => sum + course.attendedCount, 0);
     const totalHeld = courses.reduce((sum, course) => sum + course.sessionsHeld, 0);
 
     return {
@@ -314,8 +306,6 @@ export type EligibilityRow = {
   scoreTotal: number;
   sessionsHeld: number;
   eligible: boolean;
-  /** Recorded but uncounted marks. Why a student can be short and disputing it. */
-  provisionalScore: number;
 };
 
 export type EligibilityList = {
@@ -425,9 +415,6 @@ export async function loadEligibilityList(courseId?: string): Promise<Eligibilit
             scoreTotal: Number(entry.score_total),
             sessionsHeld: entry.sessions_held,
             eligible: entry.eligible,
-            // The frozen row carries no provisional figure: what was not
-            // counted at the moment of authorization is not part of the record.
-            provisionalScore: 0,
           };
         })
         .sort((a, b) => a.matricNo.localeCompare(b.matricNo)),
@@ -451,10 +438,9 @@ export async function loadEligibilityList(courseId?: string): Promise<Eligibilit
         firstName: student.firstName,
         otherNames: student.otherNames,
         attendancePct: course.pct,
-        scoreTotal: course.confirmedScore,
+        scoreTotal: course.attendedCount,
         sessionsHeld: course.sessionsHeld,
         eligible: course.sessionsHeld > 0 && course.pct >= thresholdPct,
-        provisionalScore: course.provisionalScore,
       };
     })
     .sort((a, b) => a.matricNo.localeCompare(b.matricNo));
@@ -602,8 +588,13 @@ export type WaiverRequest = {
   level: number;
   requestNote: string;
   requestedAt: string;
-  /** What granting would immediately confirm. The thing being decided about. */
-  provisionalScore: number;
+  /**
+   * Lectures this applicant has attended. It used to be "what granting would
+   * immediately confirm" — granting confirms nothing now, so what the card
+   * carries is what the student has actually done, which is still what the HOD
+   * is weighing a hardship claim against.
+   */
+  lecturesAttended: number;
   status: "pending" | "granted" | "declined";
 };
 
@@ -621,12 +612,13 @@ export async function loadWaivers(): Promise<WaiverRequest[]> {
 
   if (!rows || rows.length === 0) return [];
 
-  // The waiting marks, per student. Granting confirms exactly these, so the
-  // figure on the card is the consequence rather than a decoration.
+  // Lectures each applicant has attended. It used to be "marks waiting to be
+  // counted", which granting the waiver would have released; nothing is
+  // waiting any more, so what the card carries is what they have actually
+  // done — which is still the thing the HOD is weighing.
   const { data: scores } = await db
     .from("session_scores")
     .select("student_id, score")
-    .eq("status", "provisional")
     .in(
       "student_id",
       rows.map((row) => row.student_id),
@@ -659,7 +651,7 @@ export async function loadWaivers(): Promise<WaiverRequest[]> {
       level: student?.level ?? 0,
       requestNote: row.request_note ?? "",
       requestedAt: row.created_at,
-      provisionalScore: waitingByStudent.get(row.student_id) ?? 0,
+      lecturesAttended: waitingByStudent.get(row.student_id) ?? 0,
       status: row.status as WaiverRequest["status"],
     };
   });

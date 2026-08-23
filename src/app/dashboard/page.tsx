@@ -29,17 +29,12 @@ export const metadata: Metadata = {
 export default async function DashboardPage() {
   const { student, compliance, dues, courses, today, risk } = await requireStudent();
 
-  const totalConfirmed = courses.reduce((sum, course) => sum + course.confirmedScore, 0);
-  const totalProvisional = courses.reduce((sum, course) => sum + course.provisionalScore, 0);
+  const totalAttended = courses.reduce((sum, course) => sum + course.attendedCount, 0);
   const totalHeld = courses.reduce((sum, course) => sum + course.sessionsHeld, 0);
 
   return (
     <AppShell role="student">
-      <ComplianceBanner
-        state={compliance}
-        provisionalScore={totalProvisional}
-        graceEndsOn={dues.gracePeriodEnd}
-      />
+      <ComplianceBanner state={compliance} balanceKobo={dues.balanceKobo} />
 
       <h1 className="mt-6 text-2xl font-semibold tracking-[-0.02em] text-ink">
         {displayNameFamiliar(student)}
@@ -88,8 +83,7 @@ export default async function DashboardPage() {
             </h2>
             <AttendanceMeter
               className="mt-3"
-              confirmedScore={totalConfirmed}
-              provisionalScore={totalProvisional}
+              attendedCount={totalAttended}
               sessionsHeld={totalHeld}
             />
           </section>
@@ -152,26 +146,18 @@ export default async function DashboardPage() {
                         true. With nothing held there is no status to report at
                         all, so no badge. */}
                     {course.sessionsHeld > 0 ? (
-                      <StatusBadge
-                        className="shrink-0"
-                        variant={
-                          course.sessions.some((session) => session.status === "provisional")
-                            ? "provisional"
-                            : "confirmed"
-                        }
-                      />
+                      <StatusBadge className="shrink-0" variant="counted" />
                     ) : null}
                   </div>
                   <p className="mt-1 text-[13px] text-muted tabular">
                     {course.sessionsHeld === 0
                       ? "No classes held yet"
-                      : `${formatScore(course.confirmedScore + course.provisionalScore)} of ${course.sessionsHeld} sessions recorded`}
+                      : `${formatScore(course.attendedCount)} of ${course.sessionsHeld} lectures attended`}
                   </p>
 
                   <AttendanceMeter
                     className="mt-4"
-                    confirmedScore={course.confirmedScore}
-                    provisionalScore={course.provisionalScore}
+                    attendedCount={course.attendedCount}
                     sessionsHeld={course.sessionsHeld}
                   />
 

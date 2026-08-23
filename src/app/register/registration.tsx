@@ -36,7 +36,13 @@ type Matched = {
 };
 
 /** Collected on step 2, sent with the password on step 3. */
-type Contact = { firstName: string; otherNames: string; phone: string };
+type Contact = {
+  firstName: string;
+  otherNames: string;
+  phone: string;
+  /** Empty unless WhatsApp runs on a different SIM. */
+  whatsappPhone: string;
+};
 
 export function Registration() {
   const [step, setStep] = useState<1 | 2 | 3>(1);
@@ -257,11 +263,27 @@ function ContactStep({
   const [firstName, setFirstName] = useState("");
   const [otherNames, setOtherNames] = useState("");
   const [phone, setPhone] = useState("");
+  /**
+   * Off by default and closed by default. Most students have WhatsApp on the
+   * number they just typed, and a second phone field open on the screen is a
+   * question the majority would answer wrongly by filling it in.
+   */
+  const [separateWhatsapp, setSeparateWhatsapp] = useState(false);
+  const [whatsappPhone, setWhatsappPhone] = useState("");
   const [working, setWorking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [expiresAt, setExpiresAt] = useState<string | null>(null);
   const [code, setCode] = useState("");
   const [codeError, setCodeError] = useState<string | null>(null);
+  /**
+   * Which numbers are still unverified. Two numbers means two codes and two
+   * verifications: a WhatsApp number nobody proved reachable is worse than
+   * none, because the alerting layer would spend Critical warnings on it and
+   * record them as delivered.
+   */
+  const [pending, setPending] = useState<Array<{ channel: string; number: string }>>([]);
+
+  const current = pending[0] ?? null;
 
   async function handleSendCode(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -275,12 +297,23 @@ function ContactStep({
       return;
     }
 
+    const whatsapp = separateWhatsapp ? whatsappPhone.trim() : "";
+    if (whatsapp && !normalisePhone(whatsapp)) {
+      setError("Enter a Nigerian mobile number for WhatsApp, like 0805 123 4567.");
+      return;
+    }
+    if (whatsapp && normalisePhone(whatsapp) === normalisePhone(phone)) {
+      setError("That's the same number. Leave the WhatsApp field off if they match.");
+      return;
+    }
+
     setError(null);
     setWorking(true);
     const { ok, body } = await post({
       step: "send-otp",
       matricNo: matched.matricNo,
       phone,
+      whatsappPhone: whatsapp || undefined,
     });
     setWorking(false);
 
@@ -292,20 +325,45 @@ function ContactStep({
     // Only an expiry comes back. The code itself is never in a response, in
     // any environment — in development it is written to the server log.
     setExpiresAt(body.expiresAt);
+    setPending(
+      (body.channels as string[]).map((channel) => ({
+        channel,
+        number: channel === "whatsapp" ? whatsapp : phone,
+      })),
+    );
     setPhase("code");
   }
 
   async function handleVerify(value: string) {
+    if (!current) return;
+
     setCodeError(null);
     setWorking(true);
-    const { body: result } = await post({ step: "verify-otp", phone, code: value });
+    const { body: result } = await post({
+      step: "verify-otp",
+      phone: current.number,
+      code: value,
+    });
     setWorking(false);
 
-    if (result.ok) {
-      onVerified({ firstName: firstName.trim(), otherNames: otherNames.trim(), phone });
+    if (!result.ok) {
+      setCodeError(result.reason ?? "That code isn't right.");
       return;
     }
-    setCodeError(result.reason ?? "That code isn't right.");
+
+    const remaining = pending.slice(1);
+    setPending(remaining);
+    setCode("");
+
+    // Only once every number the student gave has been proved reachable.
+    if (remaining.length === 0) {
+      onVerified({
+        firstName: firstName.trim(),
+        otherNames: otherNames.trim(),
+        phone,
+        whatsappPhone: separateWhatsapp ? whatsappPhone.trim() : "",
+      });
+    }
   }
 
   return (
@@ -315,7 +373,11 @@ function ContactStep({
       intro={
         phase === "details"
           ? "We found you on the register. Add your full name and a phone number we can reach you on."
-          : `We sent a 6-digit code to ${phone}.`
+          : current
+            ? current.channel === "whatsapp"
+              ? `We sent a 6-digit code on WhatsApp to ${current.number}.`
+              : `We sent a 6-digit code by text to ${current.number}.`
+            : "Checking…"
       }
     >
       {/* The matched record, read back so the student knows the right row was
@@ -355,8 +417,8 @@ function ContactStep({
           <Field
             label="Phone number"
             htmlFor="phone"
-            hint="We'll text you a code to confirm it's yours."
-            error={error ?? undefined}
+            hint="We'll text you a code to confirm it's yours. This is also where WhatsApp reminders go."
+            error={separateWhatsapp ? undefined : (error ?? undefined)}
           >
             <Input
               value={phone}
@@ -367,6 +429,45 @@ function ContactStep({
               placeholder="0805 123 4567"
             />
           </Field>
+
+          {/* Closed by default. Most students run WhatsApp on the number they
+              just typed, and an open second phone field is a question the
+              majority would answer wrongly by filling it in. */}
+          <div>
+            <label className="flex cursor-pointer items-start gap-3">
+              <input
+                type="checkbox"
+                checked={separateWhatsapp}
+                onChange={(event) => setSeparateWhatsapp(event.target.checked)}
+                className="mt-0.5 h-5 w-5 accent-[var(--brand)]"
+              />
+              <span className="text-[15px] leading-relaxed text-ink">
+                My WhatsApp is on a different number
+                <span className="block text-[13px] text-muted">
+                  Only if WhatsApp runs on another SIM — a data-only line, say. Most people can
+                  leave this alone.
+                </span>
+              </span>
+            </label>
+
+            {separateWhatsapp ? (
+              <Field
+                className="mt-4"
+                label="WhatsApp number"
+                htmlFor="whatsapp"
+                hint="We'll send a second code there. Both numbers have to be confirmed."
+                error={error ?? undefined}
+              >
+                <Input
+                  value={whatsappPhone}
+                  onChange={(event) => setWhatsappPhone(event.target.value)}
+                  type="tel"
+                  inputMode="tel"
+                  placeholder="0805 123 4567"
+                />
+              </Field>
+            ) : null}
+          </div>
 
           <Button type="submit" size="lg" aria-disabled={working}>
             {working ? "Sending…" : "Send code"}
@@ -486,6 +587,7 @@ function PasswordStep({ matched, contact }: { matched: Matched; contact: Contact
       firstName: contact.firstName,
       otherNames: contact.otherNames,
       phone: contact.phone,
+      whatsappPhone: contact.whatsappPhone || undefined,
       password,
     });
 

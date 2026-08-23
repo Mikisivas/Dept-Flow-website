@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { allow, callerFrom } from "@/lib/throttle";
 import { cookies } from "next/headers";
 import { createServiceClient } from "@/lib/supabase/client";
 import { hashPassword, needsRehash, verifyPassword } from "@/lib/auth/passwords";
@@ -30,6 +31,17 @@ const LOCKOUT_MINUTES = 15;
 const CREDENTIALS_REJECTED = "That matric number and password don't match. Check both and try again.";
 
 export async function POST(request: Request) {
+  // §"Rate limiting on registration, code submission, and login endpoints".
+  // Credential stuffing is the case: a matric number is guessable and a
+  // password is not, so the only defence against trying every password is
+  // making the trying slow.
+  if (!(await allow("login", callerFrom(request)))) {
+    return NextResponse.json(
+      { error: "Too many sign-in attempts. Wait a few minutes and try again." },
+      { status: 429 },
+    );
+  }
+
   let body: { identifier?: string; password?: string };
   try {
     body = await request.json();

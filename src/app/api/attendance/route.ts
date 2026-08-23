@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { currentUser } from "@/lib/auth/current-user";
 import { submitCheckpointMark } from "@/lib/data/attendance";
+import { allow } from "@/lib/throttle";
 
 /**
  * A student answering the attendance code.
@@ -19,6 +20,17 @@ export async function POST(request: Request) {
   const session = await currentUser();
   if (!session || session.role !== "student") {
     return NextResponse.json({ error: "Sign in to record attendance." }, { status: 401 });
+  }
+
+  // Throttled on the student rather than on the caller: the code is four
+  // digits, so ten thousand guesses is a short script, and a signed-in student
+  // is exactly who would run it. Generous enough that mistyping twice in a
+  // noisy hall costs nothing.
+  if (!(await allow("attendance-code", session.profileId))) {
+    return NextResponse.json(
+      { error: "Too many attempts. Ask your lecturer for the current code." },
+      { status: 429 },
+    );
   }
 
   let body: { checkpointId?: string; token?: string; submittedAt?: string };

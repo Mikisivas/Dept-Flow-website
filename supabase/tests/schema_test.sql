@@ -1765,6 +1765,186 @@ end $$;
 
 
 -- ---------------------------------------------------------------------------
+-- Reaching the student
+--
+-- A warning system is only as good as its ability to reach somebody, and the
+-- part of that worth asserting is the part that costs money: WhatsApp is free
+-- and SMS is not, so the fallback has to fire when WhatsApp fails and must not
+-- fire for a notification the department chose not to spend SMS on.
+-- ---------------------------------------------------------------------------
+
+do $$
+declare
+  v_chidera uuid := '44444444-4444-4444-4444-444444444401';
+  v_dual    uuid := gen_random_uuid();
+  v_note    uuid;
+  v_wa      uuid;
+  v_outcome text;
+  v_count   integer;
+begin
+  -- ------------------------------------------------------------------------
+  -- Which number a WhatsApp message goes to
+  -- ------------------------------------------------------------------------
+  perform assert_true(
+    whatsapp_number(v_chidera) = (select phone from profiles where id = v_chidera),
+    'with no separate WhatsApp number, WhatsApp goes to the primary number'
+  );
+
+  insert into profiles (id, role, surname, first_name, phone, whatsapp_phone)
+  values (v_dual, 'student', 'Dual', 'Sim', '+2348050000301', '+2348050000302');
+  insert into students (id, matric_no, level) values (v_dual, 'CMP/2021/811', 300);
+
+  perform assert_true(
+    whatsapp_number(v_dual) = '+2348050000302',
+    'a student with a data-only SIM gets WhatsApp on that number and SMS on the other'
+  );
+
+  perform assert_rejects(
+    format('update profiles set whatsapp_phone = phone where id = %L', v_dual),
+    'the same number cannot be stored twice — that would be two OTPs to one handset'
+  );
+
+  perform assert_rejects(
+    format('update profiles set whatsapp_phone = %L where id = %L', '08050000302', v_dual),
+    'a WhatsApp number that is not in E.164 is refused, like every other number here'
+  );
+
+  perform assert_rejects(
+    format('update profiles set whatsapp_verified_at = now() where id = %L', v_chidera),
+    'a number cannot be marked verified when there is no number'
+  );
+
+  -- ------------------------------------------------------------------------
+  -- Queueing
+  -- ------------------------------------------------------------------------
+  v_note := queue_notification(
+    v_dual, 'attendance_warning',
+    'CMP 301: you can miss one more lecture',
+    'You are at 76% with four lectures left. Missing two takes you below 75%.',
+    '/courses/CMP-301'
+  );
+
+  perform assert_true(
+    (select count(*) from notification_deliveries where notification_id = v_note) = 4,
+    'a Critical warning is queued on every channel the policy allows'
+  );
+
+  perform assert_true(
+    (select status from notification_deliveries
+      where notification_id = v_note and channel = 'in_app') = 'sent',
+    'the in-app copy is delivered by definition — the notification row IS the delivery'
+  );
+
+  perform assert_true(
+    (select status from notification_deliveries
+      where notification_id = v_note and channel = 'whatsapp') = 'queued',
+    'everything else waits for a sender rather than claiming to have gone out'
+  );
+
+  perform assert_true(
+    (select destination from notification_deliveries
+      where notification_id = v_note and channel = 'whatsapp') = '+2348050000302'
+    and (select destination from notification_deliveries
+      where notification_id = v_note and channel = 'sms') = '+2348050000301',
+    'each channel is addressed to its own number, resolved at the time of queueing'
+  );
+
+  -- An explicit channel list overrides the policy: Watch and Critical are the
+  -- same KIND of notification and earn different channels.
+  perform queue_notification(
+    v_dual, 'attendance_warning', 'CMP 301: watch this', 'You have no buffer left.',
+    null, array['in_app', 'web_push']::notification_channel[]
+  );
+
+  perform assert_true(
+    (select count(*) from notification_deliveries d
+      join notifications n on n.id = d.notification_id
+      where n.recipient_id = v_dual and n.title = 'CMP 301: watch this') = 2,
+    'a caller can narrow the channels, which is how one kind serves two tiers'
+  );
+
+  -- ------------------------------------------------------------------------
+  -- The fallback
+  -- ------------------------------------------------------------------------
+  -- Drop the SMS row the policy queued, so the failure below has to create it.
+  delete from notification_deliveries where notification_id = v_note and channel = 'sms';
+
+  select id into v_wa from notification_deliveries
+  where notification_id = v_note and channel = 'whatsapp';
+
+  v_outcome := record_delivery_failure(v_wa, 'WhatsApp template rejected: 24-hour window closed.');
+
+  perform assert_true(v_outcome = 'fell_back_to_sms', 'a failed WhatsApp send spends an SMS immediately');
+
+  perform assert_true(
+    (select fell_back_from from notification_deliveries
+      where notification_id = v_note and channel = 'sms') = 'whatsapp',
+    'and the row says why it exists — the whole point of the rule is that it is visible afterwards'
+  );
+
+  perform assert_true(
+    (select error is not null and status = 'failed' from notification_deliveries where id = v_wa),
+    'the failed send keeps its error rather than being overwritten by the fallback'
+  );
+
+  perform assert_true(
+    record_delivery_failure(v_wa, 'Retried and failed again.') = 'failed_fallback_exists',
+    'failing twice does not send the student two texts for one warning'
+  );
+
+  -- ------------------------------------------------------------------------
+  -- And the case where falling back would be spending money nobody agreed to
+  -- ------------------------------------------------------------------------
+  v_note := queue_notification(
+    v_dual, 'lecture_reminder', 'CMP 301 starts in an hour', 'Lecture Theatre A, 10:00.'
+  );
+
+  select id into v_wa from notification_deliveries
+  where notification_id = v_note and channel = 'whatsapp';
+
+  perform assert_true(
+    record_delivery_failure(v_wa, 'Number not on WhatsApp.') = 'failed_no_fallback',
+    'a failed reminder is a reminder that does not arrive, not a reason to spend SMS budget'
+  );
+
+  perform assert_true(
+    not exists (
+      select 1 from notification_deliveries
+      where notification_id = v_note and channel = 'sms'
+    ),
+    'and no SMS row is created for it'
+  );
+
+  select count(*) into v_count from notification_policy where kind = 'lecture_reminder' and sms;
+  perform assert_true(v_count = 0, 'because the policy says reminders never use SMS');
+end $$;
+
+-- Cancelling a lecture reaches students on every channel the policy allows,
+-- not only inside an app they may not open before walking to a shut hall.
+do $$
+declare
+  v_course  uuid := '66666666-6666-6666-6666-666666666601';
+  v_sent    integer;
+  v_pushed  integer;
+begin
+  v_sent := notify_enrolled(v_course, 'schedule_change', 'CMP 301 is cancelled',
+                            'Thursday 10:00 will not hold. A makeup will be scheduled.');
+
+  perform assert_true(v_sent > 0, 'every enrolled student is notified');
+
+  select count(*) into v_pushed
+  from notification_deliveries d
+  join notifications n on n.id = d.notification_id
+  where n.title = 'CMP 301 is cancelled' and d.channel = 'whatsapp';
+
+  perform assert_true(
+    v_pushed = v_sent,
+    'and each of them gets a WhatsApp delivery queued, not just an in-app row'
+  );
+end $$;
+
+
+-- ---------------------------------------------------------------------------
 -- Dues, which are now a debt rather than a gate
 --
 -- The old model was a boolean: paid, or every mark you hold is worth nothing.

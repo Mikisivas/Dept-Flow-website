@@ -51,9 +51,14 @@ run "seed"     "$HERE/supabase/seed.sql"
 psql -h "$PGROOT" -p "$PORT" -U postgres -tAc "drop database if exists deptflow_tx" >/dev/null
 psql -h "$PGROOT" -p "$PORT" -U postgres -tAc "create database deptflow_tx" >/dev/null
 psql -h "$PGROOT" -p "$PORT" -U postgres -d deptflow_tx -q -f "$HERE/scripts/schema-harness.sql" >/dev/null 2>&1
+# Matched on "ERROR:" anywhere, NOT on the "psql:file:line:" prefix the other
+# runs produce. psql only writes that prefix when reading a file with -f; from
+# a pipe it prints a bare "ERROR:", so a prefix-anchored grep here matches
+# nothing and reports every schema as transaction-safe. It did exactly that,
+# and passed a migration that could not be applied through the SQL Editor.
 tx=$( { echo "begin;"; cat "$HERE/supabase/setup.sql"; echo "commit;"; } |
       psql -h "$PGROOT" -p "$PORT" -U postgres -d deptflow_tx 2>&1 |
-      grep -E "^psql.*ERROR" | head -1 )
+      grep -E "ERROR:" | head -1 )
 psql -h "$PGROOT" -p "$PORT" -U postgres -tAc "drop database if exists deptflow_tx" >/dev/null
 if [ -n "$tx" ]; then
   echo "FAILED — schema does not apply as a single transaction (the SQL Editor runs it as one)"

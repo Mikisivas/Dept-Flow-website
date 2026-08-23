@@ -1,6 +1,7 @@
 import "server-only";
 
 import { randomInt } from "node:crypto";
+import { sendOtp } from "@/lib/messaging";
 import { createServiceClient } from "@/lib/supabase/client";
 import { hashPassword, verifyPassword } from "@/lib/auth/passwords";
 import { normaliseMatric } from "@/lib/format";
@@ -73,31 +74,45 @@ export async function checkRegisterMatch(input: {
 }
 
 export type SendOtpResult =
-  | { outcome: "sent"; expiresAt: string }
+  | { outcome: "sent"; expiresAt: string; channels: Array<"sms" | "whatsapp"> }
   | { outcome: "rate_limited" }
   | { outcome: "phone_taken" };
 
 /**
- * Generate, store hashed, and "deliver".
+ * Generate, store hashed, and deliver — once per number the student gave.
  *
  * The plaintext code is never in an HTTP response, in any environment — that
- * is the whole reason `send_otp` is an interface rather than a return value.
- * The development implementation writes to the server log; production swaps in
- * an SMS provider and nothing above this line changes.
+ * is the whole reason delivery is an interface rather than a return value.
+ *
+ * Two numbers, two codes, two verifications. A student whose WhatsApp runs on
+ * a data-only SIM gives both, and BOTH have to be proved reachable before
+ * either is trusted: a WhatsApp number nobody has verified is worse than no
+ * WhatsApp number at all, because the alerting layer will believe it delivered
+ * a warning to it. Most students give one number and see one code.
  */
 export async function sendRegistrationOtp(input: {
   matricNo: string;
   phone: string;
+  /** Only when WhatsApp runs on a different SIM. */
+  whatsappPhone?: string | null;
 }): Promise<SendOtpResult> {
   const db = createServiceClient();
   const matric = normaliseMatric(input.matricNo);
 
+  const whatsapp =
+    input.whatsappPhone && input.whatsappPhone !== input.phone ? input.whatsappPhone : null;
+
   // One phone, one account. Two students sharing a number would each be able
-  // to reset the other's password.
+  // to reset the other's password. Checked against BOTH columns: a number
+  // already serving as somebody's WhatsApp number is just as taken.
   const { data: taken } = await db
     .from("profiles")
     .select("id")
-    .eq("phone", input.phone)
+    .or(
+      [`phone.eq.${input.phone}`, `whatsapp_phone.eq.${input.phone}`]
+        .concat(whatsapp ? [`phone.eq.${whatsapp}`, `whatsapp_phone.eq.${whatsapp}`] : [])
+        .join(","),
+    )
     .maybeSingle();
 
   if (taken) return { outcome: "phone_taken" };
@@ -111,39 +126,34 @@ export async function sendRegistrationOtp(input: {
 
   if ((count ?? 0) >= OTP_SEND_LIMIT) return { outcome: "rate_limited" };
 
-  // randomInt, not Math.random. A predictable code is a bypassed phone check.
-  const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
   const expiresAt = new Date(Date.now() + OTP_TTL_MINUTES * 60_000).toISOString();
+  const channels: Array<"sms" | "whatsapp"> = whatsapp ? ["sms", "whatsapp"] : ["sms"];
 
-  const { error } = await db.from("otp_codes").insert({
-    purpose: "registration",
-    matric_no: matric,
-    phone: input.phone,
-    code_hash: await hashPassword(code),
-    expires_at: expiresAt,
-  });
+  for (const channel of channels) {
+    const to = channel === "sms" ? input.phone : whatsapp!;
+    // randomInt, not Math.random. A predictable code is a bypassed phone
+    // check. A DIFFERENT code per channel, so that receiving one proves that
+    // one number is reachable rather than proving the student holds a code.
+    const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
 
-  if (error) throw new Error(`Could not send a code: ${error.message}`);
+    const { error } = await db.from("otp_codes").insert({
+      purpose: "registration",
+      matric_no: matric,
+      phone: to,
+      channel,
+      code_hash: await hashPassword(code),
+      expires_at: expiresAt,
+    });
 
-  await deliverOtp(input.phone, code);
+    if (error) throw new Error(`Could not send a code: ${error.message}`);
 
-  return { outcome: "sent", expiresAt };
-}
-
-/**
- * The single delivery seam. Everything above it is production code.
- *
- * Development writes to the server log. It is the one place a plaintext code
- * exists after generation, and it must never become a response body, a toast,
- * or a query string.
- */
-async function deliverOtp(phone: string, code: string): Promise<void> {
-  if (process.env.NODE_ENV === "production") {
-    // Termii / Africa's Talking goes here. Failing loudly beats a student
-    // waiting for a code that was never going to arrive.
-    throw new Error("No SMS provider is configured for production.");
+    const result = await sendOtp({ to, code, channel });
+    if (result.status === "failed") {
+      throw new Error(`Could not send a code to ${to}: ${result.error}`);
+    }
   }
-  console.info(`\n  [dev OTP] ${phone} → ${code}\n`);
+
+  return { outcome: "sent", expiresAt, channels };
 }
 
 export type VerifyOtpResult = { ok: true } | { ok: false; reason: string };
@@ -202,6 +212,11 @@ export type CreateAccountResult =
  * a consumed registration code for this matric number and phone must exist
  * inside the claim window. Without that second condition the whole flow would
  * be a POST away from registering anyone in the department.
+ *
+ * When a separate WhatsApp number was given, it needs its own consumed code.
+ * Accepting one verification for two numbers would let a student type any
+ * number at all into the WhatsApp field — and the alerting layer would then
+ * spend Critical warnings on it and record them as delivered.
  */
 export async function createStudentAccount(input: {
   matricNo: string;
@@ -210,6 +225,7 @@ export async function createStudentAccount(input: {
   firstName: string;
   otherNames: string | null;
   phone: string;
+  whatsappPhone?: string | null;
   password: string;
 }): Promise<CreateAccountResult> {
   const db = createServiceClient();
@@ -237,6 +253,25 @@ export async function createStudentAccount(input: {
 
   if (!verified) return { outcome: "not_verified" };
 
+  const whatsapp =
+    input.whatsappPhone && input.whatsappPhone !== input.phone ? input.whatsappPhone : null;
+
+  if (whatsapp) {
+    const { data: whatsappVerified } = await db
+      .from("otp_codes")
+      .select("id")
+      .eq("purpose", "registration")
+      .eq("matric_no", matric)
+      .eq("phone", whatsapp)
+      .eq("channel", "whatsapp")
+      .not("consumed_at", "is", null)
+      .gte("consumed_at", since)
+      .limit(1)
+      .maybeSingle();
+
+    if (!whatsappVerified) return { outcome: "not_verified" };
+  }
+
   const { data: entry } = await db
     .from("whitelist_entries")
     .select("id, academic_session_id")
@@ -251,6 +286,9 @@ export async function createStudentAccount(input: {
       first_name: input.firstName.trim(),
       other_names: input.otherNames?.trim() || null,
       phone: input.phone,
+      phone_verified_at: new Date().toISOString(),
+      whatsapp_phone: whatsapp,
+      whatsapp_verified_at: whatsapp ? new Date().toISOString() : null,
       password_hash: await hashPassword(input.password),
       password_updated_at: new Date().toISOString(),
     })

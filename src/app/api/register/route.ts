@@ -9,6 +9,7 @@ import {
 import { issueSession, SESSION_COOKIE, SESSION_COOKIE_OPTIONS } from "@/lib/auth/session";
 import { isValidMatric, normaliseMatric, normalisePhone } from "@/lib/format";
 import { passwordProblem } from "@/lib/auth/passwords";
+import { allow, callerFrom } from "@/lib/throttle";
 
 /**
  * The whole registration flow, one endpoint, switched on `step`.
@@ -17,6 +18,11 @@ import { passwordProblem } from "@/lib/auth/passwords";
  * drifts is the one that lets somebody register against a matric number they
  * guessed. The steps are ordered here in the order the server enforces them,
  * which is not necessarily the order the screens run in.
+ *
+ * The `check` step is the one worth throttling. It answers "is CMP/2021/047 a
+ * real, unclaimed matric number", which is exactly the question a script would
+ * walk through the whole department — and the per-phone OTP limit does nothing
+ * about it, because such a script never gets as far as a phone number.
  */
 export async function POST(request: Request) {
   let body: Record<string, unknown>;
@@ -27,9 +33,28 @@ export async function POST(request: Request) {
   }
 
   const step = String(body.step ?? "");
+  const caller = callerFrom(request);
 
-  if (step === "check") return check(body);
-  if (step === "send-otp") return sendOtp(body);
+  if (step === "check") {
+    if (!(await allow("register:check", caller))) {
+      return NextResponse.json(
+        { error: "Too many attempts. Wait a minute and try again." },
+        { status: 429 },
+      );
+    }
+    return check(body);
+  }
+
+  if (step === "send-otp") {
+    if (!(await allow("register:otp", caller))) {
+      return NextResponse.json(
+        { error: "Too many codes requested. Wait a few minutes and try again." },
+        { status: 429 },
+      );
+    }
+    return sendOtp(body);
+  }
+
   if (step === "verify-otp") return verifyOtp(body);
   if (step === "create") return create(body);
 
@@ -63,7 +88,19 @@ async function sendOtp(body: Record<string, unknown>) {
     );
   }
 
-  const result = await sendRegistrationOtp({ matricNo, phone });
+  // Optional, and only meaningful when it differs. A student who types the
+  // same number into both fields gets one code, not two.
+  const whatsappRaw = String(body.whatsappPhone ?? "").trim();
+  const whatsappPhone = whatsappRaw ? normalisePhone(whatsappRaw) : null;
+
+  if (whatsappRaw && !whatsappPhone) {
+    return NextResponse.json(
+      { error: "That WhatsApp number doesn't look like a Nigerian mobile number." },
+      { status: 400 },
+    );
+  }
+
+  const result = await sendRegistrationOtp({ matricNo, phone, whatsappPhone });
 
   if (result.outcome === "phone_taken") {
     return NextResponse.json(
@@ -79,8 +116,10 @@ async function sendOtp(body: Record<string, unknown>) {
     );
   }
 
-  // Never the code. Only when it dies.
-  return NextResponse.json({ expiresAt: result.expiresAt });
+  // Never the code. Only when it dies, and which numbers were written to —
+  // the screen has to ask for one code or two, and cannot know which without
+  // being told.
+  return NextResponse.json({ expiresAt: result.expiresAt, channels: result.channels });
 }
 
 async function verifyOtp(body: Record<string, unknown>) {
@@ -100,6 +139,8 @@ async function create(body: Record<string, unknown>) {
   const firstName = String(body.firstName ?? "").trim();
   const otherNames = String(body.otherNames ?? "").trim() || null;
   const phone = normalisePhone(String(body.phone ?? ""));
+  const whatsappRaw = String(body.whatsappPhone ?? "").trim();
+  const whatsappPhone = whatsappRaw ? normalisePhone(whatsappRaw) : null;
   const password = String(body.password ?? "");
   const level = Number(body.level ?? 0);
 
@@ -121,6 +162,7 @@ async function create(body: Record<string, unknown>) {
     firstName,
     otherNames,
     phone,
+    whatsappPhone,
     password,
   });
 

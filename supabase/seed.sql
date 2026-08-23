@@ -361,6 +361,23 @@ values
 
 -- Last in the file, and it has to be: it reads every lecture and every mark, so
 -- running it before the sections above would predict from half a term.
+-- ---------------------------------------------------------------------------
+-- One student on a data-only WhatsApp SIM
+-- ---------------------------------------------------------------------------
+
+-- The uncommon case, seeded because it is the one that breaks: a Critical
+-- warning for Halima has to reach 0805… by WhatsApp and 0803… by SMS, and a
+-- demo where every student has one number never exercises that at all.
+update profiles
+   set whatsapp_phone = '+2348051111111',
+       whatsapp_verified_at = timestamptz '2025-09-19 16:04:00+01',
+       phone_verified_at = timestamptz '2025-09-19 16:02:00+01'
+ where id = '44444444-4444-4444-4444-444444444402';
+
+update profiles
+   set phone_verified_at = created_at
+ where role = 'student' and phone_verified_at is null;
+
 select compute_risk_predictions();
 
 commit;

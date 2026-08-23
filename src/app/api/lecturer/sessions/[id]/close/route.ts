@@ -5,6 +5,11 @@ import { createServiceClient } from "@/lib/supabase/client";
 /**
  * Ending a lecture, which is when it is scored.
  *
+ * There used to be a branch here deciding whether the lecture was scored out of
+ * one checkpoint or two, and demanding a written justification for the first.
+ * A lecture now carries one code and is scored present-or-absent, so there is
+ * no decision left to make and nothing for the lecturer to justify.
+ *
  * `resolve_session_score()` in the database is the authoritative implementation
  * and this route does not reimplement any of it — it closes the lecture, then
  * calls the function once per enrolled student. Absent students are scored too:
@@ -18,13 +23,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   }
 
   const { id } = await params;
-
-  let body: { reason?: string };
-  try {
-    body = await request.json();
-  } catch {
-    body = {};
-  }
 
   const db = createServiceClient();
 
@@ -45,49 +43,36 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json({ alreadyClosed: true, scored: 0 });
   }
 
-  const { data: checkpoints } = await db
+  const { data: code } = await db
     .from("checkpoints")
-    .select("index")
-    .eq("session_instance_id", id);
+    .select("id")
+    .eq("session_instance_id", id)
+    .maybeSingle();
 
-  const issued = (checkpoints ?? []).length;
-  if (issued === 0) {
+  if (!code) {
     return NextResponse.json(
-      { error: "No checkpoint was issued, so there is nothing to score." },
+      { error: "No code was issued, so there is nothing to score." },
       { status: 409 },
-    );
-  }
-
-  // How the lecture is scored is decided by what actually happened, not by what
-  // was intended: one token means present-or-absent, two means half marks are
-  // possible. This is why the column is null until now.
-  const mode = issued >= 2 ? "pair" : "single";
-  const reason = String(body.reason ?? "").trim();
-
-  if (mode === "single" && reason.length < 10) {
-    return NextResponse.json(
-      { error: "Say why only one checkpoint was issued. The HOD reviews these." },
-      { status: 400 },
     );
   }
 
   const { error: closeError } = await db
     .from("session_instances")
-    .update({
-      status: "closed",
-      checkpoint_mode: mode,
-      closed_at: new Date().toISOString(),
-    })
+    .update({ status: "closed", closed_at: new Date().toISOString() })
     .eq("id", id);
 
   if (closeError) {
     return NextResponse.json({ error: "Couldn't end the session." }, { status: 503 });
   }
 
+  // Dropped enrolments are excluded: a student who left the course is not
+  // absent from it, and scoring them would put a zero into a denominator they
+  // are no longer part of.
   const { data: enrolled } = await db
     .from("enrolments")
     .select("student_id")
-    .eq("course_id", instance.course_id);
+    .eq("course_id", instance.course_id)
+    .is("dropped_at", null);
 
   const students = (enrolled ?? []).map((row) => row.student_id);
 
@@ -104,22 +89,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   const failed = results.filter((r) => r.error).length;
 
-  // A single-checkpoint lecture changes how every student in the hall is
-  // scored, so it leaves a record with a name and a reason against it.
-  if (mode === "single") {
-    await db.rpc("write_audit", {
-      p_actor_id: session.profileId,
-      p_actor_role: "lecturer",
-      p_action: "session.closed_single_checkpoint",
-      p_target_table: "session_instances",
-      p_target_id: id,
-      p_reason: reason,
-      p_metadata: { course_id: instance.course_id, students_scored: students.length - failed },
-    });
-  }
-
   return NextResponse.json({
-    mode,
     scored: students.length - failed,
     // Surfaced rather than swallowed: a partially scored lecture is a thing the
     // HOD has to fix, and hiding it makes it undiscoverable.

@@ -1,7 +1,7 @@
 import type { CheckpointOutcome, SubmitRejection } from "@/lib/types";
 
 /**
- * The browser's side of a checkpoint submission.
+ * The browser's side of an attendance submission.
  *
  * The distinction this file exists to make: a *rejection* is the server having
  * decided, and a *failure* is the server not having answered. Retrying the
@@ -21,7 +21,8 @@ export class RejectedSubmission extends Error {
 export async function submitCheckpoint(payload: {
   checkpointId: string;
   token: string;
-  coords: { latitude: number; longitude: number; accuracy: number };
+  /** Set only when the offline queue is replaying something recorded earlier. */
+  submittedAt?: string;
 }): Promise<CheckpointOutcome> {
   const response = await fetch("/api/attendance", {
     method: "POST",

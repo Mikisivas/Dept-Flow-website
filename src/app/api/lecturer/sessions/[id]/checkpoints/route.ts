@@ -4,12 +4,18 @@ import { currentUser } from "@/lib/auth/current-user";
 import { createServiceClient } from "@/lib/supabase/client";
 
 /**
- * Issuing a checkpoint code.
+ * Issuing the attendance code.
  *
  * The code goes on a whiteboard in front of eighty people, so it is not a
- * secret and is not stored hashed. What makes it hard to fake is that it is
- * short-lived and paired with a geo-fence — and that it never travels to a
- * student's browser, only to the lecturer's.
+ * secret and is not stored hashed. What keeps it honest is that it is
+ * short-lived and never travels to a student's browser, only to the
+ * lecturer's. Since the geo-fence was removed that is the entire mechanism —
+ * which is an argument for a short window, not a long one.
+ *
+ * One code per lecture. A lapsed code can be ROTATED: the row is updated in
+ * place, so a student who already answered stays answered — `attendance_marks`
+ * is keyed on the code row, and re-issuing must not ask a hall that has already
+ * been counted to type again.
  */
 
 /** Long enough to write it up and for a hall to type it; short enough to matter. */
@@ -46,54 +52,42 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     );
   }
 
-  const { data: issued } = await db
+  const { data: existing } = await db
     .from("checkpoints")
-    .select("index, expires_at")
+    .select("id, expires_at")
     .eq("session_instance_id", id)
-    .order("index");
+    .maybeSingle();
 
-  const existing = issued ?? [];
-
-  // Two per lecture, and never a second one while the first is still live —
-  // two valid codes on a board at once is a student support problem, not a
-  // feature.
-  if (existing.length >= 2) {
+  // Never a second code while the first is still live: two valid codes on one
+  // board is a student-support problem, not a feature.
+  if (existing && Date.parse(existing.expires_at) > Date.now()) {
     return NextResponse.json(
-      { error: "Both checkpoints have been issued." },
-      { status: 409 },
-    );
-  }
-  if (existing.some((cp) => Date.parse(cp.expires_at) > Date.now())) {
-    return NextResponse.json(
-      { error: "A checkpoint is still open. Wait for it to close." },
+      { error: "A code is still live. Wait for it to close before issuing another." },
       { status: 409 },
     );
   }
 
-  const index = existing.length + 1;
-  const expiresAt = new Date(Date.now() + WINDOW_SECONDS * 1000).toISOString();
+  const row = {
+    session_instance_id: id,
+    // randomInt, not Math.random: the code is public once it is on the board,
+    // but it must not be predictable before it is.
+    token: String(randomInt(0, 10_000)).padStart(4, "0"),
+    expires_at: new Date(Date.now() + WINDOW_SECONDS * 1000).toISOString(),
+    issued_by: session.profileId,
+    issued_at: new Date().toISOString(),
+  };
 
-  const { data: created, error } = await db
-    .from("checkpoints")
-    .insert({
-      session_instance_id: id,
-      index,
-      // randomInt, not Math.random: the code is public once it is on the board,
-      // but it must not be predictable before it is.
-      token: String(randomInt(0, 10_000)).padStart(4, "0"),
-      expires_at: expiresAt,
-      issued_by: session.profileId,
-    })
-    .select("index, token, expires_at")
-    .single();
+  const { data: created, error } = existing
+    ? await db.from("checkpoints").update(row).eq("id", existing.id).select("token, expires_at").single()
+    : await db.from("checkpoints").insert(row).select("token, expires_at").single();
 
   if (error || !created) {
     return NextResponse.json({ error: "Couldn't issue the code. Try again." }, { status: 503 });
   }
 
   return NextResponse.json({
-    index: created.index,
     token: created.token,
     expiresAt: created.expires_at,
+    reissued: Boolean(existing),
   });
 }

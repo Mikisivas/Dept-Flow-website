@@ -38,5 +38,5 @@ export type TodayClass = {
   startsAt: string;
   endsAt: string;
   /** A checkpoint is open right now and the student has not submitted it. */
-  liveCheckpoint: { index: 1 | 2; expiresAt: string } | null;
+  liveCheckpoint: { expiresAt: string } | null;
 };

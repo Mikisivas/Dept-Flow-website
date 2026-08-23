@@ -47,15 +47,11 @@ const columns: Column<LecturerOversight>[] = [
     },
   },
   {
-    key: "single",
-    header: "One checkpoint",
+    key: "cancelled",
+    header: "Cancelled",
     align: "right",
     mobile: "meta",
-    cell: (row) => (
-      <span className="tabular">
-        {row.singleCheckpoint} single-checkpoint · {row.cancelled} cancelled
-      </span>
-    ),
+    cell: (row) => <span className="tabular">{row.cancelled} cancelled</span>,
   },
 ];
 
@@ -66,7 +62,7 @@ export default async function LecturerOversightPage() {
     <AppShell role="hod">
       <PageHeader
         title="Lecturers"
-        subtitle="Paper batches and single-checkpoint sessions, as a rate rather than a count."
+        subtitle="Paper batches as a rate rather than a count — two out of forty is not two out of four."
       />
       <DataTable
         className="mt-6"

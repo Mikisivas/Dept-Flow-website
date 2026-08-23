@@ -41,10 +41,8 @@ export type LecturerDashboard = {
     sessionInstanceId: string;
     courseCode: string;
     heldOn: string;
-    full: number;
-    half: number;
+    present: number;
     absent: number;
-    singleCheckpoint: boolean;
     fromPaper: boolean;
   }>;
 };
@@ -236,10 +234,8 @@ async function loadRecent(
       sessionInstanceId: instance.id,
       courseCode: courseById.get(instance.course_id)?.code ?? "",
       heldOn: instance.held_on,
-      full: rows.filter((r) => Number(r.score) === 1).length,
-      half: rows.filter((r) => Number(r.score) === 0.5).length,
+      present: rows.filter((r) => Number(r.score) === 1).length,
       absent: rows.filter((r) => Number(r.score) === 0).length,
-      singleCheckpoint: instance.checkpoint_mode === "single",
       fromPaper: rows.some((r) => r.source === "manually_entered"),
     };
   });
@@ -249,18 +245,16 @@ export type SessionRoster = {
   sessionInstanceId: string;
   courseCode: string;
   heldOn: string;
-  /** A lecture where only one token was ever issued is scored present/absent. */
-  mode: "pair" | "single";
   roster: RosterEntry[];
 };
 
 /**
- * Who was recorded, per checkpoint.
+ * Who answered the code.
  *
  * Built from `attendance_marks` rather than from `session_scores`, because the
- * lecturer is checking the capture — a student who caught one checkpoint and a
- * student who caught none both score 0.5 and 0, but only the strip shows which
- * half of the lecture they were in the room for.
+ * lecturer is checking the capture and the score does not exist until the
+ * lecture closes. Reading the marks is what makes this screen usable while the
+ * lecture is still running.
  */
 export async function loadSessionRoster(id: string): Promise<SessionRoster | null> {
   await requireLecturer();
@@ -268,7 +262,7 @@ export async function loadSessionRoster(id: string): Promise<SessionRoster | nul
 
   const { data: instance } = await db
     .from("session_instances")
-    .select("id, course_id, held_on, checkpoint_mode, courses(code)")
+    .select("id, course_id, held_on, courses(code)")
     .eq("id", id)
     .maybeSingle();
 
@@ -279,16 +273,15 @@ export async function loadSessionRoster(id: string): Promise<SessionRoster | nul
       .from("enrolments")
       .select("student_id, students(matric_no, profiles(surname, first_name, other_names))")
       .eq("course_id", instance.course_id),
-    db.from("checkpoints").select("id, index").eq("session_instance_id", id),
+    db.from("checkpoints").select("id").eq("session_instance_id", id),
   ]);
 
   const checkpointIds = (checkpoints ?? []).map((cp) => cp.id);
-  const indexById = new Map((checkpoints ?? []).map((cp) => [cp.id, cp.index]));
 
   const { data: marks } = checkpointIds.length
     ? await db
         .from("attendance_marks")
-        .select("student_id, checkpoint_id, accepted, flagged_for_review")
+        .select("student_id, checkpoint_id, accepted")
         .in("checkpoint_id", checkpointIds)
         .eq("accepted", true)
     : { data: [] };
@@ -302,7 +295,6 @@ export async function loadSessionRoster(id: string): Promise<SessionRoster | nul
         },
       );
       const person = one(student?.profiles);
-      const mine = (marks ?? []).filter((m) => m.student_id === row.student_id);
 
       return {
         studentId: row.student_id,
@@ -310,9 +302,7 @@ export async function loadSessionRoster(id: string): Promise<SessionRoster | nul
         surname: person?.surname ?? "",
         firstName: person?.first_name ?? "",
         otherNames: person?.other_names ?? null,
-        checkpointOne: mine.some((m) => indexById.get(m.checkpoint_id) === 1),
-        checkpointTwo: mine.some((m) => indexById.get(m.checkpoint_id) === 2),
-        flagged: mine.some((m) => m.flagged_for_review),
+        present: (marks ?? []).some((m) => m.student_id === row.student_id),
       };
     })
     .sort((a, b) => a.matricNo.localeCompare(b.matricNo));
@@ -321,7 +311,6 @@ export async function loadSessionRoster(id: string): Promise<SessionRoster | nul
     sessionInstanceId: instance.id,
     courseCode: one(instance.courses as unknown as { code: string })?.code ?? "",
     heldOn: instance.held_on,
-    mode: instance.checkpoint_mode === "single" ? "single" : "pair",
     roster,
   };
 }
@@ -348,11 +337,7 @@ export async function loadSessionControl(id: string): Promise<SessionControl | n
       .from("enrolments")
       .select("id", { count: "exact", head: true })
       .eq("course_id", instance.course_id),
-    db
-      .from("checkpoints")
-      .select("id, index, token, expires_at")
-      .eq("session_instance_id", id)
-      .order("index"),
+    db.from("checkpoints").select("id, token, expires_at").eq("session_instance_id", id),
     venueNames(db, [instance.venue_id]),
   ]);
 
@@ -364,7 +349,17 @@ export async function loadSessionControl(id: string): Promise<SessionControl | n
         .in("checkpoint_id", checkpointIds)
     : { data: [] };
 
-  const now = Date.now();
+  // One code per lecture, so there is at most one row. A lapsed code is
+  // reported as no live code rather than as an expired one: the lecturer's
+  // next move is the same either way, and the screen offers it as one button.
+  const code = (checkpoints ?? [])[0] ?? null;
+  const live = code && Date.parse(code.expires_at) > Date.now() ? code : null;
+
+  const rejections = new Map<string, number>();
+  for (const mark of marks ?? []) {
+    if (mark.accepted || !mark.reject_reason) continue;
+    rejections.set(mark.reject_reason, (rejections.get(mark.reject_reason) ?? 0) + 1);
+  }
 
   return {
     sessionInstanceId: instance.id,
@@ -374,24 +369,14 @@ export async function loadSessionControl(id: string): Promise<SessionControl | n
     status: instance.status as LecturerClassStatus,
     openedAt: instance.opened_at ?? instance.held_on,
     enrolled: enrolled ?? 0,
-    liveCheckpointIndex:
-      ((checkpoints ?? []).find((cp) => Date.parse(cp.expires_at) > now)?.index as 1 | 2) ?? null,
-    checkpoints: (checkpoints ?? []).map((cp) => {
-      const mine = (marks ?? []).filter((m) => m.checkpoint_id === cp.id);
-      const rejections = new Map<string, number>();
-      for (const mark of mine) {
-        if (mark.accepted || !mark.reject_reason) continue;
-        rejections.set(mark.reject_reason, (rejections.get(mark.reject_reason) ?? 0) + 1);
-      }
-
-      return {
-        index: cp.index as 1 | 2,
-        token: cp.token,
-        expiresAt: cp.expires_at,
-        submissions: mine.filter((m) => m.accepted).length,
-        rejections: [...rejections].map(([reason, count]) => ({ reason, count })),
-      };
-    }),
+    code: live
+      ? {
+          token: live.token,
+          expiresAt: live.expires_at,
+          submissions: (marks ?? []).filter((m) => m.accepted).length,
+          rejections: [...rejections].map(([reason, count]) => ({ reason, count })),
+        }
+      : null,
   };
 }
 

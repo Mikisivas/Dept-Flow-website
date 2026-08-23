@@ -4,7 +4,7 @@ import { useId, useRef } from "react";
 import { cn } from "@/lib/utils";
 
 /**
- * The 4-digit checkpoint token and the 6-digit OTP, in one control.
+ * The 4-digit attendance code and the 6-digit OTP, in one control.
  *
  * This is the highest-frequency, most time-pressured interaction in the
  * product: a noisy hall, a 3–5 minute window, a student holding a phone

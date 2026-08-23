@@ -132,19 +132,14 @@ export default async function LecturerDashboardPage() {
                   <p className="text-[13px] text-muted tabular">{formatDateShort(entry.heldOn)}</p>
                 </div>
                 <p className="mt-1 text-[13px] text-slate tabular">
-                  {entry.full} full · {entry.half} half · {entry.absent} absent
+                  {entry.present} present · {entry.absent} absent
                 </p>
 
-                {/* Both of these are visible to the HOD as lecturer oversight,
-                    so they are visible to the lecturer here too rather than
-                    being tracked silently. */}
-                {entry.singleCheckpoint || entry.fromPaper ? (
+                {/* Visible to the HOD as lecturer oversight, so it is visible
+                    to the lecturer here too rather than being tracked
+                    silently. */}
+                {entry.fromPaper ? (
                   <p className="mt-2 flex flex-wrap gap-2">
-                    {entry.singleCheckpoint ? (
-                      <span className="rounded-full border border-line px-2 py-0.5 text-[12px] text-slate">
-                        One checkpoint only
-                      </span>
-                    ) : null}
                     {entry.fromPaper ? (
                       <span className="flex items-center gap-1.5 rounded-full border border-line px-2 py-0.5 text-[12px] text-slate">
                         <FileText className="h-3 w-3" aria-hidden="true" />

@@ -98,9 +98,7 @@ async function loadToday(
         startsAt: (entry.start_time ?? "").slice(0, 5),
         endsAt: (entry.end_time ?? "").slice(0, 5),
         liveCheckpoint:
-          live && live.courseCode === course?.code
-            ? { index: live.index, expiresAt: live.expiresAt }
-            : null,
+          live && live.courseCode === course?.code ? { expiresAt: live.expiresAt } : null,
       };
     })
     .sort((a, b) => a.startsAt.localeCompare(b.startsAt));
@@ -197,18 +195,14 @@ export async function loadStudentDashboard(): Promise<StudentDashboard> {
     const sessions: SessionCell[] = held.map((instance, index) => {
       const score = scoreByInstance.get(instance.id);
       const value = Number(score?.score ?? 0);
-      const single = instance.checkpoint_mode === "single";
 
       return {
         id: instance.id,
         label: `Week ${index + 1}`,
         heldOn: instance.held_on,
-        mode: single ? "single" : "pair",
-        // The stored score is the source of truth; the cells are drawn from it
-        // rather than from a second read of attendance_marks, which a student
-        // cannot see the coordinates of anyway.
-        checkpointOne: value > 0,
-        checkpointTwo: value === 1 && !single,
+        // The stored score is the source of truth; the cell is drawn from it
+        // rather than from a second read of attendance_marks.
+        attended: value > 0,
         status: score?.status === "confirmed" ? "confirmed" : "provisional",
         source: score?.source === "manually_entered" ? "manually_entered" : "digital",
         score: value,
@@ -374,15 +368,12 @@ export async function loadCourseDetail(code: string): Promise<CourseDetail | nul
   const sessions: SessionCell[] = (instances ?? []).map((instance, index) => {
     const score = scoreByInstance.get(instance.id);
     const value = Number(score?.score ?? 0);
-    const single = instance.checkpoint_mode === "single";
 
     return {
       id: instance.id,
       label: `Week ${index + 1}`,
       heldOn: instance.held_on,
-      mode: single ? "single" : "pair",
-      checkpointOne: value > 0,
-      checkpointTwo: value === 1 && !single,
+      attended: value > 0,
       status: score?.status === "confirmed" ? "confirmed" : "provisional",
       source: score?.source === "manually_entered" ? "manually_entered" : "digital",
       score: value,

@@ -92,7 +92,7 @@ select assert_true(
 -- The attendance formula
 -- ---------------------------------------------------------------------------
 
--- Chidera has 10.0 of 13 recorded, all provisional. Provisional scores are
+-- Chidera has 10 of 13 recorded, all provisional. Provisional scores are
 -- excluded from the numerator, so her counted attendance is zero — which is
 -- the honest number, and the whole reason the dashboard leads with the banner.
 select assert_true(
@@ -103,15 +103,15 @@ select assert_true(
 
 select assert_true(
   attendance_pct('44444444-4444-4444-4444-444444444402',
-                 '66666666-6666-6666-6666-666666666601') = 26.92,
-  'confirmed scores produce 3.5/13 = 26.92%'
+                 '66666666-6666-6666-6666-666666666601') = 38.46,
+  'confirmed scores produce 5/13 = 38.46%'
 );
 
--- The mockup's own worked example: 9.5 of 13 is 73%, and one more full session
--- reaches 75%.
+-- The worked example the AttendanceMeter states: 9 of 13 is 69%, and three
+-- more lectures in a row reach 75%.
 select assert_true(
-  full_sessions_needed(9.5, 13) = 1,
-  'the AttendanceMeter sentence: 9.5 of 13 needs 1 more full session'
+  full_sessions_needed(9, 13) = 3,
+  'the AttendanceMeter sentence: 9 of 13 needs 3 more lectures'
 );
 
 select assert_true(
@@ -120,7 +120,7 @@ select assert_true(
 );
 
 select assert_true(
-  full_sessions_needed(3.5, 13) = 25,
+  full_sessions_needed(5, 13) = 19,
   'a badly-behind student is told the real number, not a comfortable one'
 );
 
@@ -150,7 +150,7 @@ select assert_true(
 select assert_true(
   attendance_pct('44444444-4444-4444-4444-444444444401',
                  '66666666-6666-6666-6666-666666666601') = 76.92,
-  'after clearing, the same 10.0 of 13 reads as 76.92%'
+  'after clearing, the same 10 of 13 reads as 76.92%'
 );
 
 -- The consequence, stated as the eligibility list states it. She attended
@@ -181,71 +181,70 @@ $$, 'a clearance granted by a person must name that person');
 do $$
 declare
   v_session uuid := gen_random_uuid();
-  v_cp1     uuid := gen_random_uuid();
-  v_cp2     uuid := gen_random_uuid();
+  v_code    uuid := gen_random_uuid();
   v_student uuid := '44444444-4444-4444-4444-444444444402';
   v_score   numeric;
 begin
-  insert into session_instances (id, course_id, timetable_entry_id, held_on, venue_id, type, status, checkpoint_mode, closed_at, created_by)
+  insert into session_instances (id, course_id, timetable_entry_id, held_on, venue_id, type, status, closed_at, created_by)
   values (v_session, '66666666-6666-6666-6666-666666666601', '77777777-7777-7777-7777-777777777701',
-          '2026-01-13', '22222222-2222-2222-2222-222222222201', 'recurring', 'closed', 'pair', now(),
+          '2026-01-13', '22222222-2222-2222-2222-222222222201', 'recurring', 'closed', now(),
           '33333333-3333-3333-3333-333333333301');
 
-  insert into checkpoints (id, session_instance_id, index, token, expires_at, issued_by) values
-    (v_cp1, v_session, 1, '4821', now() + interval '5 min', '33333333-3333-3333-3333-333333333301'),
-    (v_cp2, v_session, 2, '9037', now() + interval '5 min', '33333333-3333-3333-3333-333333333301');
+  insert into checkpoints (id, session_instance_id, token, expires_at, issued_by)
+  values (v_code, v_session, '4821', now() + interval '5 min', '33333333-3333-3333-3333-333333333301');
 
-  -- One checkpoint caught.
-  insert into attendance_marks (student_id, checkpoint_id, accepted, distance_m)
-  values (v_student, v_cp1, true, 12.4);
+  -- Nobody answered: the lecture is held, the student was not there.
+  v_score := resolve_session_score(v_student, v_session);
+  perform assert_true(v_score = 0, 'a lecture with no accepted mark scores 0');
+
+  insert into attendance_marks (student_id, checkpoint_id, accepted)
+  values (v_student, v_code, true);
 
   v_score := resolve_session_score(v_student, v_session);
-  perform assert_true(v_score = 0.5, 'one checkpoint out of two scores 0.5');
-
-  -- The second as well.
-  insert into attendance_marks (student_id, checkpoint_id, accepted, distance_m)
-  values (v_student, v_cp2, true, 11.1);
-
-  v_score := resolve_session_score(v_student, v_session);
-  perform assert_true(v_score = 1.0, 'both checkpoints score 1.0');
+  perform assert_true(v_score = 1.0, 'one accepted code is the whole lecture');
 
   perform assert_true(
     (select status from session_scores where student_id = v_student and session_instance_id = v_session) = 'confirmed',
     'a cleared student''s score is written confirmed, not provisional'
   );
 
-  -- A duplicate submission for the same checkpoint cannot be raced through.
+  -- A duplicate submission for the same code cannot be raced through.
   perform assert_rejects(
-    format('insert into attendance_marks (student_id, checkpoint_id, accepted) values (%L, %L, true)', v_student, v_cp1),
-    'a second submission for the same checkpoint is rejected by the database, not by application logic'
+    format('insert into attendance_marks (student_id, checkpoint_id, accepted) values (%L, %L, true)', v_student, v_code),
+    'a second submission for the same code is rejected by the database, not by application logic'
+  );
+
+  -- The half mark went with the checkpoint pair it described.
+  perform assert_rejects(
+    format('update session_scores set score = 0.5 where student_id = %L and session_instance_id = %L', v_student, v_session),
+    'a lecture is attended or it is not — 0.5 is no longer a score'
+  );
+
+  perform assert_rejects(
+    format('select resolve_session_score(%L, %L, ''digital'', null, 0.5)', v_student, v_session),
+    'a paper batch cannot transcribe a half mark either'
   );
 end $$;
 
--- A lecture where the lecturer only issued one token is scored present/absent.
+-- One lecture, one code. A second row for the same lecture is refused by the
+-- database rather than by whichever route happened to be issuing it.
 do $$
 declare
   v_session uuid := gen_random_uuid();
-  v_cp1     uuid := gen_random_uuid();
-  v_student uuid := '44444444-4444-4444-4444-444444444402';
-  v_score   numeric;
 begin
-  insert into session_instances (id, course_id, timetable_entry_id, held_on, venue_id, type, status, checkpoint_mode, closed_at, created_by)
+  insert into session_instances (id, course_id, timetable_entry_id, held_on, venue_id, type, status, closed_at, created_by)
   values (v_session, '66666666-6666-6666-6666-666666666601', '77777777-7777-7777-7777-777777777701',
-          '2026-01-20', '22222222-2222-2222-2222-222222222201', 'recurring', 'closed', 'single', now(),
+          '2026-01-20', '22222222-2222-2222-2222-222222222201', 'recurring', 'closed', now(),
           '33333333-3333-3333-3333-333333333301');
 
-  insert into checkpoints (id, session_instance_id, index, token, expires_at, issued_by)
-  values (v_cp1, v_session, 1, '1234', now() + interval '5 min', '33333333-3333-3333-3333-333333333301');
-
-  insert into attendance_marks (student_id, checkpoint_id, accepted, distance_m)
-  values (v_student, v_cp1, true, 9.0);
-
-  v_score := resolve_session_score(v_student, v_session);
-  perform assert_true(v_score = 1.0, 'a single-checkpoint lecture scores 1.0, not 0.5');
+  insert into checkpoints (id, session_instance_id, token, expires_at, issued_by)
+  values (gen_random_uuid(), v_session, '1234', now() + interval '5 min', '33333333-3333-3333-3333-333333333301');
 
   perform assert_rejects(
-    format('update session_scores set score = 0.5 where student_id = %L and session_instance_id = %L', v_student, v_session),
-    'a single-checkpoint lecture can never hold a half mark'
+    format($q$insert into checkpoints (id, session_instance_id, token, expires_at, issued_by)
+              values (gen_random_uuid(), %L, '5678', now() + interval '5 min', '33333333-3333-3333-3333-333333333301')$q$,
+           v_session),
+    'a lecture cannot carry two attendance codes'
   );
 end $$;
 
@@ -374,38 +373,33 @@ select assert_true(
 -- Retention
 -- ---------------------------------------------------------------------------
 
-do $$
-declare
-  v_purged integer;
-  v_mark   uuid;
-begin
-  select id into v_mark from attendance_marks where gps_lat is not null limit 1;
+-- There used to be a retention window here, and a job that enforced it, because
+-- a mark carried the student's coordinates. Trust-based attendance records no
+-- location at all, so the strongest assertion available is that there is
+-- nothing left to retain — checked against the catalogue rather than trusted,
+-- because a column quietly reintroduced would restore the obligation without
+-- restoring the job.
+select assert_true(
+  (select count(*) from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'attendance_marks'
+      and column_name in ('gps_lat', 'gps_lng', 'gps_accuracy_m', 'distance_m',
+                          'coordinates_purged_at', 'device_id')) = 0,
+  'an attendance mark records no position, no derived distance and no device'
+);
 
-  if v_mark is null then
-    update attendance_marks set gps_lat = 6.5183, gps_lng = 3.3768
-     where id = (select id from attendance_marks limit 1)
-    returning id into v_mark;
-  end if;
+select assert_true(
+  (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname = 'purge_expired_coordinates') = 0,
+  'the coordinate purge is gone with the coordinates it purged'
+);
 
-  update attendance_marks
-     set gps_lat = 6.5183, gps_lng = 3.3768, distance_m = 12.4,
-         submitted_at = now() - interval '60 days'
-   where id = v_mark;
-
-  v_purged := purge_expired_coordinates();
-  perform assert_true(v_purged >= 1, 'expired coordinates are purged on schedule');
-
-  perform assert_true(
-    (select gps_lat is null and gps_lng is null and distance_m is not null
-       from attendance_marks where id = v_mark),
-    'the purge drops the coordinates and keeps the derived distance'
-  );
-end $$;
-
-select assert_rejects($$
-  update attendance_marks set coordinates_purged_at = now(), gps_lat = 6.5183
-  where id = (select id from attendance_marks limit 1)
-$$, 'a row cannot be marked purged while still holding coordinates');
+select assert_true(
+  (select count(*) from information_schema.columns
+    where table_schema = 'public' and table_name = 'students'
+      and column_name = 'device_id') = 0,
+  'no device fingerprint is kept against a student'
+);
 
 -- ---------------------------------------------------------------------------
 -- Authority actions
@@ -713,18 +707,16 @@ select assert_true(
   'a lecturer can read venue names'
 );
 
-select assert_true(
-  (select count(*) from venues) = 0,
-  'a lecturer still cannot read geo-fence coordinates'
-);
-
 reset role;
 
+-- The fence is gone, so the thing venues_admin_read existed to hide is gone
+-- with it. What the policy still does is keep the hall list off the anonymous
+-- surface, and `venue_directory` remains the read path every screen uses.
 select assert_true(
   (select count(*) from information_schema.columns
-    where table_name = 'venue_directory'
+    where table_schema = 'public' and table_name = 'venues'
       and column_name in ('centre_lat', 'centre_lng', 'radius_m', 'boundary')) = 0,
-  'venue_directory has no coordinate columns at all, not merely hidden ones'
+  'a venue is a name and nothing that could place a student'
 );
 
 -- ---------------------------------------------------------------------------
@@ -975,17 +967,17 @@ begin
   -- A lecture Halima was rejected on, then disputes
   -- ------------------------------------------------------------------------
   insert into session_instances (id, course_id, timetable_entry_id, held_on, venue_id,
-                                 type, status, checkpoint_mode, closed_at, created_by)
+                                 type, status, closed_at, created_by)
   values (v_lecture, v_course, '77777777-7777-7777-7777-777777777701', current_date - 1,
-          '22222222-2222-2222-2222-222222222201', 'recurring', 'closed', 'single', now(),
+          '22222222-2222-2222-2222-222222222201', 'recurring', 'closed', now(),
           '33333333-3333-3333-3333-333333333301');
 
-  insert into checkpoints (id, session_instance_id, index, token, issued_at, expires_at, issued_by)
-  values (v_cp, v_lecture, 1, '1234', now() - interval '2 hours', now() - interval '1 hour',
+  insert into checkpoints (id, session_instance_id, token, issued_at, expires_at, issued_by)
+  values (v_cp, v_lecture, '1234', now() - interval '2 hours', now() - interval '1 hour',
           '33333333-3333-3333-3333-333333333301');
 
-  insert into attendance_marks (student_id, checkpoint_id, accepted, reject_reason, distance_m)
-  values (v_halima, v_cp, false, 'outside_geofence', 87);
+  insert into attendance_marks (student_id, checkpoint_id, accepted, reject_reason)
+  values (v_halima, v_cp, false, 'invalid_or_expired_token');
 
   perform resolve_session_score(v_halima, v_lecture);
 
@@ -1212,8 +1204,8 @@ begin
   insert into enrolments (student_id, course_id, source, enrolled_on)
   values (v_student, v_course, 'core', date '2025-09-15');
 
-  insert into session_instances (id, course_id, held_on, venue_id, type, status, checkpoint_mode, closed_at, created_by)
-  values (v_lecture, v_course, date '2025-10-07', v_venue, 'makeup', 'closed', 'pair', now(), v_lect);
+  insert into session_instances (id, course_id, held_on, venue_id, type, status, closed_at, created_by)
+  values (v_lecture, v_course, date '2025-10-07', v_venue, 'makeup', 'closed', now(), v_lect);
 
   -- One lecture, attended in full, but provisional: the student has not paid.
   insert into session_scores (student_id, session_instance_id, score, status, source)
@@ -1677,8 +1669,8 @@ end $$;
 -- A correction never lowers a score
 --
 -- Found by rehearsing the demo. Correcting a dispute on a lecture with no
--- checkpoint rows re-scored the student from an empty set of marks and took
--- them from 0.5 to 0. The HOD clicked "correct"; ending up with less than they
+-- attendance-code rows re-scored the student from an empty set of marks and
+-- took them to 0. The HOD clicked "correct"; ending up with less than they
 -- started with is the opposite of that instruction.
 -- ---------------------------------------------------------------------------
 
@@ -1692,17 +1684,15 @@ declare
   v_paper   uuid := gen_random_uuid();
   v_dispute uuid;
 begin
-  -- A lecture recorded from a paper register: a real score, and no checkpoints
-  -- at all for a correction to accept.
-  insert into session_instances (id, course_id, held_on, venue_id, type, status, checkpoint_mode, closed_at, created_by)
-  -- 'pair', because a half mark is only meaningful against two checkpoints —
-  -- enforce_single_checkpoint_scoring refuses 0.5 on a single-checkpoint
-  -- lecture, which is the schema defending the rule rather than this test
-  -- working around it.
-  values (v_paper, v_course, date '2026-02-10', v_venue, 'makeup', 'closed', 'pair', now(), v_lect);
+  -- A lecture recorded from a paper register: a real score, and no attendance
+  -- code at all for a correction to re-derive it from. Re-scoring this from
+  -- marks would return 0, because there are no marks — which is precisely the
+  -- floor being tested.
+  insert into session_instances (id, course_id, held_on, venue_id, type, status, closed_at, created_by)
+  values (v_paper, v_course, date '2026-02-10', v_venue, 'makeup', 'closed', now(), v_lect);
 
   insert into session_scores (student_id, session_instance_id, score, status, source, confirmed_at)
-  values (v_student, v_paper, 0.5, 'confirmed', 'manually_entered', now());
+  values (v_student, v_paper, 0, 'confirmed', 'manually_entered', now());
 
   insert into attendance_disputes (student_id, session_instance_id, student_note)
   values (v_student, v_paper, 'I was there for the whole hour and signed the sheet.')
@@ -1713,7 +1703,7 @@ begin
   perform assert_true(
     (select score from session_scores
       where student_id = v_student and session_instance_id = v_paper) = 1.0,
-    'correcting a dispute on a lecture with no checkpoints credits the whole lecture rather than scoring from nothing'
+    'correcting a dispute on a lecture with no attendance code credits the whole lecture rather than scoring from nothing'
   );
 
   perform assert_true(
@@ -1734,22 +1724,23 @@ declare
   v_cp      uuid := gen_random_uuid();
   v_dispute uuid;
 begin
-  -- The other half of the floor: checkpoints exist, but only one of a pair, so
-  -- re-scoring would legitimately produce 0.5 against an existing 1.0.
-  insert into session_instances (id, course_id, held_on, venue_id, type, status, checkpoint_mode, closed_at, created_by)
-  values (v_full, v_course, date '2026-02-17', v_venue, 'makeup', 'closed', 'pair', now(), v_lect);
+  -- The other half of the floor: an attendance code exists but the student
+  -- never answered it, so re-scoring would legitimately produce 0 against an
+  -- existing 1.0. The correction still may not dock her.
+  insert into session_instances (id, course_id, held_on, venue_id, type, status, closed_at, created_by)
+  values (v_full, v_course, date '2026-02-17', v_venue, 'makeup', 'closed', now(), v_lect);
 
-  insert into checkpoints (id, session_instance_id, index, token, expires_at, issued_by)
-  values (v_cp, v_full, 1, '4417', now() + interval '1 hour', v_lect);
+  insert into checkpoints (id, session_instance_id, token, expires_at, issued_by)
+  values (v_cp, v_full, '4417', now() + interval '1 hour', v_lect);
 
   insert into session_scores (student_id, session_instance_id, score, status, source, confirmed_at)
   values (v_student, v_full, 1.0, 'confirmed', 'manually_entered', now());
 
   insert into attendance_disputes (student_id, session_instance_id, student_note)
-  values (v_student, v_full, 'The second checkpoint never appeared on my phone.')
+  values (v_student, v_full, 'The code never appeared on the board where I was sitting.')
   returning id into v_dispute;
 
-  perform resolve_dispute(v_dispute, v_hod, false, 'Second checkpoint was never issued; not her fault.');
+  perform resolve_dispute(v_dispute, v_hod, false, 'Lecturer confirms the code went up late; not her fault.');
 
   perform assert_true(
     (select score from session_scores
@@ -1799,9 +1790,9 @@ begin
 
   -- And it moves with the attendance. A prediction that did not would be a
   -- constant wearing a percentage sign.
-  insert into session_instances (id, course_id, held_on, venue_id, type, status, checkpoint_mode, closed_at, created_by)
+  insert into session_instances (id, course_id, held_on, venue_id, type, status, closed_at, created_by)
   values (v_extra, v_cmp301, date '2026-03-03', '22222222-2222-2222-2222-222222222201',
-          'makeup', 'closed', 'pair', now(), '33333333-3333-3333-3333-333333333301');
+          'makeup', 'closed', now(), '33333333-3333-3333-3333-333333333301');
 
   insert into session_scores (student_id, session_instance_id, score, status, source)
   values (v_halima, v_extra, 1.0, 'provisional', 'digital');
@@ -1886,8 +1877,8 @@ begin
   values (v_outsider, 'student', 'Outside', 'Course', '+2348057777777');
   insert into students (id, matric_no, level) values (v_outsider, 'STA/2021/333', 300);
 
-  insert into session_instances (id, course_id, held_on, venue_id, type, status, checkpoint_mode, created_by)
-  values (v_inst, v_cmp301, current_date, v_venue, 'makeup', 'open', 'pair', v_lect);
+  insert into session_instances (id, course_id, held_on, venue_id, type, status, created_by)
+  values (v_inst, v_cmp301, current_date, v_venue, 'makeup', 'open', v_lect);
 
   begin
     perform submit_manual_batch(v_inst, v_lect, 'network down',
@@ -1918,7 +1909,7 @@ begin
     'The network was down in Lecture Theatre A for the whole hour; register taken on paper.',
     jsonb_build_array(
       jsonb_build_object('student_id', v_chidera, 'score', 1.0),
-      jsonb_build_object('student_id', v_halima,  'score', 0.5)
+      jsonb_build_object('student_id', v_halima,  'score', 1.0)
     ));
 
   perform assert_true(v_n = 2, 'the batch records every student marked present');
@@ -1947,8 +1938,8 @@ begin
   );
 
   perform assert_true(
-    (select score from session_scores where student_id = v_halima and session_instance_id = v_inst) = 0.5,
-    'the transcribed score is what is stored — there are no checkpoint marks to derive it from'
+    (select score from session_scores where student_id = v_halima and session_instance_id = v_inst) = 1.0,
+    'the transcribed score is what is stored — there are no code marks to derive it from'
   );
 
   perform assert_true(
@@ -1959,7 +1950,7 @@ begin
   perform assert_true(
     (select count(*) from audit_log
       where action = 'manual_batch.submit' and target_id = v_batch::text) = 1,
-    'the batch is audited — this is the route with no geo-fence behind it'
+    'the batch is audited — this is the route with no code behind it'
   );
 
   -- The whole point of the batch row: the HOD's oversight screen counts them.
@@ -1975,7 +1966,7 @@ begin
     v_ok := false;
   exception when others then v_ok := true;
   end;
-  perform assert_true(v_ok, 'a score is 0, 0.5 or 1.0 — a paper entry cannot invent one between');
+  perform assert_true(v_ok, 'a lecture is attended or it is not — a paper entry cannot invent a fraction');
 end $$;
 
 
@@ -2015,8 +2006,8 @@ begin
   insert into enrolments (student_id, course_id, source, enrolled_on)
   values (v_student, v_course, 'core', date '2025-09-15');
 
-  insert into session_instances (id, course_id, held_on, venue_id, type, status, checkpoint_mode, closed_at, created_by)
-  values (v_lecture, v_course, date '2025-10-07', v_venue, 'makeup', 'closed', 'pair', now(), v_lect);
+  insert into session_instances (id, course_id, held_on, venue_id, type, status, closed_at, created_by)
+  values (v_lecture, v_course, date '2025-10-07', v_venue, 'makeup', 'closed', now(), v_lect);
 
   insert into session_scores (student_id, session_instance_id, score, status, source)
   values (v_student, v_lecture, 1.0, 'provisional', 'digital');

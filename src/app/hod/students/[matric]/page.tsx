@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { AttendanceMeter } from "@/components/attendance-meter";
-import { CheckpointStrip } from "@/components/checkpoint-strip";
+import { AttendanceStrip } from "@/components/attendance-strip";
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
 import { loadStudentRecord } from "@/lib/data/hod";
@@ -86,7 +86,7 @@ export default async function StudentDetailPage({
                   sessionsHeld={course.sessionsHeld}
                   showSentence={false}
                 />
-                <CheckpointStrip className="mt-4" sessions={course.sessions} size="sm" />
+                <AttendanceStrip className="mt-4" sessions={course.sessions} size="sm" />
               </li>
             ))}
           </ul>

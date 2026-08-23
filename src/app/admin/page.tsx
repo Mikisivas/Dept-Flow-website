@@ -20,7 +20,7 @@ export const dynamic = "force-dynamic";
  * same boundary by refusing admin the risk_predictions table.
  */
 export default async function AdminDashboardPage() {
-  const { byLevel, reconciliation, gpsRejectionRate, registration, duesWindow } =
+  const { byLevel, reconciliation, unregisteredRejectionRate, registration, duesWindow } =
     await loadAdminOverview();
 
   // `sampled` is the guard that matters. Four rejections out of six is 67% and
@@ -28,9 +28,9 @@ export default async function AdminDashboardPage() {
   // reads this screen to ignore the banner, which is the one outcome that
   // makes a real spike invisible.
   const spiking =
-    gpsRejectionRate.sampled &&
-    gpsRejectionRate.baseline > 0 &&
-    gpsRejectionRate.current > gpsRejectionRate.baseline * 2;
+    unregisteredRejectionRate.sampled &&
+    unregisteredRejectionRate.baseline > 0 &&
+    unregisteredRejectionRate.current > unregisteredRejectionRate.baseline * 2;
   const totals = byLevel.reduce(
     (acc, row) => ({
       cleared: acc.cleared + row.cleared,
@@ -54,22 +54,30 @@ export default async function AdminDashboardPage() {
         }
       />
 
-      {/* A steady GPS rejection rate is just GPS. A spike is people trying
-          things, and it is the one thing on this screen worth interrupting
-          for. */}
+      {/* Students turned away because they are not registered for the course
+          they are sitting in. A few is ordinary. A spike is a registry
+          problem — a stale course list, a window closed early, enrolments that
+          never ran — and it is the one thing on this screen worth interrupting
+          for, because every student it hits is in a lecture being marked
+          absent from it. */}
       {spiking ? (
         <section role="alert" className="mt-6 rounded-lg border border-danger bg-danger-tint p-4">
           <div className="flex gap-3">
             <TriangleAlert className="mt-0.5 h-5 w-5 shrink-0 text-danger" aria-hidden="true" />
             <div>
               <h2 className="text-[15px] font-semibold text-ink">
-                Location rejections are {Math.round(gpsRejectionRate.current / gpsRejectionRate.baseline)}× the usual rate
+                Students are being turned away{" "}
+                {Math.round(unregisteredRejectionRate.current / unregisteredRejectionRate.baseline)}× the
+                usual rate
               </h2>
               <p className="mt-1 text-[14px] leading-relaxed text-slate">
-                <span className="tabular">{formatPercent(gpsRejectionRate.current)}</span> of
-                submissions were rejected as outside the hall, against a baseline of{" "}
-                <span className="tabular">{formatPercent(gpsRejectionRate.baseline)}</span>. Worth
-                checking the geo-fence for the venues involved before assuming it is students.
+                <span className="tabular">{formatPercent(unregisteredRejectionRate.current)}</span> of
+                submissions were rejected because the student is not registered for the course,
+                against a baseline of{" "}
+                <span className="tabular">{formatPercent(unregisteredRejectionRate.baseline)}</span>.
+                Check the course register and the registration window before assuming it is
+                students in the wrong hall — each of these is someone in a lecture being marked
+                absent from it.
               </p>
             </div>
           </div>

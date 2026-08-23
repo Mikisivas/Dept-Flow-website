@@ -10,9 +10,12 @@ export const dynamic = "force-dynamic";
 
 /**
  * Every value here changes how the system treats every student, so each one is
- * shown with what it actually does rather than as a bare field. The geo-fence
- * is admin-only: the HOD cannot read venue coordinates at all, enforced in RLS
- * as well as by this page's absence from their nav.
+ * shown with what it actually does rather than as a bare field.
+ *
+ * The geo-fence and the location-retention window used to live at the bottom
+ * of this page. Both are gone with location enforcement, and the section that
+ * replaced them is the hall list — which is now just a list of halls, because
+ * a venue no longer holds anything a student could be measured against.
  */
 export default async function ConfigPage() {
   const config = await loadSystemConfig();
@@ -83,9 +86,9 @@ export default async function ConfigPage() {
             detail="Per semester, counting core, electives and carry-overs alike."
           />
           <Row
-            label="Checkpoint code lifetime"
+            label="Attendance code lifetime"
             value={`${config.tokenTtlSeconds} seconds`}
-            detail="How long an issued code stays valid. Short enough that it cannot usefully be sent to someone outside."
+            detail="How long an issued code stays valid. With no location check behind it, this window is the whole of what stops a code being useful to someone who left."
           />
           <Row
             label="Timetable tolerance"
@@ -95,38 +98,24 @@ export default async function ConfigPage() {
         </dl>
       </section>
 
-      <section aria-labelledby="geo-heading" className="mt-8">
-        <h2 id="geo-heading" className="text-[13px] font-semibold text-slate">
-          Geo-fence
+      <section aria-labelledby="venues-heading" className="mt-8">
+        <h2 id="venues-heading" className="text-[13px] font-semibold text-slate">
+          Halls
         </h2>
         <dl className="mt-3 divide-y divide-line overflow-hidden rounded-lg border border-line bg-surface">
-          <Row
-            label="Default radius"
-            value={`${config.defaultRadiusM} m`}
-            detail="Bounded 30–50 m. Wider counts the corridor; narrower rejects a student in their seat."
-          />
           {config.venues.map((venue) => (
             <Row
               key={venue.id}
               label={venue.name}
-              value={`${venue.radiusM} m`}
-              detail="Coordinates are held for the hall, never for a student."
+              value="—"
+              detail="Where a lecture is held. Nothing is measured against it."
             />
           ))}
         </dl>
-      </section>
-
-      <section aria-labelledby="retention-heading" className="mt-8">
-        <h2 id="retention-heading" className="text-[13px] font-semibold text-slate">
-          Retention
-        </h2>
-        <dl className="mt-3 divide-y divide-line overflow-hidden rounded-lg border border-line bg-surface">
-          <Row
-            label="Location retention"
-            value={`${config.gpsRetentionDays} days`}
-            detail="After this, raw coordinates are deleted and only the pass/fail and distance remain. Bounded 7–30 days."
-          />
-        </dl>
+        <p className="mt-3 text-[13px] leading-relaxed text-muted">
+          Attendance records no location, so this system stores none — no coordinates for a hall, and
+          none for a student. There is nothing here to retain and nothing to purge.
+        </p>
       </section>
     </AppShell>
   );

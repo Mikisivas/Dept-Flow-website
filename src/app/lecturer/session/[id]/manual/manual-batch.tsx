@@ -15,12 +15,15 @@ import { cn } from "@/lib/utils";
  * Transcribing a paper sign-in sheet after a network outage.
  *
  * This screen is deliberately heavier than the normal flow, because it
- * bypasses every anti-proxy check the system has: no token, no geo-fence, no
- * device heuristics. A lecturer can mark anyone present. The weight is the
- * point — the warning, the mandatory note and the confirmation are what make
- * the paper route a monitored path rather than a silent backdoor.
+ * bypasses the only check the system has left. Attendance is trust-based: the
+ * code on the board is the whole mechanism, and here no code was entered at
+ * all, so a lecturer can mark anyone present. That is not a weakness to hide —
+ * a network that fails during a lecture is ordinary, and the alternative is a
+ * hall of students marked absent for it. The weight is the point: the warning,
+ * the mandatory note and the confirmation are what make the paper route a
+ * monitored path rather than a silent backdoor.
  *
- * Two checkboxes per student, mirroring the two columns on the paper sheet, so
+ * One checkbox per student, mirroring the one column on the paper sheet, so
  * transcription is a straight copy rather than a translation.
  */
 
@@ -36,8 +39,8 @@ export function ManualBatch({
   heldOn: string;
 }) {
   const router = useRouter();
-  const [marks, setMarks] = useState<Record<string, { one: boolean; two: boolean }>>(() =>
-    Object.fromEntries(roster.map((entry) => [entry.studentId, { one: false, two: false }])),
+  const [marks, setMarks] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(roster.map((entry) => [entry.studentId, false])),
   );
   const [note, setNote] = useState("");
   const [noteTouched, setNoteTouched] = useState(false);
@@ -77,17 +80,14 @@ export function ManualBatch({
     }
   }
 
-  function toggle(studentId: string, which: "one" | "two") {
-    setMarks((current) => ({
-      ...current,
-      [studentId]: { ...current[studentId], [which]: !current[studentId][which] },
-    }));
+  function toggle(studentId: string) {
+    setMarks((current) => ({ ...current, [studentId]: !current[studentId] }));
   }
 
-  const scored = roster.map((entry) => {
-    const mark = marks[entry.studentId];
-    return { entry, score: mark.one && mark.two ? 1 : mark.one || mark.two ? 0.5 : 0 };
-  });
+  const scored = roster.map((entry) => ({
+    entry,
+    score: marks[entry.studentId] ? 1 : 0,
+  }));
 
   const withMarks = scored.filter((row) => row.score > 0);
   const total = scored.reduce((sum, row) => sum + row.score, 0);
@@ -103,7 +103,7 @@ export function ManualBatch({
           <TriangleAlert className="mt-0.5 h-5 w-5 shrink-0 text-danger" aria-hidden="true" />
           <div>
             <h2 className="text-[15px] font-semibold text-ink">
-              These entries bypass the location check
+              These entries bypass the attendance code
             </h2>
             <p className="mt-1 text-[14px] leading-relaxed text-slate">
               Anything recorded here is tagged as coming from a paper register and is reviewable by
@@ -122,8 +122,7 @@ export function ManualBatch({
         <div className="mt-3 overflow-hidden rounded-lg border border-line bg-surface">
           <div className="flex items-center gap-3 border-b border-line bg-surface-sunken px-4 py-2.5 text-[12px] font-semibold text-slate">
             <span className="flex-1">Student</span>
-            <span className="w-11 text-center">CP 1</span>
-            <span className="w-11 text-center">CP 2</span>
+            <span className="w-11 text-center">Present</span>
             <span className="w-10 text-right">Score</span>
           </div>
 
@@ -139,19 +138,17 @@ export function ManualBatch({
                   </span>
                 </span>
 
-                {(["one", "two"] as const).map((which, index) => (
-                  <span key={which} className="flex w-11 justify-center">
-                    <input
-                      type="checkbox"
-                      checked={marks[entry.studentId][which]}
-                      onChange={() => toggle(entry.studentId, which)}
-                      // 44px hit target on a control that gets tapped 80 times
-                      // in a row off a paper sheet.
-                      className="h-6 w-6 accent-[var(--brand)]"
-                      aria-label={`${displayNameRegister(entry)}, checkpoint ${index + 1}`}
-                    />
-                  </span>
-                ))}
+                <span className="flex w-11 justify-center">
+                  <input
+                    type="checkbox"
+                    checked={marks[entry.studentId]}
+                    onChange={() => toggle(entry.studentId)}
+                    // 44px hit target on a control that gets tapped 80 times
+                    // in a row off a paper sheet.
+                    className="h-6 w-6 accent-[var(--brand)]"
+                    aria-label={`${displayNameRegister(entry)}, present`}
+                  />
+                </span>
 
                 {/* Live, so a mis-tick is visible on the row it happened on
                     rather than in a total at the bottom. */}

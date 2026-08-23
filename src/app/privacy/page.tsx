@@ -9,10 +9,11 @@ export const metadata: Metadata = {
 /**
  * Plain language, because the people it describes are the people reading it.
  *
- * The honest thing this page has to convey is the shape of the location
- * handling: a single reading at the moment of submission, no tracking between
- * lectures, and deletion on a schedule. Anything vaguer would be a worse
- * promise than the system actually makes.
+ * This page used to spend its longest section explaining how carefully the
+ * system handled a student's location. It no longer handles one at all, and the
+ * strongest version of that section is the shortest: nothing is collected, so
+ * nothing is retained, shown, or deleted on a schedule. A promise with no
+ * mechanism behind it is the easiest kind to keep.
  */
 export default function PrivacyPage() {
   return (
@@ -46,30 +47,32 @@ export default function PrivacyPage() {
 
         <Section title="Your attendance">
           <p>
-            For each lecture we record which checkpoints you submitted a code for, and the score
-            that produces: 1.0 for both, 0.5 for one, 0 for neither. We also record submissions that
-            were rejected, and why, so you can dispute one if it was wrong.
+            For each lecture we record whether you entered the attendance code, which makes you
+            present or absent for it. We also record submissions that were rejected, and why, so you
+            can dispute one if it was wrong.
           </p>
         </Section>
 
-        <Section title="Your location — the important part">
+        <Section title="Your location — we don't collect it">
           <p>
-            When you submit a checkpoint code, your browser asks for your location{" "}
-            <strong className="font-semibold text-ink">once, at that moment</strong>. We use it to
-            check whether you are inside the lecture hall, and nothing else.
+            Dept-Flow does not ask for your location, at any point.{" "}
+            <strong className="font-semibold text-ink">
+              Your browser will never prompt this site for location access
+            </strong>
+            , because nothing here requests it.
           </p>
           <ul className="ml-5 list-disc space-y-1.5">
-            <li>You are not tracked between lectures, or at any other time.</li>
-            <li>There is no background location access — closing the page ends it entirely.</li>
+            <li>Attendance is recorded from the code your lecturer puts on the board — nothing else.</li>
+            <li>You are not tracked during a lecture, between lectures, or at any other time.</li>
             <li>
-              Your coordinates are deleted after a short period, set by the department and never
-              longer than 30 days. After that only the pass-or-fail result and the distance remain.
-            </li>
-            <li>
-              No screen in Dept-Flow shows anyone your coordinates — not lecturers, not the HOD, not
-              administrators.
+              There are no coordinates stored against you, so there is nothing to delete on a
+              schedule and nothing anyone could be shown.
             </li>
           </ul>
+          <p>
+            An earlier version of this system checked that you were inside the lecture hall. That
+            check was removed, along with everything it collected.
+          </p>
         </Section>
 
         <Section title="What we never collect">
@@ -108,7 +111,7 @@ export default function PrivacyPage() {
         <Section title="How long it is kept">
           <p>
             Attendance and payment records are kept for as long as the department needs them for
-            academic records. Location coordinates are deleted on the schedule above. If your
+            academic records. If your
             account is deactivated, your history is retained but you can no longer log in.
           </p>
         </Section>

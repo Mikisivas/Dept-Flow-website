@@ -14,7 +14,7 @@ const CARDS = [
   {
     icon: KeySquare,
     title: "Record attendance",
-    body: "Your lecturer opens two checkpoints during each lecture. Enter the code on the board at each one.",
+    body: "Your lecturer puts a code on the board during each lecture. Enter it here and you're counted.",
   },
   {
     icon: CreditCard,
@@ -78,8 +78,7 @@ export default function LandingPage() {
             Department of Mathematics and Computer Science · Departmental office, Faculty of Science
           </p>
           <p>
-            Your location is checked once, at the moment you submit attendance. It is never tracked
-            continuously.{" "}
+            Dept-Flow does not ask for your location, at any point.{" "}
             <Link
               href="/privacy"
               className="text-brand-text underline underline-offset-2 hover:text-brand-pressed"

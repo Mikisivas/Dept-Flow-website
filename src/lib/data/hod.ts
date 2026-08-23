@@ -148,15 +148,12 @@ export async function loadStandings(db: Db, courseId?: string): Promise<StudentS
       const sessions: SessionCell[] = held.map((instance, index) => {
         const score = scoreByInstance.get(instance.id);
         const value = Number(score?.score ?? 0);
-        const single = instance.checkpoint_mode === "single";
 
         return {
           id: instance.id,
           label: `Week ${index + 1}`,
           heldOn: instance.held_on,
-          mode: single ? "single" : "pair",
-          checkpointOne: value > 0,
-          checkpointTwo: value === 1 && !single,
+          attended: value > 0,
           status: score?.status === "confirmed" ? "confirmed" : "provisional",
           source: "digital",
           score: value,
@@ -785,7 +782,6 @@ export type LecturerOversight = {
   name: string;
   sessionsHeld: number;
   paperBatches: number;
-  singleCheckpoint: number;
   cancelled: number;
 };
 
@@ -834,7 +830,7 @@ export async function loadLecturerOversight(): Promise<LecturerOversight[]> {
 
   const tally = new Map<string, Omit<LecturerOversight, "lecturerId" | "name">>();
   for (const id of lecturerIds) {
-    tally.set(id, { sessionsHeld: 0, paperBatches: 0, singleCheckpoint: 0, cancelled: 0 });
+    tally.set(id, { sessionsHeld: 0, paperBatches: 0, cancelled: 0 });
   }
 
   for (const instance of instances ?? []) {
@@ -854,18 +850,12 @@ export async function loadLecturerOversight(): Promise<LecturerOversight[]> {
     if (instance.status !== "closed") continue;
 
     row.sessionsHeld += 1;
-    if (instance.checkpoint_mode === "single") row.singleCheckpoint += 1;
     if (batched.has(instance.id)) row.paperBatches += 1;
   }
 
   return (lecturers ?? []).map((lecturer) => ({
     lecturerId: lecturer.id,
     name: `${lecturer.first_name} ${lecturer.surname}`,
-    ...(tally.get(lecturer.id) ?? {
-      sessionsHeld: 0,
-      paperBatches: 0,
-      singleCheckpoint: 0,
-      cancelled: 0,
-    }),
+    ...(tally.get(lecturer.id) ?? { sessionsHeld: 0, paperBatches: 0, cancelled: 0 }),
   }));
 }

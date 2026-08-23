@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 
 /**
  * The submission state machine for anything the student must not be lied to
- * about — a checkpoint token above all.
+ * about — the attendance code above all.
  *
  * There is deliberately no "recorded" state that the client can enter on its
  * own. `confirmed` is reachable only by the server resolving the request. A
@@ -122,7 +122,7 @@ export function usePendingSubmission<TPayload, TResult>({
           const reason = error instanceof Error ? error.message : "Something went wrong.";
           const retryable = isRetryable(error);
 
-          // A rejected token, a locked account or a failed geo-fence check are
+          // A rejected token, a locked account or an unregistered student are
           // answers, not failures. Retrying them wastes the student's window.
           if (!retryable) {
             clearPending();

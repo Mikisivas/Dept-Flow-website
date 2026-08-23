@@ -39,9 +39,9 @@ end $$;
 insert into academic_sessions (id, name, starts_on, ends_on, is_active) values
   ('11111111-1111-1111-1111-111111111111', '2025/2026', '2025-09-15', '2026-07-31', true);
 
-insert into venues (id, name, centre_lat, centre_lng, radius_m) values
-  ('22222222-2222-2222-2222-222222222201', 'Lecture Theatre A', 6.518300, 3.376800, 40),
-  ('22222222-2222-2222-2222-222222222202', 'Maths Block 2',     6.518900, 3.377500, 35);
+insert into venues (id, name) values
+  ('22222222-2222-2222-2222-222222222201', 'Lecture Theatre A'),
+  ('22222222-2222-2222-2222-222222222202', 'Maths Block 2');
 
 -- ₦5,000 = 500000 kobo.
 insert into dues_periods (academic_session_id, resumption_date, dues_amount_kobo) values
@@ -138,8 +138,14 @@ insert into payments (student_id, academic_session_id, paystack_reference, chann
 -- A term of CMP 301, scored
 -- ---------------------------------------------------------------------------
 
--- Thirteen closed lectures. Chidera catches both checkpoints in most, one in a
--- few — the "half marks" pattern the risk list is meant to surface.
+-- Thirteen closed lectures. Attendance is present-or-absent now, so the
+-- pattern worth seeding is not a mixture of half marks but a TREND.
+--
+-- Chidera is the case the whole warning system exists for: ten lectures
+-- straight, then three misses running. Her running percentage is 76.92%, which
+-- is ABOVE the line — a scoreboard would show her green and say nothing. Where
+-- she is heading is not above the line, and that is the difference between
+-- reporting and warning.
 do $$
 declare
   v_course  uuid := '66666666-6666-6666-6666-666666666601';
@@ -151,9 +157,10 @@ declare
   v_session uuid;
   v_day     date;
   i         integer;
-  -- Chidera: 1.0 in most weeks, 0.5 in four, absent in one.
-  chidera_scores numeric[] := array[1.0, 1.0, 0.5, 1.0, 0.5, 1.0, 0, 0.5, 1.0, 1.0, 0.5, 1.0, 1.0];
-  halima_scores  numeric[] := array[1.0, 0, 0, 0.5, 0, 0, 0.5, 0, 1.0, 0, 0, 0.5, 0];
+  -- Chidera: ten straight, then three misses running. 10 of 13 = 76.92%.
+  chidera_scores numeric[] := array[1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0, 0, 0];
+  -- Halima: never established a habit. 5 of 13 = 38.46%.
+  halima_scores  numeric[] := array[1.0, 0, 0, 1.0, 0, 0, 1.0, 0, 1.0, 0, 0, 1.0, 0];
 begin
   for i in 1..13 loop
     v_day := date '2025-09-16' + (7 * (i - 1));
@@ -161,10 +168,10 @@ begin
 
     insert into session_instances (
       id, course_id, timetable_entry_id, held_on, venue_id, type, status,
-      checkpoint_mode, opened_at, closed_at, created_by
+      opened_at, closed_at, created_by
     ) values (
       v_session, v_course, v_tt, v_day, v_venue, 'recurring', 'closed',
-      'pair', v_day + time '10:00', v_day + time '12:00', v_lect
+      v_day + time '10:00', v_day + time '12:00', v_lect
     );
 
     insert into session_scores (student_id, session_instance_id, score, status, confirmed_at)
@@ -276,9 +283,10 @@ select write_audit(
 -- his counted attendance is zero. Without these he is at zero before a waiver
 -- and zero after it, and the screen demonstrates nothing.
 --
--- 4.5 of 6 is 75.00% — exactly the threshold. Granting his waiver is the
+-- 6 of 8 is 75.00% — exactly the threshold. Granting his waiver is the
 -- difference between not sitting the paper and sitting it, which is the whole
--- argument this system makes.
+-- argument this system makes. It used to be 4.5 of 6, which said the same
+-- thing back when a lecture could be half attended.
 do $$
 declare
   v_tunde  uuid := '44444444-4444-4444-4444-444444444403';
@@ -286,24 +294,24 @@ declare
   v_entry  uuid := '77777777-7777-7777-7777-777777777702';
   v_venue  uuid := '22222222-2222-2222-2222-222222222202';
   v_lect   uuid := '33333333-3333-3333-3333-333333333301';
-  v_marks  numeric[] := array[1.0, 1.0, 0.5, 1.0, 1.0, 0.0];
+  v_marks  numeric[] := array[1.0, 1.0, 0.0, 1.0, 1.0, 1.0, 1.0, 0.0];
   v_day    date;
   v_id     uuid;
   i        integer;
 begin
-  for i in 1..6 loop
+  for i in 1..8 loop
     v_day := date '2025-09-25' + ((i - 1) * 7);
     v_id  := gen_random_uuid();
 
     insert into session_instances (
       id, course_id, timetable_entry_id, held_on, scheduled_start, scheduled_end,
-      venue_id, type, status, checkpoint_mode, closed_at, created_by
+      venue_id, type, status, closed_at, created_by
     )
     values (
       v_id, v_mth205, v_entry, v_day,
       (v_day + time '08:00') at time zone 'Africa/Lagos',
       (v_day + time '10:00') at time zone 'Africa/Lagos',
-      v_venue, 'recurring', 'closed', 'pair', now(), v_lect
+      v_venue, 'recurring', 'closed', now(), v_lect
     );
 
     -- A zero is an absence, and an absence is the lack of a row rather than a

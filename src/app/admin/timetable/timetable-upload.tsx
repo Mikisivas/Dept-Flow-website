@@ -75,7 +75,7 @@ export function TimetableUpload() {
           course_code, day, start, end, venue
         </code>
         . A header row is ignored. Courses and venues must already exist — a venue carries the
-        geo-fence, so it cannot be created from here.
+        hall list, so it cannot be created from here.
       </p>
 
       <label htmlFor="timetable-csv" className="sr-only">

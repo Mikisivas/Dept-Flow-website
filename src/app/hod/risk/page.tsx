@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { TrendingDown } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
-import { CheckpointStrip } from "@/components/checkpoint-strip";
+import { AttendanceStrip } from "@/components/attendance-strip";
 import { DataTable, type Column } from "@/components/data-table";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
@@ -72,7 +72,7 @@ const columns: Column<AtRiskStudent>[] = [
     // The strip is why this is a table and not a list of numbers: two students
     // on the same percentage can be in completely different trouble, and the
     // shape says which.
-    cell: (student) => <CheckpointStrip sessions={student.sessions} size="sm" />,
+    cell: (student) => <AttendanceStrip sessions={student.sessions} size="sm" />,
   },
 ];
 

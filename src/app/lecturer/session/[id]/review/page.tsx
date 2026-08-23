@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { FileText, Flag } from "lucide-react";
+import { FileText } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
-import { CheckpointStrip } from "@/components/checkpoint-strip";
+import { AttendanceStrip } from "@/components/attendance-strip";
 import { DataTable, type Column } from "@/components/data-table";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -15,28 +15,20 @@ export const metadata: Metadata = {
   title: "Session review",
 };
 
-/**
- * Mirrors `resolve_session_score()`. A single-checkpoint lecture is scored
- * present or absent — there is no half mark to award when there was only one
- * checkpoint to catch.
- */
-function scoreOf(entry: RosterEntry, mode: "pair" | "single") {
-  const caught = Number(entry.checkpointOne) + Number(entry.checkpointTwo);
-  if (mode === "single") return caught > 0 ? 1 : 0;
-  return caught === 2 ? 1 : caught === 1 ? 0.5 : 0;
+/** Mirrors `resolve_session_score()`: an accepted mark is the whole lecture. */
+function scoreOf(entry: RosterEntry) {
+  return entry.present ? 1 : 0;
 }
 
-function cellOf(entry: RosterEntry, heldOn: string, mode: "pair" | "single"): SessionCell {
+function cellOf(entry: RosterEntry, heldOn: string): SessionCell {
   return {
     id: entry.studentId,
     label: "This session",
     heldOn,
-    mode,
-    checkpointOne: entry.checkpointOne,
-    checkpointTwo: entry.checkpointTwo,
+    attended: entry.present,
     status: "confirmed",
     source: "digital",
-    score: scoreOf(entry, mode),
+    score: scoreOf(entry),
   };
 }
 
@@ -46,12 +38,10 @@ export default async function SessionReviewPage({ params }: { params: Promise<{ 
 
   if (!session) notFound();
 
-  const { roster, courseCode, heldOn, mode } = session;
+  const { roster, courseCode, heldOn } = session;
 
-  const full = roster.filter((entry) => scoreOf(entry, mode) === 1).length;
-  const half = roster.filter((entry) => scoreOf(entry, mode) === 0.5).length;
-  const absent = roster.filter((entry) => scoreOf(entry, mode) === 0).length;
-  const flagged = roster.filter((entry) => entry.flagged);
+  const present = roster.filter((entry) => entry.present).length;
+  const absent = roster.length - present;
 
   const columns: Column<RosterEntry>[] = [
     {
@@ -68,31 +58,17 @@ export default async function SessionReviewPage({ params }: { params: Promise<{ 
       ),
     },
     {
-      key: "checkpoints",
-      header: "Checkpoints",
+      key: "attendance",
+      header: "Attendance",
       mobile: "meta",
-      cell: (entry) => <CheckpointStrip sessions={[cellOf(entry, heldOn, mode)]} size="sm" />,
+      cell: (entry) => <AttendanceStrip sessions={[cellOf(entry, heldOn)]} size="sm" />,
     },
     {
       key: "score",
       header: "Score",
       align: "right",
       mobile: "trailing",
-      cell: (entry) => <span className="tabular">{formatScore(scoreOf(entry, mode))}</span>,
-    },
-    {
-      key: "flag",
-      header: "Review",
-      mobile: "meta",
-      cell: (entry) =>
-        entry.flagged ? (
-          <span className="flex items-center gap-1.5 text-[13px] text-slate">
-            <Flag className="h-3.5 w-3.5 text-danger" aria-hidden="true" />
-            Same device as another student
-          </span>
-        ) : (
-          <span className="text-[13px] text-muted">—</span>
-        ),
+      cell: (entry) => <span className="tabular">{formatScore(scoreOf(entry))}</span>,
     },
   ];
 
@@ -113,9 +89,9 @@ export default async function SessionReviewPage({ params }: { params: Promise<{ 
 
       <dl className="mt-6 grid grid-cols-3 gap-px overflow-hidden rounded-lg border border-line bg-line">
         {[
-          ["Full", full],
-          ["Half", half],
+          ["Present", present],
           ["Absent", absent],
+          ["Enrolled", roster.length],
         ].map(([label, value]) => (
           <div key={String(label)} className="bg-surface px-3 py-3">
             <dt className="text-[12px] text-muted">{label}</dt>
@@ -124,20 +100,6 @@ export default async function SessionReviewPage({ params }: { params: Promise<{ 
         ))}
       </dl>
 
-      {/* Flagged submissions were accepted, not blocked — a shared phone is
-          suspicious, not proof, and refusing it would punish the wrong
-          student. They surface here for a human to judge. */}
-      {flagged.length > 0 ? (
-        <p className="mt-4 flex items-start gap-2 rounded-lg border border-line bg-surface-sunken p-4 text-[14px] leading-relaxed text-slate">
-          <Flag className="mt-0.5 h-4 w-4 shrink-0 text-danger" aria-hidden="true" />
-          <span>
-            <strong className="font-semibold text-ink tabular">{flagged.length}</strong> submission
-            came from a device that had already recorded another student today. It was accepted and
-            counted — flagged here so you can judge it.
-          </span>
-        </p>
-      ) : null}
-
       <section className="mt-8">
         <h2 className="text-[13px] font-semibold text-slate">Roster</h2>
         <DataTable
@@ -145,7 +107,7 @@ export default async function SessionReviewPage({ params }: { params: Promise<{ 
           rows={roster}
           columns={columns}
           rowKey={(entry) => entry.studentId}
-          caption={`${roster.length} students · ${formatScore(full + half * 0.5)} marks awarded`}
+          caption={`${roster.length} students · ${present} recorded present`}
         />
       </section>
     </AppShell>

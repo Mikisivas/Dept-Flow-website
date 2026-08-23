@@ -10,7 +10,7 @@ export const metadata: Metadata = {
   title: "Enter code",
 };
 
-// A checkpoint opens and closes inside five minutes, so a cached render of this
+// A code opens and closes inside five minutes, so a cached render of this
 // screen is worse than useless — it would show a student a code window that
 // shut before they arrived.
 export const dynamic = "force-dynamic";

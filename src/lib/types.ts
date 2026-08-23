@@ -21,33 +21,32 @@ export type RiskPattern = "disengagement" | "partial_attendance";
 
 export type ProgrammeCode = "MTH" | "CMP" | "STA";
 
-/** One lecture, as the CheckpointStrip draws it. */
+/** One lecture, as the AttendanceStrip draws it. */
 export type SessionCell = {
   id: string;
   /** Shown in the accessible label: "Week 4". */
   label: string;
   heldOn: string;
-  /** Two checkpoints unless the lecturer only ever issued one. */
-  mode: "pair" | "single";
-  checkpointOne: boolean;
-  checkpointTwo: boolean;
+  /** Present or absent. There is no third thing a lecture can be. */
+  attended: boolean;
   status: ScoreStatus;
   source: ScoreSource;
   score: number;
 };
 
 /* -------------------------------------------------------------------------
-   Checkpoints
+   The attendance code
 
    Shared between the server that decides and the client that renders the
    decision, so they live here rather than in a server-only module.
    ------------------------------------------------------------------------- */
 
 /**
- * A checkpoint as the student is allowed to see it.
+ * The live code as the student is allowed to see it.
  *
  * There is no `token` field, and there must never be one: the code is on the
- * board, and being in the room to read it is the whole mechanism.
+ * board, and being in the room to read it is what attendance now rests on. It
+ * is the only thing that does — there is no second check behind it.
  */
 export type LiveCheckpoint = {
   sessionInstanceId: string;
@@ -56,30 +55,29 @@ export type LiveCheckpoint = {
   courseTitle: string;
   lecturer: string;
   venue: string;
-  index: 1 | 2;
   expiresAt: string;
-  /** What this lecture is already worth to this student. */
-  firstCheckpointCaptured: boolean;
 };
 
 /**
  * Every rejection a student can meet has its own reason, because every one of
  * them gets its own message on screen. A generic failure here generates
  * disputes the HOD then has to resolve by hand.
+ *
+ * `not_registered` is the one that carries weight now: after the registration
+ * deadline, a student who never confirmed cannot record attendance at all, and
+ * telling them "wrong code" would send them back to the board to retype a code
+ * that was never going to work.
  */
 export type SubmitRejection =
-  | "outside_geofence"
   | "invalid_or_expired_token"
   | "wrong_code"
+  | "not_registered"
   | "account_locked"
-  | "already_submitted"
-  | "location_blocked";
+  | "already_submitted";
 
 export type CheckpointOutcome = {
-  index: 1 | 2;
-  /** What the lecture is worth so far. Final scoring happens when it closes. */
+  /** The lecture, recorded. Final scoring happens when the lecturer closes it. */
   sessionScore: number;
-  bothCaptured: boolean;
 };
 
 /** Card and Pay with Transfer only. Dedicated virtual accounts were dropped. */
@@ -104,9 +102,7 @@ export type RosterEntry = {
   surname: string;
   firstName: string;
   otherNames: string | null;
-  checkpointOne: boolean;
-  checkpointTwo: boolean;
-  flagged: boolean;
+  present: boolean;
 };
 
 /** One lecture as the lecturer's control panel operates it. */
@@ -119,18 +115,16 @@ export type SessionControl = {
   openedAt: string;
   enrolled: number;
   /**
-   * Which checkpoint is still open, decided by the server. The client must not
-   * work this out from its own clock: a phone with a skewed clock would either
-   * keep a dead code on the board or retire a live one early.
+   * The lecture's code, or null once it has lapsed. Whether it is still live is
+   * decided by the server: a phone with a skewed clock would either keep a dead
+   * code on the board or retire a live one early.
    */
-  liveCheckpointIndex: 1 | 2 | null;
-  checkpoints: Array<{
-    index: 1 | 2;
+  code: {
     token: string;
     expiresAt: string;
     submissions: number;
     rejections: Array<{ reason: string; count: number }>;
-  }>;
+  } | null;
 };
 
 export type CourseAttendance = {

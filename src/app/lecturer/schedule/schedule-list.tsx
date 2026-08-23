@@ -376,7 +376,7 @@ export function ScheduleList({
             <Field
               label="Venue"
               htmlFor="makeup-venue"
-              hint="The geo-fence comes from the venue, so this decides where students must be."
+              hint="Where the class will actually be held — it appears on the student's timetable and reminder."
             >
               <select
                 id="makeup-venue"

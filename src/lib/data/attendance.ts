@@ -1,7 +1,6 @@
 import "server-only";
 
 import { createServiceClient } from "@/lib/supabase/client";
-import { distanceMetres, withinFence } from "@/lib/geo";
 import type { CheckpointOutcome, LiveCheckpoint, SubmitRejection } from "@/lib/types";
 
 /**
@@ -11,8 +10,10 @@ import type { CheckpointOutcome, LiveCheckpoint, SubmitRejection } from "@/lib/t
  *
  * 1. The token never reaches the student's browser. Students have no read
  *    policy on `checkpoints` at all, and this module — which does hold the
- *    service role — returns every field of a live checkpoint *except* the code.
- *    Being in the hall to read it off the board is the point.
+ *    service role — returns every field of a live code *except* the code
+ *    itself. Being in the hall to read it off the board is the point, and
+ *    since the geo-fence was removed it is the ONLY point: there is no second
+ *    check behind it to catch a code read out over the phone.
  *
  * 2. Nothing is reported to the student until the row is written. The decision
  *    is made here, persisted here, and only then returned.
@@ -24,10 +25,10 @@ import type { CheckpointOutcome, LiveCheckpoint, SubmitRejection } from "@/lib/t
  * lapsed are the same event to the HOD, but need different instructions in the
  * hall.
  */
-const STORED_REASON: Record<Exclude<SubmitRejection, "location_blocked">, string> = {
-  outside_geofence: "outside_geofence",
+const STORED_REASON: Record<SubmitRejection, string> = {
   invalid_or_expired_token: "invalid_or_expired_token",
   wrong_code: "invalid_or_expired_token",
+  not_registered: "not_registered",
   account_locked: "account_locked",
   already_submitted: "already_submitted",
 };
@@ -38,10 +39,10 @@ function one<T>(value: T | T[] | null | undefined): T | null {
 }
 
 /**
- * The checkpoint this student can answer right now, if any.
+ * The code this student can answer right now, if any.
  *
- * Scoped by enrolment, so a student cannot see — let alone submit to — a
- * checkpoint in a course they do not take.
+ * Scoped by enrolment, so a student cannot see — let alone submit to — a code
+ * for a course they do not take.
  */
 export async function loadLiveCheckpoint(studentId: string): Promise<LiveCheckpoint | null> {
   const db = createServiceClient();
@@ -49,7 +50,8 @@ export async function loadLiveCheckpoint(studentId: string): Promise<LiveCheckpo
   const { data: enrolments } = await db
     .from("enrolments")
     .select("course_id")
-    .eq("student_id", studentId);
+    .eq("student_id", studentId)
+    .is("dropped_at", null);
 
   const courseIds = (enrolments ?? []).map((row) => row.course_id);
   if (courseIds.length === 0) return null;
@@ -64,7 +66,7 @@ export async function loadLiveCheckpoint(studentId: string): Promise<LiveCheckpo
 
   const { data: checkpoints } = await db
     .from("checkpoints")
-    .select("id, session_instance_id, index, expires_at")
+    .select("id, session_instance_id, expires_at")
     .in(
       "session_instance_id",
       open.map((row) => row.id),
@@ -88,16 +90,6 @@ export async function loadLiveCheckpoint(studentId: string): Promise<LiveCheckpo
   );
   const lecturer = one(course?.profiles);
 
-  // Whether checkpoint 1 is already banked changes the sentence the student
-  // reads, so it is read rather than guessed.
-  const { data: earlier } = await db
-    .from("attendance_marks")
-    .select("id, checkpoints!inner(session_instance_id, index)")
-    .eq("student_id", studentId)
-    .eq("accepted", true)
-    .eq("checkpoints.session_instance_id", instance.id)
-    .eq("checkpoints.index", 1);
-
   return {
     sessionInstanceId: instance.id,
     checkpointId: checkpoint.id,
@@ -105,9 +97,7 @@ export async function loadLiveCheckpoint(studentId: string): Promise<LiveCheckpo
     courseTitle: course?.title ?? "",
     lecturer: lecturer ? `${lecturer.first_name} ${lecturer.surname}` : "",
     venue: one(instance.venues as unknown as { name: string })?.name ?? "",
-    index: checkpoint.index as 1 | 2,
     expiresAt: checkpoint.expires_at,
-    firstCheckpointCaptured: (earlier ?? []).length > 0,
   };
 }
 
@@ -116,24 +106,31 @@ export type SubmitResult =
   | { outcome: "rejected"; reason: SubmitRejection };
 
 /**
- * Record a checkpoint submission and return the server's decision.
+ * Record a submission and return the server's decision.
  *
- * Checks run in the order the spec fixes them: identity and lock state first,
- * then the token, then the geo-fence. A locked student is told about their dues
- * rather than being sent to fiddle with their location settings.
+ * Checks run in the order that produces the most useful instruction: whether
+ * this student may record attendance on this course at all, then the account,
+ * then the code. A student who never confirmed their semester registration is
+ * told that, rather than being sent back to the board to retype a code that
+ * was never going to be accepted.
  */
 export async function submitCheckpointMark(input: {
   studentId: string;
   checkpointId: string;
   token: string;
-  coords: { latitude: number; longitude: number; accuracy: number };
+  /**
+   * When the student actually pressed submit. Supplied by the offline queue,
+   * which may be replaying something recorded before the tab lost the network;
+   * absent for a live submission, which is simply now.
+   */
+  submittedAt?: string;
 }): Promise<SubmitResult> {
   const db = createServiceClient();
 
   const { data: checkpoint } = await db
     .from("checkpoints")
     .select(
-      "id, index, token, expires_at, session_instance_id, session_instances(id, course_id, status, venue_id, courses(academic_session_id))",
+      "id, token, expires_at, session_instance_id, session_instances(id, course_id, status, courses(academic_session_id))",
     )
     .eq("id", input.checkpointId)
     .maybeSingle();
@@ -145,7 +142,6 @@ export async function submitCheckpointMark(input: {
       id: string;
       course_id: string;
       status: string;
-      venue_id: string;
       courses: { academic_session_id: string } | null;
     },
   );
@@ -159,9 +155,10 @@ export async function submitCheckpointMark(input: {
     .select("id")
     .eq("student_id", input.studentId)
     .eq("course_id", instance.course_id)
+    .is("dropped_at", null)
     .maybeSingle();
 
-  if (!enrolment) return { outcome: "rejected", reason: "invalid_or_expired_token" };
+  if (!enrolment) return { outcome: "rejected", reason: "not_registered" };
 
   const academicSessionId = one(instance.courses)?.academic_session_id;
 
@@ -177,18 +174,6 @@ export async function submitCheckpointMark(input: {
 
   if (existing?.accepted) return { outcome: "rejected", reason: "already_submitted" };
 
-  const { data: venue } = await db
-    .from("venues")
-    .select("centre_lat, centre_lng, radius_m")
-    .eq("id", instance.venue_id)
-    .maybeSingle();
-
-  // Kept whatever the decision is. `distance_m` survives the coordinate purge,
-  // so it is the only evidence a disputed rejection leaves behind.
-  const distance = venue
-    ? distanceMetres({ latitude: venue.centre_lat, longitude: venue.centre_lng }, input.coords)
-    : null;
-
   const reason = await decide();
 
   const row = {
@@ -196,11 +181,7 @@ export async function submitCheckpointMark(input: {
     checkpoint_id: checkpoint.id,
     accepted: reason === null,
     reject_reason: reason === null ? null : STORED_REASON[reason],
-    gps_lat: input.coords.latitude,
-    gps_lng: input.coords.longitude,
-    gps_accuracy_m: input.coords.accuracy,
-    distance_m: distance,
-    submitted_at: new Date().toISOString(),
+    submitted_at: input.submittedAt ?? new Date().toISOString(),
   };
 
   const { error } = await db
@@ -213,28 +194,9 @@ export async function submitCheckpointMark(input: {
 
   if (reason !== null) return { outcome: "rejected", reason };
 
-  const { data: accepted } = await db
-    .from("attendance_marks")
-    .select("id, checkpoints!inner(session_instance_id)")
-    .eq("student_id", input.studentId)
-    .eq("accepted", true)
-    .eq("checkpoints.session_instance_id", instance.id);
+  return { outcome: "accepted", result: { sessionScore: 1 } };
 
-  const captured = (accepted ?? []).length;
-
-  return {
-    outcome: "accepted",
-    result: {
-      index: checkpoint.index as 1 | 2,
-      // Provisional arithmetic for the confirmation sentence only. The score
-      // that counts is written by resolve_session_score() when the lecture
-      // closes, from these same marks.
-      sessionScore: captured >= 2 ? 1 : 0.5,
-      bothCaptured: captured >= 2,
-    },
-  };
-
-  async function decide(): Promise<Exclude<SubmitRejection, "location_blocked"> | null> {
+  async function decide(): Promise<SubmitRejection | null> {
     if (academicSessionId) {
       const { data: locked } = await db.rpc("is_attendance_locked", {
         p_student_id: input.studentId,
@@ -244,16 +206,13 @@ export async function submitCheckpointMark(input: {
     }
 
     if (instance!.status !== "open") return "invalid_or_expired_token";
+
+    // Judged against the server's clock and the stored expiry, never against
+    // the client's. A replayed offline submission carries its original
+    // timestamp for the record, but it does not get to reopen a lapsed code.
     if (Date.parse(checkpoint!.expires_at) <= Date.now()) return "invalid_or_expired_token";
     if (input.token.trim() !== checkpoint!.token) return "wrong_code";
 
-    // A venue with no fence recorded cannot reject anyone. Failing open here is
-    // the right way round: the alternative locks a whole hall out of attendance
-    // over a missing configuration row.
-    if (!venue || distance === null) return null;
-
-    return withinFence(distance, venue.radius_m, input.coords.accuracy)
-      ? null
-      : "outside_geofence";
+    return null;
   }
 }

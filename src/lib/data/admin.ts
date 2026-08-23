@@ -64,7 +64,16 @@ async function activeSessionId(db: Db): Promise<string | null> {
 export type AdminOverview = {
   byLevel: Array<{ level: number; cleared: number; provisional: number; locked: number }>;
   reconciliation: { failedWebhooks: number; unverified: number };
-  gpsRejectionRate: { current: number; baseline: number; sampled: boolean };
+  /**
+   * Submissions turned away because the student is not registered for the
+   * course, as a share of all submissions. This used to measure geo-fence
+   * rejections, which no longer exist; what replaced it is the signal that
+   * actually belongs to the registry side. A spike means the course lists are
+   * out of step with who is turning up — a stale register, a registration
+   * window closed too early, a course whose enrolments never ran — and every
+   * one of those is fixed from an admin screen.
+   */
+  unregisteredRejectionRate: { current: number; baseline: number; sampled: boolean };
   registration: { openDisputes: number; unclaimed: number };
   duesWindow: { daysRemaining: number; deadline: string } | null;
 };
@@ -119,8 +128,8 @@ export async function loadAdminOverview(): Promise<AdminOverview> {
   const cutoff = new Date(Date.now() - RECENT_WINDOW_DAYS * 86_400_000).toISOString();
   const rejectionRate = (rows: typeof marks) => {
     if (!rows || rows.length === 0) return null;
-    const outside = rows.filter((row) => row.reject_reason === "outside_geofence").length;
-    return (outside / rows.length) * 100;
+    const turnedAway = rows.filter((row) => row.reject_reason === "not_registered").length;
+    return (turnedAway / rows.length) * 100;
   };
 
   const recent = (marks ?? []).filter((row) => row.submitted_at >= cutoff);
@@ -144,7 +153,7 @@ export async function loadAdminOverview(): Promise<AdminOverview> {
     reconciliation: { failedWebhooks, unverified },
     // A rate computed from four submissions is noise wearing a percentage.
     // `sampled` lets the screen say so rather than raise an alarm about it.
-    gpsRejectionRate: {
+    unregisteredRejectionRate: {
       current: current ?? 0,
       baseline: baseline ?? 0,
       sampled: current !== null && baseline !== null && recent.length >= 20 && older.length >= 20,
@@ -411,13 +420,11 @@ export type SystemConfig = {
   provisionalWindowDays: number;
   graceWindowDays: number;
   pendingBufferHours: number;
-  gpsRetentionDays: number;
-  defaultRadiusM: number;
   attendanceThresholdPct: number;
   maxCreditUnits: number;
   tokenTtlSeconds: number;
   timetableToleranceMinutes: number;
-  venues: Array<{ id: string; name: string; radiusM: number }>;
+  venues: Array<{ id: string; name: string }>;
 };
 
 export async function loadSystemConfig(): Promise<SystemConfig> {
@@ -431,7 +438,7 @@ export async function loadSystemConfig(): Promise<SystemConfig> {
       .select("dues_amount_kobo, resumption_date")
       .eq("academic_session_id", sessionId ?? "")
       .limit(1),
-    db.from("venues").select("id, name, radius_m").order("name"),
+    db.from("venues").select("id, name").order("name"),
   ]);
 
   const row = config?.[0];
@@ -442,17 +449,11 @@ export async function loadSystemConfig(): Promise<SystemConfig> {
     provisionalWindowDays: row?.provisional_window_days ?? 30,
     graceWindowDays: row?.grace_window_days ?? 30,
     pendingBufferHours: row?.pending_verification_buffer_hours ?? 12,
-    gpsRetentionDays: row?.gps_retention_days ?? 14,
-    defaultRadiusM: row?.default_geofence_radius_m ?? 40,
     attendanceThresholdPct: row?.attendance_threshold_pct ?? 75,
     maxCreditUnits: row?.max_credit_units_per_semester ?? 24,
     tokenTtlSeconds: row?.checkpoint_token_ttl_seconds ?? 90,
     timetableToleranceMinutes: row?.timetable_tolerance_minutes ?? 15,
-    venues: (venues ?? []).map((venue) => ({
-      id: venue.id,
-      name: venue.name,
-      radiusM: venue.radius_m,
-    })),
+    venues: (venues ?? []).map((venue) => ({ id: venue.id, name: venue.name })),
   };
 }
 
@@ -845,7 +846,7 @@ export async function previewTimetableUpload(csv: string): Promise<TimetablePrev
 
   // A course or venue that does not exist is rejected rather than created. The
   // timetable references them; it is not where they are defined, and inventing
-  // a venue here would mean inventing a geo-fence with it.
+  // a venue here would mean inventing a hall the department does not have.
   const usable: TimetableUploadRow[] = [];
   rows.forEach((row, index) => {
     if (!courseByCode.has(row.courseCode)) {

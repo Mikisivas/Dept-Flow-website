@@ -3,7 +3,7 @@ import Link from "next/link";
 import { CalendarDays, ChevronRight, Clock } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { AttendanceMeter } from "@/components/attendance-meter";
-import { CheckpointLegend, CheckpointStrip } from "@/components/checkpoint-strip";
+import { AttendanceLegend, AttendanceStrip } from "@/components/attendance-strip";
 import { ComplianceBanner } from "@/components/compliance-banner";
 import { EmptyState } from "@/components/empty-state";
 import { StatusBadge } from "@/components/status-badge";
@@ -22,7 +22,7 @@ export const metadata: Metadata = {
  * Order is not cosmetic:
  *   1. compliance state, with the fix attached — never under a greeting
  *   2. overall attendance against the 75% line
- *   3. per-course meters and checkpoint strips
+ *   3. per-course meters and attendance strips
  *   4. the risk nudge, worded by pattern
  *   5. today's classes
  */
@@ -100,13 +100,13 @@ export default async function DashboardPage() {
               <p className="mt-2 text-[15px] leading-relaxed text-slate">
                 {risk.pattern === "partial_attendance" ? (
                   <>
-                    You&apos;re only catching one checkpoint most weeks in{" "}
-                    <strong className="font-semibold text-ink">{risk.courseCode}</strong>. Staying
-                    till the second would put you back on track.
+                    Your attendance in{" "}
+                    <strong className="font-semibold text-ink">{risk.courseCode}</strong> has become
+                    patchy. Attending the next few would bring you back toward 75%.
                   </>
                 ) : (
                   <>
-                    You&apos;ve missed several full classes in{" "}
+                    You&apos;ve missed several classes in a row in{" "}
                     <strong className="font-semibold text-ink">{risk.courseCode}</strong>. Attending
                     the next few would bring you back toward 75%.
                   </>
@@ -127,7 +127,7 @@ export default async function DashboardPage() {
                 Add or remove
               </Link>
             </div>
-            <CheckpointLegend className="mt-2" />
+            <AttendanceLegend className="mt-2" />
 
             <ul className="mt-4 flex flex-col gap-3">
               {courses.map((course) => (
@@ -176,7 +176,7 @@ export default async function DashboardPage() {
                   />
 
                   {course.sessions.length > 0 ? (
-                    <CheckpointStrip className="mt-4" sessions={course.sessions} />
+                    <AttendanceStrip className="mt-4" sessions={course.sessions} />
                   ) : null}
                 </li>
               ))}

@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { CalendarDays, MapPin, UserRound } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { AttendanceMeter } from "@/components/attendance-meter";
-import { CheckpointLegend, CheckpointStrip } from "@/components/checkpoint-strip";
+import { AttendanceLegend, AttendanceStrip } from "@/components/attendance-strip";
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
 import { DataTable, type Column } from "@/components/data-table";
@@ -35,10 +35,10 @@ const COLUMNS: Column<SessionCell>[] = [
     ),
   },
   {
-    key: "checkpoints",
-    header: "Checkpoints",
+    key: "attendance",
+    header: "Attendance",
     mobile: "meta",
-    cell: (session) => <CheckpointStrip sessions={[session]} size="sm" />,
+    cell: (session) => <AttendanceStrip sessions={[session]} size="sm" />,
   },
   {
     key: "score",
@@ -139,7 +139,7 @@ export default async function CourseDetailPage({
           </p>
         ) : (
           <>
-        <CheckpointLegend className="mt-2" />
+        <AttendanceLegend className="mt-2" />
         <DataTable
           className="mt-4"
           rows={course.sessions}

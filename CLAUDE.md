@@ -1,14 +1,24 @@
 # Project instructions — Dept-Flow
 
-Dept-Flow gates a student's ability to accumulate *counted* attendance behind
-departmental dues compliance, using a two-checkpoint token+GPS mechanism, and
-warns students before they fall below the 75% exam-eligibility threshold.
+Dept-Flow warns students before they fall below the 75% exam-eligibility
+threshold, and does it early enough to be worth acting on — a forecast of where
+a student will finish, per course, not a tally of where they are.
+
+**The August 2026 supervisor revision reversed three of the original premises.**
+Where anything below still describes the old system, the new one wins:
+
+| Was | Is |
+|---|---|
+| Two checkpoints, token + GPS, distance and proxy checks | **Trust-based.** One short-lived code. No GPS, no distance, no spoofing detection. |
+| Dues compliance gates whether attendance *counts* | **Decoupled.** A lecture counts whether or not a naira has been paid. Dues and attendance meet in exactly one place: the exam permit needs both. |
+| Nothing gates attendance | **Semester registration does.** Past the deadline an unconfirmed student cannot log attendance, and confirming late backfills an absence for every lecture they missed in between. |
 
 ## Read these first
 
 | File | What it is |
 |---|---|
-| `docs/decisions.md` | **The current specification.** Decisions agreed before any code was written. Where it disagrees with anything below, it wins. |
+| `docs/operational-flow.md` | **The current specification.** The supervisor's August 2026 revision. Where it disagrees with anything else — including `decisions.md` and every design mockup — it wins. |
+| `docs/decisions.md` | The decisions agreed before any code was written. Still the reference for everything the revision did not touch; superseded on GPS, on dues gating attendance, and on the checkpoint pair. |
 | `docs/system-operation-and-logic.md` | Functional reference: roles, entities, the compliance state machine, attendance logic, payment and registration flows. |
 | `docs/ui-build-specification.md` | Screen-by-screen build spec: every route, its role, contents and required states. |
 | `docs/dept-flow-design-skill.md` | Design system: palette, typography, the checkpoint motif, per-role patterns, pre-ship checklist. |
@@ -39,8 +49,10 @@ only the surname is matched against the register.
 - Orange is the brand, never a status. Provisional has no colour — dashed
   border, muted text, no fill.
 - Never encode a state by colour alone.
-- Never show raw GPS coordinates. No biometric, selfie or fingerprint UI
-  anywhere.
+- No location UI of any kind, and no biometric, selfie or fingerprint UI
+  anywhere. Attendance is trust-based: the code on the board is the whole
+  mechanism, and a request that carried coordinates would be recording
+  something this system has undertaken not to keep.
 - Authority actions — deactivate, revoke registration, grace period, manual
   batch, level rollover, eligibility authorization — confirm, require a reason,
   and write an audit log row.
@@ -49,13 +61,34 @@ only the surname is matched against the register.
   this system can produce.
 - Mobile-first. Students only use phones.
 
-## This is a website, not an app
+## A website first, installable second
 
 Every role reaches it through a browser at a URL. No app store, no native
-build, no installation step. The student bottom bar is a sticky nav of real
-links to real routes. No service worker, no web manifest, no install prompt —
-which also bounds what "offline" can mean, so a queued submission survives only
-while the tab is open.
+build. The student bottom bar is a sticky nav of real links to real routes, and
+every screen works with no service worker at all.
+
+It is now a PWA on top of that, which the supervisor's August 2026 flow asks
+for. The manifest buys a home-screen icon and a window without browser chrome;
+the service worker exists for **two things only**:
+
+1. **Web Push.** A push cannot be delivered to a page that is not open, so
+   something has to be listening when it is not. This is the whole reason the
+   file exists.
+2. **An honest offline page.** `/offline` carries no data of any kind, which is
+   what makes it the only page safe to cache.
+
+**The service worker must never cache a page.** Every screen is somebody's
+record, and phones get shared and resold — a cached dashboard is one student's
+attendance served from disk to whoever picks the phone up next, with no session
+to check it against. Navigations are network-only.
+
+**It must never replay an attendance submission either.** The offline queue
+lives in the page, so it can only send while somebody is watching the result. A
+POST replayed from the background, against a code window measured in minutes,
+is how a student ends up believing they were counted. So a queued submission
+still survives only while the tab is open — the queue now waits for the
+connection to return and replays with the **original timestamp**, but closing
+the tab still loses it, and the screen says so in those words.
 
 ## Visual-style precedence
 
@@ -93,7 +126,7 @@ white and needs cutting out before it sits on a tinted panel or in dark mode.
 
 ## Where the work is
 
-The branch is `claude/shared-components-review-995lls`. Schema first, then
+The branch is `claude/supervisor-adjustments-c8e5ac`. Schema first, then
 screens — that order has held throughout.
 
 **Working end to end against a real Supabase project:**
@@ -102,10 +135,14 @@ screens — that order has held throughout.
 |---|---|
 | Login | Matric number or staff ID + password. Self-signed JWT, no Supabase Auth. |
 | Registration | Register match → phone OTP → password → account → core enrolment. |
-| Attendance | Lecturer opens a lecture, issues checkpoint codes, closes it; the student submits a code with a position; `resolve_session_score()` scores everyone. |
-| Dues | Paystack redirect → verify → `clear_student()` flips compliance and confirms every provisional score. |
+| Semester registration | Admin sets the window; the student confirms; `confirm_registration()` stamps it server-side and backfills absences for anyone confirming late. Attendance is gated on it. |
+| Attendance | Lecturer opens a lecture, issues one code, closes it; the student submits the code; `resolve_session_score()` scores everyone. No location, either end. |
+| Dues | Paystack redirect → verify → `apply_payment()`. Instalments run a balance down; nothing about attendance changes. Reversals re-lock, with notice. |
+| Forecast | `compute_risk_predictions()` projects where each student finishes per course; Safe / Watch / Critical; alerts escalate in-app → push → WhatsApp → SMS, one rung per tier. |
+| Reminders and reports | pg_cron fires pre-lecture reminders and the Monday digest; weekly, monthly and semester reports share one generator with the permit. |
+| Exam permit | Needs dues paid in full AND ≥75% per course. A live panel says what is outstanding; the document carries a QR to `/check/permit`. |
 | Course registration | Admin uploads the list; students pick electives and carry-overs against a 24-unit cap. |
-| HOD | Overview, at-risk list, exam eligibility (authorizing snapshots and freezes the list), grace periods, waivers, disputes, the per-student record and lecturer oversight. |
+| HOD | Overview, drillable at-risk list, exam eligibility (authorizing snapshots and freezes the list), payment compliance, messaging students at three scopes, registration exceptions, waivers, disputes, the per-student record and lecturer oversight. |
 | Admin | Overview, students (deactivate and reverse it), payments, the register and the timetable (both preview-then-commit uploads), courses, registration disputes, configuration, audit log, level rollover. |
 | Lecturer | Dashboard, schedule (cancel, reschedule, add a makeup — each notifies every enrolled student), course list, paper register. |
 | Student | Dashboard, course detail, notifications, the printable exam permit, password reset, and changing their own password or phone number. |
@@ -115,18 +152,27 @@ screens — that order has held throughout.
 demo quietly shows invented data.
 
 **The advisory signal is a computed rule, not scikit-learn.**
-`compute_risk_predictions()` carries a student's own attendance rate forward,
-per course, and the nightly job refreshes it. It is a rule because there is no
+`compute_risk_predictions()` projects a student's own attendance forward, per
+course, from week five onward — half what they have been doing lately, half
+what they have done all term — and the nightly job refreshes it. Not the
+regression slope extrapolated: that turns one missed lecture in ten into a
+projected failure. It is a rule because there is no
 history to train on — one session and three students is a training set to
 memorise, not learn from — and because a rule can tell a student *why* they were
 flagged. The table is the seam: swap the writer, change no reader. Advisory
-only, and `attendance_pct()` has never been allowed to consult it.
+only, and `attendance_pct()` has never been allowed to consult it. Nor does the
+permit panel: `lectures_needed()` is deterministic arithmetic on the threshold,
+and a test deletes every prediction and checks the panel does not move.
 
-**Not built:** SMS delivery (the OTP seam throws in production), deployment.
+**Not built:** SMS and WhatsApp delivery (both seams report failure in
+production rather than pretending), deployment. Web Push **is** wired end to
+end and needs only VAPID keys — `npx web-push generate-vapid-keys`.
 
 **Checks:** `npm test` (12 Paystack + 33 account + 28 timetable assertions, no
-network) and `supabase/tests/schema_test.sql` (230 assertions, run in the SQL
-Editor).
+network) and `./scripts/schema-test.sh` (373 assertions against a local
+Postgres, which also verifies the whole schema applies inside ONE transaction —
+the Supabase SQL Editor runs it that way, so a migration that only works
+outside one is a migration that cannot be deployed).
 `/api/health` is the first thing to open when something misbehaves: it reports
 **which migrations are missing by name**, which tables the signed-in user can
 read, whether Paystack answers, and whether pg_cron is installed. A

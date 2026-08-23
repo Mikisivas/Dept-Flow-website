@@ -3,6 +3,7 @@ import { Bell, CalendarClock, CreditCard, ShieldCheck, TrendingDown } from "luci
 import { AppShell } from "@/components/app-shell";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
+import { PushToggle } from "@/components/push-toggle";
 import { loadNotifications } from "@/lib/data/student";
 import { MarkReadButton } from "./mark-read-button";
 import { formatDateTime } from "@/lib/format";
@@ -34,6 +35,14 @@ export default async function NotificationsPage() {
         subtitle={unread > 0 ? `${unread} unread` : "You're up to date."}
         action={<MarkReadButton unread={unread} />}
       />
+
+      {/* Above the list, because it is the reason the list is usually empty
+          when it matters: a warning a student reads three days later, having
+          opened the site for some other reason, is a warning that arrived too
+          late to change anything. */}
+      <div className="mt-6">
+        <PushToggle publicKey={process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? ""} />
+      </div>
 
       {notifications.length === 0 ? (
         <EmptyState

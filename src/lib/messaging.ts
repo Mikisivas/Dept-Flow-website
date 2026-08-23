@@ -28,7 +28,13 @@ export type Channel = "whatsapp" | "sms" | "web_push";
 
 export type SendResult =
   | { status: "sent"; providerRef: string | null }
-  | { status: "failed"; error: string };
+  /**
+   * `expired` marks a recipient the provider says no longer exists — a push
+   * endpoint for a browser whose data was cleared. Distinct from an ordinary
+   * failure because it is not worth retrying: the fix is to delete the
+   * subscription, not to send again.
+   */
+  | { status: "failed"; error: string; expired?: boolean };
 
 /** Whether a channel can actually deliver right now. */
 export function channelIsConfigured(channel: Channel): boolean {
@@ -107,6 +113,8 @@ export async function sendWebPush(input: {
   title: string;
   body: string;
   link: string | null;
+  /** Groups replaceable notifications so a second warning supersedes the first. */
+  tag?: string;
 }): Promise<SendResult> {
   if (!channelIsConfigured("web_push")) {
     if (process.env.NODE_ENV === "production") {
@@ -116,7 +124,53 @@ export async function sendWebPush(input: {
     return { status: "sent", providerRef: null };
   }
 
-  return { status: "failed", error: "Web Push is configured but not implemented." };
+  // Imported here rather than at the top of the file. `web-push` reaches for
+  // Node's crypto and https modules, and this module is also read by code
+  // paths that only ever call `channelIsConfigured()`.
+  const webpush = (await import("web-push")).default;
+  type PushSubscription = Parameters<typeof webpush.sendNotification>[0];
+
+  webpush.setVapidDetails(
+    // The contact the push service complains to when this application starts
+    // sending badly. A mailto: that nobody reads is still better than the
+    // service having no way to reach the department at all.
+    process.env.VAPID_SUBJECT || "mailto:deptflow@example.edu.ng",
+    process.env.VAPID_PUBLIC_KEY!,
+    process.env.VAPID_PRIVATE_KEY!,
+  );
+
+  try {
+    await webpush.sendNotification(
+      input.subscription as PushSubscription,
+      JSON.stringify({
+        title: input.title,
+        body: input.body,
+        link: input.link,
+        tag: input.tag,
+      }),
+      // Four hours. A pre-lecture reminder delivered the next morning is worse
+      // than one not delivered at all — it teaches the student that Dept-Flow
+      // notifications are about things that already happened.
+      { TTL: 4 * 60 * 60 },
+    );
+
+    return { status: "sent", providerRef: null };
+  } catch (error) {
+    const status = (error as { statusCode?: number }).statusCode;
+
+    // 404 and 410 are the push service saying this browser is gone: the
+    // student cleared their data, uninstalled, or revoked permission. It is
+    // reported distinctly so the caller can drop the row rather than retry
+    // forever against an endpoint that will never answer again.
+    if (status === 404 || status === 410) {
+      return { status: "failed", error: "gone", expired: true };
+    }
+
+    return {
+      status: "failed",
+      error: error instanceof Error ? error.message : "The push service refused it.",
+    };
+  }
 }
 
 /**

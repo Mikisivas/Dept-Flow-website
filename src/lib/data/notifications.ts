@@ -33,6 +33,7 @@ type QueuedDelivery = {
     title: string;
     body: string;
     link: string | null;
+    kind: string;
   } | null;
 };
 
@@ -46,7 +47,7 @@ export async function dispatchQueuedNotifications(limit = BATCH): Promise<Dispat
 
   const { data: queued } = await db
     .from("notification_deliveries")
-    .select("id, channel, destination, notifications(recipient_id, title, body, link)")
+    .select("id, channel, destination, notifications(recipient_id, title, body, link, kind)")
     .eq("status", "queued")
     .order("created_at", { ascending: true })
     .limit(limit);
@@ -122,22 +123,49 @@ export async function dispatchQueuedNotifications(limit = BATCH): Promise<Dispat
         }
 
         const results = await Promise.all(
-          subscriptions.map((row) =>
-            sendWebPush({
+          subscriptions.map(async (row) => ({
+            id: row.id,
+            result: await sendWebPush({
               subscription: row.subscription,
               title: notification.title,
               body: notification.body,
               link: notification.link,
+              // The notification's kind, so a second attendance warning
+              // REPLACES the first in the tray rather than stacking beside it.
+              // Four identical warnings is how a student learns to swipe them
+              // all away without reading one.
+              tag: notification.kind,
             }),
-          ),
+          })),
         );
+
+        // A push service answering 404 or 410 is telling us this browser is
+        // gone — data cleared, permission revoked, app uninstalled. Deleted
+        // rather than retried forever: an endpoint that will never answer
+        // again makes every future push for this student look like a failure,
+        // and a failure is what escalates to SMS.
+        const gone = results
+          .filter((entry) => entry.result.status === "failed" && entry.result.expired)
+          .map((entry) => entry.id);
+
+        if (gone.length > 0) {
+          await db.from("push_subscriptions").delete().in("id", gone);
+        }
 
         // One device reached is a delivered notification. Reporting failure
         // because a stale laptop subscription rejected it would spend an SMS
         // on a student whose phone already buzzed.
-        const delivered = results.find((result) => result.status === "sent");
-        if (delivered) return delivered;
-        return results[0] ?? { status: "failed", error: "No push subscription on any device." };
+        const delivered = results.find((entry) => entry.result.status === "sent");
+        if (delivered) return delivered.result;
+
+        // Every subscription was stale, which is the same situation as having
+        // none: the student has no working browser to push to, and the
+        // fallback should treat it that way.
+        if (gone.length === results.length) {
+          return { status: "failed", error: "No push subscription on any device." };
+        }
+
+        return results[0]?.result ?? { status: "failed", error: "No push subscription on any device." };
       }
 
       case "in_app":

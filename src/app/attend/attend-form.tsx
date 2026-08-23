@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { CheckCircle2, ScanLine, TriangleAlert } from "lucide-react";
+import { CheckCircle2, CloudOff, ScanLine, TriangleAlert } from "lucide-react";
 import { CodeInput } from "@/components/code-input";
 import { Countdown } from "@/components/countdown";
 import { EmptyState } from "@/components/empty-state";
@@ -18,8 +18,15 @@ import { cn } from "@/lib/utils";
  *
  * The rule this screen exists to honour: it never says the attendance is
  * recorded until the server has said so. "Sending…" is the only thing shown
- * while a request is in flight, and a failure is loud while the student is
- * still in the room and can retry or tell the lecturer.
+ * while a request is in flight, "Waiting for a connection" is the only thing
+ * shown while one is queued, and a failure is loud while the student is still
+ * in the room and can retry or tell the lecturer.
+ *
+ * The queued state is the one to be careful with. It looks like success — the
+ * student has done everything they were asked to do — and it is not success:
+ * nothing has reached the server, and if the signal never comes back they are
+ * absent. Every word of that panel says so, and the button underneath still
+ * offers to try again by hand.
  *
  * There is no location step. Attendance is trust-based — the code on the board
  * is the whole mechanism — so the screen asks for one thing and asks for it
@@ -53,14 +60,17 @@ export function AttendForm({ checkpoint }: { checkpoint: LiveCheckpoint | null }
   const [token, setToken] = useState("");
   const [rejection, setRejection] = useState<SubmitRejection | null>(null);
 
-  const { state, send, reset, isSending } = usePendingSubmission<
+  const { state, send, reset, isSending, isQueued } = usePendingSubmission<
     { checkpointId: string; token: string },
     { sessionScore: number }
   >({
     key: checkpoint ? `checkpoint:${checkpoint.checkpointId}` : "checkpoint:none",
-    submit: async (payload) => {
+    submit: async (payload, submittedAt) => {
       try {
-        return await submitCheckpoint(payload);
+        // The moment the student pressed Submit, not the moment this attempt
+        // reached the network. A code answered in the hall and delivered from
+        // the car park is a record of the hall.
+        return await submitCheckpoint({ ...payload, submittedAt });
       } catch (error) {
         // A decision from the server is an answer, not a network failure.
         // Marking it non-retryable stops the hook burning the code window
@@ -111,6 +121,32 @@ export function AttendForm({ checkpoint }: { checkpoint: LiveCheckpoint | null }
     );
   }
 
+  if (state.status === "queued") {
+    return (
+      <div role="status" className="rounded-lg border border-line bg-surface-sunken p-5">
+        <CloudOff className="h-7 w-7 text-slate" aria-hidden="true" />
+        {/* Never "recorded", never a tick, never green. The student has done
+            their part and the system has not done its part yet, and the
+            difference is the whole point of this panel. */}
+        <h2 className="mt-3 text-[19px] font-semibold text-ink">
+          Waiting for a connection — you are not recorded yet
+        </h2>
+        <p className="mt-1.5 text-[15px] leading-relaxed text-slate">
+          Your code is saved on this phone and sends itself the moment the network is back. It
+          will be recorded at the time you entered it, not the time it sends.
+        </p>
+        <p className="mt-2 text-[15px] leading-relaxed text-slate">
+          <strong className="font-semibold text-ink">Leave this tab open.</strong> If you close it
+          the code is lost — and if the lecture ends before the signal returns, tell your lecturer
+          before you leave the hall.
+        </p>
+        <Button className="mt-4 w-full" onClick={handleSubmit}>
+          Try now
+        </Button>
+      </div>
+    );
+  }
+
   const failed = state.status === "failed";
   const copy = rejection ? REJECTION_COPY[rejection] : null;
   // Rejections a student cannot act on by resubmitting.
@@ -154,7 +190,7 @@ export function AttendForm({ checkpoint }: { checkpoint: LiveCheckpoint | null }
             }
           }}
           label="4-digit code from the board"
-          disabled={isSending}
+          disabled={isSending || isQueued}
           // Not an SMS code — offering one-time-code here would surface the
           // wrong suggestion from the keyboard.
           autoComplete="off"
@@ -223,10 +259,10 @@ export function AttendForm({ checkpoint }: { checkpoint: LiveCheckpoint | null }
             size="lg"
             className="w-full"
             onClick={handleSubmit}
-            aria-disabled={isSending || token.length < 4}
+            aria-disabled={isSending || isQueued || token.length < 4}
           >
             {/* Never "Recorded" until the server says so. */}
-            {isSending ? "Sending…" : failed ? "Try again" : "Submit"}
+            {isSending ? "Sending…" : isQueued ? "Waiting…" : failed ? "Try again" : "Submit"}
           </Button>
         )}
       </StickyActionBar>

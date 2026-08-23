@@ -1,6 +1,6 @@
 ---
 name: dept-flow-design
-description: The design system and frontend workflow for Dept-Flow. Use when building or reviewing any UI in this project — pages, components, dashboards, forms, status indicators — or when choosing colors, typography, or layout, adding shadcn/ui components, or auditing a screen before shipping. Encodes the technology stack, the SAMACOSS-derived palette (orange/white/black), the checkpoint-pair visual signature, per-role screen patterns, and the accessibility rules this project must not break. Triggers on "design this page", "build this component", "what color should this be", "review this UI", "add a shadcn component".
+description: The design system and frontend workflow for Dept-Flow. Use when building or reviewing any UI in this project — pages, components, dashboards, forms, status indicators — or when choosing colors, typography, or layout, adding shadcn/ui components, or auditing a screen before shipping. Encodes the technology stack, the SAMACOSS-derived palette (orange/white/black), the attendance-strip visual signature, per-role screen patterns, and the accessibility rules this project must not break. Triggers on "design this page", "build this component", "what color should this be", "review this UI", "add a shadcn component".
 ---
 
 # Dept-Flow design system
@@ -26,7 +26,7 @@ visit must work immediately on a phone browser with nothing downloaded beforehan
 | Primitives | **Radix UI** | Unstyled accessible primitives under shadcn — focus trapping, keyboard nav, ARIA roles |
 | Backend API | **FastAPI (Python)** | |
 | Database | **Supabase (PostgreSQL)** | Auth, realtime, row-level security |
-| Cache | **Redis** | Hot-path compliance check during checkpoint bursts |
+| Cache | ~~Redis~~ | Dropped — the compliance lookup it was for no longer happens during a submission |
 | Payments | **Paystack** | Card + Pay with Transfer, webhook-verified |
 | ML | **scikit-learn** | Advisory regression only |
 
@@ -37,11 +37,15 @@ for free — most of the accessibility checklist in §9 is satisfied by using th
 of hand-rolled markup. Radix is unstyled, so it takes the palette in §3 without
 fighting it. Bundles stay small.
 
-**Why Redis:** the load pattern is bursty, not sustained — hundreds of students
-submitting inside the same 3–5 minute token window across parallel classes. Caching
-the "is this student cleared / provisional / locked" lookup keeps a database
-round-trip off the hot path. Postgres alone would survive a demo; Redis is what makes
-the scalability claim defensible at 5,000 students.
+**Why Redis was dropped:** it was there for a bursty load pattern — hundreds of
+students submitting inside the same few-minute code window across parallel classes —
+caching the "is this student cleared / locked" lookup to keep a round-trip off the hot
+path. Payment no longer gates attendance, so a submission does not consult compliance
+at all, and the hot path Redis existed for does not exist. The remaining per-submission
+reads are the code and the registration, both indexed single-row lookups.
+
+Keep the burst *argument* for Chapter 3 — it is still the right analysis of the load —
+but do not list a cache the system does not have.
 
 For Chapter 3 (Research Instruments/Tools), list all of these **with versions** —
 that section is graded on reproducibility.
@@ -55,18 +59,26 @@ a student sits an exam. It should read as precise, legible, and trustworthy —
 tabular, high-contrast, low-decoration. When in doubt, choose the version that looks
 like a well-made register rather than a startup landing page.
 
-**The signature element: the checkpoint pair.** Dept-Flow's one genuinely unusual
-mechanic is that a lecture is scored `0 / 0.5 / 1.0` from two checkpoints. Make that
-the recurring visual motif — every session renders as two cells:
+**The signature element: the attendance strip.** Every lecture renders as one cell:
 
 ```
-▮▮  Full (1.0)      ▮▯  Half (0.5)      ▯▯  Absent (0)      ⌐⌐  Provisional
+▮  Present (1)      ▯  Absent (0)
 ```
 
-Orange fills a captured checkpoint; an outline marks a missed one. This scales from
-a single list row to a full semester strip, and it comes from the system's own logic
+Orange fills a lecture attended; an outline marks a missed one. It scales from a
+single list row to a full semester strip, and it comes from the system's own logic
 rather than a template. Spend the design's boldness here and keep everything around
 it quiet.
+
+*(Until August 2026 this was a pair of cells, because a lecture was scored 0 / 0.5 /
+1.0 from two checkpoints. The supervisor's revision removed the second checkpoint, so
+the motif is one cell and scoring is binary.)*
+
+**The other signature element, and the one that is actually the product: the gap
+between two numbers.** A student on 76.92% today, projected to finish at 66%, is the
+whole argument for this system existing. Wherever a percentage appears, ask whether
+the projection belongs beside it — and design the pair so the eye reads *where this is
+going*, not just *where this is*.
 
 ---
 
@@ -139,7 +151,7 @@ orange must be *text* on white, it darkens all the way to `#A75F0C`.
   --info-tint:        #DBEAFE;
   --danger:           #B91C1C;  /* locked */
   --danger-tint:      #FEE2E2;
-  /* provisional has no colour of its own — see below */
+  /* Watch has no colour of its own — see below */
 }
 
 @media (prefers-color-scheme: dark) {
@@ -171,7 +183,7 @@ kept clear of hue 32°. **Never use amber or yellow for any status.**
 | State | Treatment |
 |---|---|
 | Confirmed / Cleared | Green `--ok` |
-| Provisional | **Neutral, dashed outline** — not a warning, just *not yet counted* |
+| Watch (forecast) | **Neutral, no fill** — not a warning, just *no room left* |
 | Pending verification | Blue `--info` — system is working, student need do nothing |
 | Locked | Red `--danger`, filled |
 | At risk (advisory) | Red **outlined**, not filled — lower emphasis than Locked |
@@ -179,24 +191,31 @@ kept clear of hue 32°. **Never use amber or yellow for any status.**
 Never encode a state by color alone: every status carries an icon or text label too,
 so it survives color-blindness and a bad phone screen in bright daylight.
 
-### Why provisional has no color
+### Why Watch has no colour
 
-Provisional attendance is not a warning and not an error — it is a record that exists
-but does not yet count. Giving it a color implies a judgment. Instead: **dashed 1px
-border**, `--muted` text, no fill; checkpoint cells render hollow with a dashed edge;
-always paired with the sentence explaining it and the action that fixes it.
+*(This section used to be "Why provisional has no colour". Provisional attendance no
+longer exists — payment stopped deciding whether a lecture counts — but the reasoning
+transferred intact to the state that replaced it as the hard one to colour.)*
 
-Once the student clears, those cells fill solid orange and the border goes solid.
-That hollow→filled transition is the most important visual moment in the product —
-it is the payoff for paying dues. Design it deliberately (a brief fill animation is
-justified here; honor `prefers-reduced-motion`).
+Watch is the forecast tier for a student projected to finish between 75% and 80%:
+above the line, with nothing spare. It is not a warning and not an error. Giving it an
+alarm colour implies a judgment the number does not support, and worse, it spends the
+loudest colour in the palette on the students who are not failing — leaving nothing
+louder for the ones who are.
+
+So: **neutral border, `--slate` text, no fill**, and a falling-trend icon rather than
+an alert triangle. Safe is green, Critical is the at-risk outline, and Watch sits
+visually between them by being quieter than both.
+
+Always paired with the sentence that makes it actionable: "You can miss 4 more — after
+that there is no room left."
 
 ### Budgeting orange
 
 Orange is loud. A screen where everything is orange loses hierarchy and stops looking
 institutional.
 
-- **~10% of the screen maximum** — primary action, checkpoint motif, active nav item.
+- **~10% of the screen maximum** — primary action, attendance strip, active nav item.
   Nothing else.
 - Structure comes from **black type on white with thin gray rules**, not orange panels.
 - Never use orange for large background washes behind text.
@@ -242,7 +261,7 @@ shield disappears), or add effects.
 
 **No other imagery.** No stock photos, no generic illustrations. Icons come from
 `lucide-react` (ships with shadcn — vector, near-zero weight, inherits current color).
-Empty states are typographic plus a single icon. The checkpoint motif is CSS/SVG. The
+Empty states are typographic plus a single icon. The attendance strip is CSS/SVG. The
 social/OG preview image is generated at build time from the logo and text.
 
 ---
@@ -300,13 +319,13 @@ Add only what a screen needs; don't bulk-install the catalog.
 
 - **`cn()`** (`clsx` + `tailwind-merge`) for conditional classes — never manual string
   concatenation.
-- **`cva`** for variants. `StatusBadge` (`confirmed | provisional | pending | locked |
+- **`cva`** for variants. `StatusBadge` (`counted | pending | locked |
   atRisk`) is the obvious case — declare variants, don't branch JSX.
 - **Theme through the CSS variables in §3**, mapped onto shadcn's token names. Never
   hardcode hex inside components; dark mode and any palette change depend on this.
 - **Own the code.** Once a component is in `components/ui/`, edit it directly rather
   than wrapping it in another abstraction.
-- **Compose from primitives:** `CheckpointStrip`, `StatusBadge`, `AttendanceMeter`,
+- **Compose from primitives:** `AttendanceStrip`, `StatusBadge`, `AttendanceMeter`,
   `TokenEntrySheet`, `GraceOverrideDialog` all build on shadcn/Radix rather than raw
   HTML with hand-written ARIA.
 
@@ -335,101 +354,128 @@ first button you build.
 
 ## 8. Screen and component patterns
 
-### CheckpointStrip — the signature component
+### AttendanceStrip — the signature component
 
 ```
-Single session:   ▮▮ 1.0     ▮▯ 0.5     ▯▯ 0     ⌐⌐ provisional (dashed)
-Semester strip:   ▮▮ ▮▯ ▮▮ ▮▮ ▯▯ ▮▮ ▮▯ ▮▮ …
+Semester strip:   ▮ ▮ ▮ ▮ ▯ ▮ ▮ ▮ ▯ ▯ ▯ …
 ```
 
-- Filled cell = accepted checkpoint (`--brand`); hollow = missed (1px `--line`);
-  dashed = provisional
-- **Single-checkpoint session** (lecturer issued one token) renders as one wide cell,
-  so it is visibly not a pair — never fake a second cell
+- Filled cell = present (`--brand`); hollow = absent (1px `--line`)
 - Manual/paper batch carries a small corner mark; tapping reveals "Recorded from
   paper register"
-- Each cell needs an accessible label (`aria-label="Week 4, both checkpoints
-  captured"`) — the motif must not be the only carrier of meaning
+- Each cell needs an accessible label (`aria-label="Week 4, present"`) — the motif
+  must not be the only carrier of meaning
+
+The strip earns its place by carrying what a percentage cannot. The example above is a
+student who attended eight straight and then stopped; a student who missed the first
+three and has been perfect since has the same percentage and a completely different
+future. That is the difference the whole forecast rests on, and the strip is where a
+person can see it without doing arithmetic.
 
 ### StatusBadge
-Icon + label + color, never color alone: "Counted" / "Not yet counted" /
+Icon + label + color, never color alone: "Counted" / "Absent" /
 "Checking payment…" / "Attendance locked" / "At risk".
 
 ### AttendanceMeter
 The 75% threshold is the whole point — the meter must show the line, not just the
 value. A bare percentage with no threshold marker is a failed design here.
 - Horizontal bar, orange fill, hard tick at 75% with a label
-- Below the number, the actionable sentence: "You need 4 more full sessions to reach 75%"
-- Provisional sessions show as a dashed segment beyond the solid fill, so the student
-  sees what clearing would gain them
+- Below the number, the actionable sentence: "You need 4 more lectures to reach 75%"
 - `tabular-nums` on the percentage
+
+### ForecastPanel
+The projection for one course, and the screen that justifies the product. Three rules:
+- **Every sentence names the course and a count.** Never "your attendance is low" — a
+  student cannot act on that, and learns to stop reading.
+- **The good case gets a sentence too.** A panel that only ever appears when something
+  is wrong is one students dread and then avoid. "You could miss 3 and still be
+  eligible" is the number a student on track actually wants.
+- **When the threshold is out of reach, say so.** Asking a student to attend
+  everything when everything is not enough is the one failure they cannot detect
+  until it is far too late to matter.
+
+The what-if control is a slider, not a form: "what if I miss the next two?" is a
+question asked by dragging, not by typing a number and pressing a button.
 
 ### Student
 
 **Dashboard** — the most-used screen. Priority top to bottom:
-1. **Compliance state** — if locked or provisional, first thing on screen with the fix
-   action attached. Never bury it under a greeting.
-2. **AttendanceMeter** per course, with the 75% line.
-3. **CheckpointStrip** for the semester.
-4. Risk nudge, worded by pattern: trending 0s → "You've missed 3 full classes";
-   trending 0.5s → "You're catching only one checkpoint — try to stay till the end."
+1. **Registration state** — if the deadline has passed unconfirmed, first thing on
+   screen with the fix attached. It is the one thing that stops attendance working.
+2. **ForecastPanel** per course — where they are headed, and the number that fixes it.
+   Above the meter, because the meter answers a question the student can no longer
+   change and the panel answers the one they can.
+3. **AttendanceMeter** per course, with the 75% line.
+4. **AttendanceStrip** for the semester.
 
-**Token entry** — highest-frequency, most time-pressured interaction, in a noisy hall
-with a 3–5 minute window.
-- Big numeric input, `inputmode="numeric"`, `autocomplete="one-time-code"`
+**Code entry** — highest-frequency, most time-pressured interaction, in a noisy hall
+with a few minutes on the clock.
+- Big numeric input, `inputmode="numeric"`; **not** `autocomplete="one-time-code"` —
+  this is not an SMS code and offering one surfaces the wrong keyboard suggestion
 - **Never block paste**; auto-advance between digits but allow pasting the whole code
 - Show the expiry countdown
-- One clear result: accepted (and which checkpoint), or rejected **with the reason** —
-  "You're outside the lecture hall," "This code expired," "Your account is locked."
-  A generic failure here generates disputes.
-- Must work on a bad connection: optimistic local state + retry, with an honest "not
-  yet confirmed" indicator until the server acknowledges
+- **No location step and no permission prompt.** The screen asks for one thing.
+- One clear result: accepted, or rejected **with the reason** — "This code expired,"
+  "That code isn't right," "You aren't registered for this course." A generic failure
+  here generates disputes.
+- On a bad connection: retry, then hold. The held state must not read as success —
+  no tick, no green, and the words "you are not recorded yet". **Never** optimistic
+  local state that says recorded.
 
-**Payment** — Card and Pay with Transfer. Show the amount, the deadline, and what
-clearing unlocks ("This will count your 12 waiting sessions"). After paying, never
-leave an ambiguous screen: show "Checking payment…" until the webhook confirms.
+**Payment** — Card and Pay with Transfer. Show the amount, the **balance** (instalments
+are normal), the deadline, and what paying is actually for: the exam permit, never the
+attendance. After paying, never leave an ambiguous screen: show "Checking payment…"
+until the webhook confirms.
 
 ### Lecturer
 
 **Session control** — one primary action at a time, large tap targets; operated while
 standing in front of a class.
-- Start Session → a single prominent **"Generate checkpoint code"** button
+- Start Session → a single prominent **"Issue the code"** button
 - Display the 4-digit code **very large** (it gets written on a whiteboard) with the
   expiry countdown
 - Live count of submissions arriving
-- Clearly indicate which checkpoint this is and that a second is expected
-- End Session confirms if only one checkpoint was issued ("This session will be scored
-  present/absent, not out of two checkpoints — continue?")
+- One code per lecture. No "checkpoint 1 of 2", no confirm-on-end about pairs.
 
-**Manual/paper batch** — reached only from a closed session. Two-column entry
-mirroring the paper sheet, mandatory justification note, explicit warning that the
-entry is flagged and reviewable. Should feel heavier than the normal flow — it
-bypasses the anti-proxy checks.
+**Manual/paper batch** — reached only from a closed session. One checkbox per student
+mirroring a sign-in sheet, mandatory justification note, explicit warning that the
+entry is recorded as manually entered and is reviewable. Should feel heavier than the
+normal flow — it is the one path with no code behind it.
 
 **Schedule** — makeup / reschedule / cancel for own courses only. Cancelling states
 its consequence: "This session won't count toward anyone's total."
 
 ### HOD
 Academic governance; individual students visible.
-- **Risk list** — students trending below 75%, sorted by severity, each row showing
-  the CheckpointStrip so the pattern is legible at a glance
-- **Grace period control** — the highest-consequence control on the site. Show exactly
-  who it affects and how many, require a reason, confirm before applying, state the
-  expiry in plain language. Writes to the audit log.
+- **At-risk list** — students projected below 75%, sorted by severity, each row
+  showing the AttendanceStrip so the pattern is legible at a glance, the number of
+  lectures that would fix it, and **a link to the student's record**. A row here
+  starts a conversation; it does not end one.
+- **Registration exceptions** — the highest-consequence control on the site. Show
+  exactly who it affects and how many, require a reason, confirm before applying,
+  state the expiry in plain language. Writes to the audit log.
+- **Messaging** — one message, three audiences. The audience count is fetched live and
+  repeated in the confirmation, because "message 412 students" is a different decision
+  from "message 12".
+- **Payment compliance** — by level, as a balance rather than a flag.
 - **Waivers, disputes, final eligibility list** — the eligibility list is an
   authorization action, not an export; the confirm step is serious.
-- HOD does **not** see dues configuration, geo-fence coordinates, or the whitelist.
+- HOD does **not** see dues configuration or the register.
 
 ### Admin
-Operations only. Aggregate signals — **no individual student risk alerts** (that is
-HOD scope; showing it here breaks separation of duties).
-- Whitelist upload with a preview/diff before committing
+Operations only. Aggregate signals — **no individual student risk data of any kind**
+(that is HOD scope; showing it here breaks separation of duties, and the data is
+unreadable as this role rather than merely hidden).
+- Register upload with a preview/diff before committing
 - Registration disputes: revoke + reclaim, with reason, audit-logged
 - Deactivation (Expelled / Withdrawn / Graduated / Other) — soft delete, confirm,
   reason required
 - Level rollover — one bulk action with a strong confirmation showing how many students
   move and to what level; irreversible in practice
-- System health: reconciliation failures, GPS-rejection spikes, aggregate compliance
+- The semester registration window — the control that decides who can record
+  attendance at all
+- System health: reconciliation failures, payment-integrity anomalies, aggregate
+  compliance
 
 ### Layout rules
 - **Mobile-first, always.** Students only ever use phones. Desktop is the HOD/admin
@@ -437,7 +483,7 @@ HOD scope; showing it here breaks separation of duties).
 - Tables collapse to stacked cards below `md` — never horizontal-scroll a data table
   as the primary mobile experience.
 - Sticky primary action on mobile (pay, submit code) so it survives a long scroll.
-- Bottom-sheet pattern for token entry and confirmations; `overscroll-behavior: contain`.
+- Bottom-sheet pattern for code entry and confirmations; `overscroll-behavior: contain`.
 - Respect `env(safe-area-inset-*)`.
 
 ---
@@ -487,7 +533,7 @@ data, burst traffic in a 3–5 minute window, and legally-relevant state.
 - Async state changes need `aria-live="polite"`.
 - Semantic HTML before ARIA. Headings in order. Include a skip link.
 - **Never encode status by color alone.**
-- CheckpointStrip needs per-cell accessible labels.
+- AttendanceStrip needs per-cell accessible labels.
 
 ### Focus
 - Visible focus everywhere via `focus-visible:ring-*`; never `outline-none` without a
@@ -506,7 +552,9 @@ data, burst traffic in a 3–5 minute window, and legally-relevant state.
 ### Animation
 - Honor `prefers-reduced-motion`; animate only `transform`/`opacity`; never
   `transition: all`; animations interruptible.
-- The provisional→confirmed fill is the one place worth a deliberate animation.
+- Almost nothing here earns an animation. The tier change on a forecast panel is the
+  one candidate, and even that is better as a state than a transition — a student
+  arriving at Critical should read it, not watch it.
 
 ### Typography and numbers
 - `tabular-nums` wherever numbers stack or update.
@@ -549,12 +597,14 @@ data, burst traffic in a 3–5 minute window, and legally-relevant state.
 - Images without dimensions; long lists without virtualization
 - Inputs without labels; icon buttons without `aria-label`
 - Hardcoded date/number formats
-- Brand Orange `#F0952B` as text on white (2.32:1)
+- Brand Orange `#FF9935` as text on white (**2.13:1**) — darken to `#A85E0A`
 - **White text on orange** — the most likely mistake in this project
 - Status conveyed by color alone
 - The full crest at favicon/header size instead of the simplified mark
 - Any biometric/fingerprint/selfie UI — not part of this system
-- Raw GPS coordinates displayed to any user
+- **Any location UI at all** — no coordinates, no map, no distance, no permission
+  prompt. There is nothing left to show one of.
+- A held offline submission rendered as success — no tick, no green
 
 ---
 
@@ -562,13 +612,22 @@ data, burst traffic in a 3–5 minute window, and legally-relevant state.
 
 - **Never invent a state.** The only compliance states are those in
   `docs/system-operation-and-logic.md`: provisional, confirmed, pending verification,
-  locked, cleared. Don't add "partial," "warning," or "review" to the UI vocabulary.
-- **Provisional must never look like confirmed.** A student with 12 provisional
-  sessions has *nothing counted yet*. A reassuring number there actively misleads them.
-- **Never show raw GPS coordinates.** Location is captured momentarily and purged; the
-  UI shows pass/fail only.
+  locked, cleared. The forecast tiers are exactly three: safe, watch, critical. Don't
+  add "partial," "warning," or "review" to the UI vocabulary.
+- **A held submission must never look like a recorded one.** This is the descendant of
+  the old "provisional must never look like confirmed" rule, and it is now sharper: a
+  student who sees a tick and walks out of the hall uncounted is the worst failure
+  this system can produce. No optimistic state, ever.
+- **Never promise a threshold that cannot be reached.** Where attending every
+  remaining lecture still finishes below 75%, say that. Asking a student to do
+  something that will not work is a lie they cannot detect until it is too late to
+  matter.
+- **No location UI anywhere.** Not a map, not a coordinate, not a distance, not a
+  permission prompt. Attendance is trust-based; a screen that asked for a position
+  would be collecting something this system has undertaken not to keep.
 - **Authority actions confirm and log.** Deactivation, revoking a registration,
-  granting grace, submitting a manual batch — confirmation step plus reason field.
+  granting an exception, submitting a manual batch, messaging a level — confirmation
+  step plus reason field.
 - **No biometrics anywhere.** No fingerprint prompts, no selfie capture — not in the
   system, must not appear in a mockup.
 

@@ -1,7 +1,7 @@
 import "server-only";
 
 import { redirect } from "next/navigation";
-import { createUserClient } from "@/lib/supabase/client";
+import { createServiceClient, createUserClient } from "@/lib/supabase/client";
 import { currentAccessToken, currentUser } from "@/lib/auth/current-user";
 import { attendancePct } from "@/lib/format";
 import type { SessionClaims } from "@/lib/auth/session";
@@ -245,10 +245,18 @@ export type AtRiskStudent = {
   firstName: string;
   otherNames: string | null;
   level: number;
+  courseId: string;
   courseCode: string;
   currentPct: number;
   predictedPct: number;
-  pattern: "disengagement" | "partial_attendance";
+  tier: "watch" | "critical";
+  /** Null for a student whose projection is above the line but without room. */
+  pattern: "disengagement" | "partial_attendance" | null;
+  /** Percentage points per lecture. Negative is a student falling away. */
+  trend: number;
+  mustAttend: number;
+  canStillMiss: number;
+  lecturesRemaining: number;
   sessions: SessionCell[];
 };
 
@@ -256,6 +264,12 @@ export type AtRiskStudent = {
  * The advisory list. `currentPct` is a determination; `predictedPct` is a
  * guess — they sit in separate columns and the screen says which is which,
  * because a student is never barred from an exam on the strength of a model.
+ *
+ * Filtered to Watch and Critical here rather than in the caller. The forecast
+ * table holds a row for EVERY enrolment now, Safe ones included, because the
+ * student's own dashboard needs the good news as much as the bad. A list
+ * headed "at-risk students" that reads that table unfiltered would put the
+ * whole department on it, which is the same as putting nobody on it.
  */
 export async function loadAtRiskStudents(): Promise<AtRiskStudent[]> {
   await requireHod();
@@ -264,7 +278,14 @@ export async function loadAtRiskStudents(): Promise<AtRiskStudent[]> {
   const [{ data: predictions }, standings] = await Promise.all([
     db
       .from("risk_predictions")
-      .select("student_id, course_id, predicted_pct, pattern, courses(code)")
+      .select(
+        "student_id, course_id, predicted_pct, pattern, tier, trend, must_attend, can_still_miss, lectures_held, lectures_expected, courses(code)",
+      )
+      .in("tier", ["watch", "critical"])
+      // Critical before Watch, and within each the worst projection first.
+      // Severity is the only order that survives a list of four hundred: an
+      // HOD reads down it until they run out of afternoon.
+      .order("tier", { ascending: false })
       .order("predicted_pct"),
     loadStandings(createUserClient(await currentAccessToken())),
   ]);
@@ -286,10 +307,19 @@ export async function loadAtRiskStudents(): Promise<AtRiskStudent[]> {
         firstName: student.firstName,
         otherNames: student.otherNames,
         level: student.level,
+        courseId: prediction.course_id,
         courseCode: course?.code ?? "",
         currentPct: standing?.pct ?? 0,
         predictedPct: Number(prediction.predicted_pct),
-        pattern: prediction.pattern as AtRiskStudent["pattern"],
+        tier: prediction.tier as AtRiskStudent["tier"],
+        pattern: (prediction.pattern as AtRiskStudent["pattern"]) ?? null,
+        trend: Number(prediction.trend ?? 0),
+        mustAttend: Number(prediction.must_attend ?? 0),
+        canStillMiss: Number(prediction.can_still_miss ?? 0),
+        lecturesRemaining: Math.max(
+          0,
+          Number(prediction.lectures_expected ?? 0) - Number(prediction.lectures_held ?? 0),
+        ),
         sessions: standing?.sessions ?? [],
       },
     ];
@@ -882,5 +912,163 @@ export async function loadLecturerOversight(): Promise<LecturerOversight[]> {
     lecturerId: lecturer.id,
     name: `${lecturer.first_name} ${lecturer.surname}`,
     ...(tally.get(lecturer.id) ?? { sessionsHeld: 0, paperBatches: 0, cancelled: 0 }),
+  }));
+}
+
+/* -------------------------------------------------------------------------
+   Messaging (§7.3)
+
+   Three audiences, drawn from the registration data. Everything about how a
+   message physically goes out — the channels, the WhatsApp→SMS fallback, the
+   delivery record — belongs to `queue_notification()` and is not restated
+   here. A second messaging path would be a second thing that can fail to
+   deliver and a second set of channel rules to drift.
+   ------------------------------------------------------------------------- */
+
+export type MessageScope = "student" | "level" | "course";
+
+export type SendMessageResult = { messageId: string; recipients: number };
+
+export async function messageAudience(
+  scope: MessageScope,
+  target: string | null,
+  level: number | null,
+): Promise<number> {
+  const db = createServiceClient();
+  const { data } = await db.rpc("hod_message_audience", {
+    p_scope: scope,
+    p_target: target,
+    p_level: level,
+  });
+  return Number(data ?? 0);
+}
+
+export async function sendHodMessage(input: {
+  actorId: string;
+  scope: MessageScope;
+  target: string | null;
+  level: number | null;
+  subject: string;
+  body: string;
+}): Promise<SendMessageResult> {
+  const db = createServiceClient();
+  const { data, error } = await db.rpc("send_hod_message", {
+    p_actor_id: input.actorId,
+    p_scope: input.scope,
+    p_target: input.target,
+    p_level: input.level,
+    p_subject: input.subject,
+    p_body: input.body,
+  });
+
+  if (error) throw new Error(error.message);
+
+  const row = Array.isArray(data) ? data[0] : data;
+  return {
+    messageId: String(row?.message_id ?? ""),
+    recipients: Number(row?.recipients ?? 0),
+  };
+}
+
+export type SentMessage = {
+  id: string;
+  scope: MessageScope;
+  audience: string;
+  subject: string;
+  body: string;
+  recipients: number;
+  sentAt: string;
+};
+
+export async function loadSentMessages(): Promise<SentMessage[]> {
+  await requireHod();
+  const db = createUserClient(await currentAccessToken());
+
+  const { data } = await db
+    .from("hod_messages")
+    .select(
+      "id, scope, level, subject, body, recipients, sent_at, courses(code), students(matric_no)",
+    )
+    .order("sent_at", { ascending: false })
+    .limit(30);
+
+  return (data ?? []).map((row) => {
+    const course = one(row.courses as unknown as { code: string });
+    const student = one(row.students as unknown as { matric_no: string });
+
+    return {
+      id: row.id,
+      scope: row.scope as MessageScope,
+      audience:
+        row.scope === "course"
+          ? (course?.code ?? "a course")
+          : row.scope === "level"
+            ? `Level ${row.level}`
+            : (student?.matric_no ?? "one student"),
+      subject: row.subject,
+      body: row.body,
+      recipients: row.recipients,
+      sentAt: row.sent_at,
+    };
+  });
+}
+
+export type PaymentComplianceRow = {
+  level: number;
+  students: number;
+  paidInFull: number;
+  partPaid: number;
+  nothingPaid: number;
+  outstandingKobo: number;
+};
+
+/**
+ * §7.2, and it exists BECAUSE payment was decoupled.
+ *
+ * Dues used to be visible on every attendance screen as a side effect of
+ * gating it. They gate nothing now, which means the department's money is
+ * invisible unless somebody goes looking — so there is a screen to look at.
+ */
+export async function loadPaymentCompliance(): Promise<PaymentComplianceRow[]> {
+  await requireHod();
+  const db = createUserClient(await currentAccessToken());
+
+  const { data } = await db.rpc("payment_compliance_report", {
+    p_academic_session_id: null,
+  });
+
+  return ((data ?? []) as Record<string, unknown>[]).map((row) => ({
+    level: Number(row.level ?? 0),
+    students: Number(row.students ?? 0),
+    paidInFull: Number(row.paid_in_full ?? 0),
+    partPaid: Number(row.part_paid ?? 0),
+    nothingPaid: Number(row.nothing_paid ?? 0),
+    outstandingKobo: Number(row.outstanding_kobo ?? 0),
+  }));
+}
+
+export type CourseChoice = { courseId: string; code: string; title: string };
+
+/** Every course in the active session, for the audience picker. */
+export async function loadCourseChoices(): Promise<CourseChoice[]> {
+  await requireHod();
+  const db = createUserClient(await currentAccessToken());
+
+  const { data: session } = await db
+    .from("academic_sessions")
+    .select("id")
+    .eq("is_active", true)
+    .maybeSingle();
+
+  const { data } = await db
+    .from("courses")
+    .select("id, code, title")
+    .eq("academic_session_id", session?.id ?? "")
+    .order("code");
+
+  return (data ?? []).map((row) => ({
+    courseId: row.id,
+    code: row.code,
+    title: row.title,
   }));
 }

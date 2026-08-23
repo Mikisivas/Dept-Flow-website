@@ -17,6 +17,7 @@ import {
   ListChecks,
   Radio,
   ScrollText,
+  Send,
   Settings,
   ShieldAlert,
   ShieldQuestion,
@@ -68,6 +69,10 @@ const NAV: Record<AppRole, NavItem[]> = {
   hod: [
     { href: "/hod", label: "Overview", icon: Gauge },
     { href: "/hod/risk", label: "At-risk students", icon: TriangleAlert },
+    // Directly under the at-risk list, because that is the order the work
+    // happens in: see who is falling behind, then tell them so.
+    { href: "/hod/messages", label: "Message students", icon: Send },
+    { href: "/hod/payments", label: "Payment compliance", icon: CreditCard },
     { href: "/hod/grace", label: "Exceptions", icon: ShieldAlert },
     { href: "/hod/waivers", label: "Waivers", icon: BadgeCheck },
     { href: "/hod/disputes", label: "Disputes", icon: ClipboardList },

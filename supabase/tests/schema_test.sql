@@ -3062,6 +3062,168 @@ end $$;
 
 
 -- ---------------------------------------------------------------------------
+-- The HOD talking to students (§7.3)
+--
+-- Three audiences from one function, drawn from the registration data. What is
+-- worth asserting is mostly the boundaries: who it reaches, who it does not,
+-- and that it cannot spend the SMS budget.
+-- ---------------------------------------------------------------------------
+
+do $$
+declare
+  v_hod     uuid := '33333333-3333-3333-3333-333333333302';
+  v_admin   uuid := '33333333-3333-3333-3333-333333333303';
+  v_seeded  uuid := '11111111-1111-1111-1111-111111111111';
+  v_course  uuid := gen_random_uuid();
+  v_on      uuid := gen_random_uuid();
+  v_off     uuid := gen_random_uuid();
+  v_id      uuid;
+  v_count   integer;
+begin
+  insert into courses (id, academic_session_id, code, title, level, kind, credit_units, semester, lecturer_id)
+  values (v_course, v_seeded, 'STA 394', 'Message Fixture', 300, 'core', 3, 1,
+          '33333333-3333-3333-3333-333333333301');
+
+  insert into profiles (id, role, surname, first_name, phone)
+  values (v_on, 'student', 'Still', 'Registered', '+2348050000701'),
+         (v_off, 'student', 'Dropped', 'It', '+2348050000702');
+  insert into students (id, matric_no, level)
+  values (v_on, 'CMP/2021/861', 300), (v_off, 'CMP/2021/862', 300);
+
+  insert into enrolments (student_id, course_id, source, enrolled_on)
+  values (v_on, v_course, 'core', session_day(0));
+  insert into enrolments (student_id, course_id, source, enrolled_on, dropped_at)
+  values (v_off, v_course, 'elective', session_day(0), now());
+
+  -- ------------------------------------------------------------------------
+  -- Who may send at all
+  -- ------------------------------------------------------------------------
+  perform assert_rejects(
+    format('select send_hod_message(%L, %L, %L, null, %L, %L)',
+           v_admin, 'course', v_course, 'Notice', 'The administrator is not the head of department.'),
+    'only the head of department can message students'
+  );
+
+  perform assert_rejects(
+    format('select send_hod_message(%L, %L, %L, null, %L, %L)',
+           v_hod, 'course', v_course, 'Notice', 'see me'),
+    'a message reaching a whole course has to say something — "see me" is a summons nobody can act on'
+  );
+
+  -- ------------------------------------------------------------------------
+  -- A course group is everyone CURRENTLY registered
+  -- ------------------------------------------------------------------------
+  v_count := hod_message_audience('course', v_course, null);
+  perform assert_true(
+    v_count = 1,
+    'the audience preview counts the registered student and not the one who dropped it'
+  );
+
+  select message_id, recipients into v_id, v_count
+  from send_hod_message(v_hod, 'course', v_course, null,
+                        'STA 394 venue change',
+                        'Thursday''s lecture moves to Lecture Theatre A for the rest of the term.');
+
+  perform assert_true(v_count = 1, 'and the send reaches exactly that audience');
+
+  perform assert_true(
+    exists (select 1 from notifications where recipient_id = v_on and kind = 'hod_message'),
+    'the registered student gets it'
+  );
+
+  perform assert_true(
+    not exists (select 1 from notifications where recipient_id = v_off and kind = 'hod_message'),
+    'and the one who left the course does not — a message about a course they dropped is the system not having noticed'
+  );
+
+  -- ------------------------------------------------------------------------
+  -- Same channels as everything else, and never SMS
+  -- ------------------------------------------------------------------------
+  perform assert_true(
+    exists (
+      select 1 from notification_deliveries d
+      join notifications n on n.id = d.notification_id
+      where n.recipient_id = v_on and n.kind = 'hod_message' and d.channel = 'whatsapp'
+    ),
+    'it routes through the same channels as an alert rather than a messaging system of its own'
+  );
+
+  perform assert_true(
+    not exists (
+      select 1 from notification_deliveries d
+      join notifications n on n.id = d.notification_id
+      where n.kind = 'hod_message' and d.channel = 'sms'
+    ),
+    'and never SMS — an HOD who could spend that budget on a routine notice eventually would'
+  );
+
+  -- ------------------------------------------------------------------------
+  -- Reaching four hundred phones is an authority action
+  -- ------------------------------------------------------------------------
+  perform assert_true(
+    (select count(*) from audit_log
+      where action = 'hod_message.sent' and target_id = v_id::text) = 1,
+    'every send is audited with the actor, the scope and the audience size'
+  );
+
+  perform assert_true(
+    (select (metadata->>'recipients')::integer from audit_log
+      where action = 'hod_message.sent' and target_id = v_id::text) = 1,
+    'and the audit records how many phones it actually reached'
+  );
+
+  -- ------------------------------------------------------------------------
+  -- One student, and a level
+  -- ------------------------------------------------------------------------
+  select recipients into v_count
+  from send_hod_message(v_hod, 'student', v_on, null,
+                        'About your attendance',
+                        'Please come and see me before Friday about CMP 301.');
+  perform assert_true(v_count = 1, 'an individual message reaches one student');
+
+  perform assert_true(
+    hod_message_audience('level', null, 300) >= 1,
+    'a level message reaches everyone at that level'
+  );
+
+  perform assert_rejects(
+    format('insert into hod_messages (sent_by, scope, level, subject, body) values (%L, %L, 300, %L, %L)',
+           v_hod, 'student', 'Wrong', 'A student-scoped message that names a level instead.'),
+    'a scope and its target cannot disagree'
+  );
+end $$;
+
+-- The payment compliance report the HOD needs precisely BECAUSE dues no longer
+-- gate attendance: it used to be visible as a side effect of the attendance
+-- screens, and now it is visible nowhere unless somebody goes looking.
+do $$
+declare
+  v_seeded uuid := '11111111-1111-1111-1111-111111111111';
+  v_rows   integer;
+begin
+  select count(*) into v_rows from payment_compliance_report(v_seeded);
+  perform assert_true(v_rows > 0, 'the payment report covers every level with students in it');
+
+  perform assert_true(
+    not exists (
+      select 1 from payment_compliance_report(v_seeded)
+      where paid_in_full + part_paid + nothing_paid <> students
+    ),
+    'and every student is in exactly one of the three columns'
+  );
+
+  -- Part paid is its own column because it is its own conversation. A student
+  -- who has paid half is not a student who has not paid, and a boolean cannot
+  -- hold the difference.
+  perform assert_true(
+    (select count(*) from information_schema.routines
+      where routine_name = 'payment_compliance_report') = 1,
+    'the report exists as one function rather than as a query copied onto a screen'
+  );
+end $$;
+
+
+-- ---------------------------------------------------------------------------
 -- The paper register
 --
 -- The one route with no token, no geo-fence and no device check behind it, so

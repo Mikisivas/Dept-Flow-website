@@ -4,7 +4,14 @@ import { createUserClient } from "@/lib/supabase/client";
 import { currentAccessToken, currentUser } from "@/lib/auth/current-user";
 import { loadLiveCheckpoint } from "@/lib/data/attendance";
 import { lagosToday } from "@/lib/format";
-import type { ComplianceState, CourseAttendance, RiskPattern, SessionCell } from "@/lib/types";
+import type {
+  ComplianceState,
+  CourseAttendance,
+  CourseForecast,
+  RiskPattern,
+  RiskTier,
+  SessionCell,
+} from "@/lib/types";
 import type { DuesPeriod, StudentProfile, TodayClass } from "@/lib/data/fixtures";
 
 /**
@@ -21,13 +28,19 @@ export type StudentDashboard = {
   compliance: ComplianceState;
   /**
    * Whether the student can start a payment at all. The portal is not open all
-   * session: once locked, paying is shut along with recording attendance, and a
-   * grace period reopens both because it is one lock.
+   * session — once the window closes, paying is shut. It no longer has
+   * anything to do with recording attendance, which continues either way.
    */
   paymentOpen: boolean;
   dues: DuesPeriod;
   courses: CourseAttendance[];
   today: TodayClass[];
+  /** One per course the student is registered for, worst first. */
+  forecasts: CourseForecast[];
+  /**
+   * The single worst course. Kept for the one place with room for one
+   * sentence; anything with room for more reads `forecasts`.
+   */
   risk: { pattern: RiskPattern; courseCode: string } | null;
 };
 
@@ -237,13 +250,17 @@ export async function loadStudentDashboard(): Promise<StudentDashboard> {
 
   const today = await loadToday(db, session.profileId, courses);
 
-  const { data: risk } = await db
+  // Every course, not just the worst one. The dashboard used to show a single
+  // nudge about whichever course had the lowest number, which meant a student
+  // in trouble on two courses heard about one of them — and the whole claim
+  // this system makes is that it tells you what to do, per course.
+  const { data: forecasts } = await db
     .from("risk_predictions")
-    .select("pattern, courses(code)")
+    .select(
+      "course_id, predicted_pct, tier, trend, lectures_held, lectures_expected, must_attend, can_still_miss, pattern, courses(code)",
+    )
     .eq("student_id", session.profileId)
-    .order("predicted_pct")
-    .limit(1)
-    .maybeSingle();
+    .order("predicted_pct");
 
   const resumption = dues?.resumption_date ?? new Date().toISOString();
 
@@ -283,10 +300,22 @@ export async function loadStudentDashboard(): Promise<StudentDashboard> {
     },
     courses,
     today,
-    risk: risk
+    forecasts: (forecasts ?? []).map((row) => ({
+      courseId: row.course_id as string,
+      courseCode: one(row.courses as unknown as { code: string })?.code ?? "",
+      tier: (row.tier ?? "safe") as RiskTier,
+      projectedPct: Number(row.predicted_pct ?? 0),
+      trend: Number(row.trend ?? 0),
+      lecturesHeld: Number(row.lectures_held ?? 0),
+      lecturesExpected: Number(row.lectures_expected ?? 0),
+      mustAttend: Number(row.must_attend ?? 0),
+      canStillMiss: Number(row.can_still_miss ?? 0),
+      pattern: (row.pattern ?? null) as RiskPattern | null,
+    })),
+    risk: forecasts?.[0]
       ? {
-          pattern: risk.pattern as RiskPattern,
-          courseCode: one(risk.courses as unknown as { code: string })?.code ?? "",
+          pattern: forecasts[0].pattern as RiskPattern,
+          courseCode: one(forecasts[0].courses as unknown as { code: string })?.code ?? "",
         }
       : null,
   };

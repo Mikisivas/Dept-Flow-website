@@ -65,6 +65,20 @@ begin
 end $$;
 
 -- ---------------------------------------------------------------------------
+-- Dates, relative to the seeded session
+-- ---------------------------------------------------------------------------
+--
+-- The seed anchors every date on today, because a forecast needs lectures
+-- still to come and a seed with absolute dates describes a session that has
+-- already ended. This suite has to follow: a test that inserts a lecture on
+-- "2026-01-13" was inserting one inside the session when it was written and
+-- one three years before it now.
+create or replace function session_day(p_offset integer)
+returns date language sql stable as $$
+  select (select starts_on from academic_sessions where is_active limit 1) + p_offset;
+$$;
+
+-- ---------------------------------------------------------------------------
 -- Naming: CMP, never CSC
 -- ---------------------------------------------------------------------------
 
@@ -187,7 +201,7 @@ declare
 begin
   insert into session_instances (id, course_id, timetable_entry_id, held_on, venue_id, type, status, closed_at, created_by)
   values (v_session, '66666666-6666-6666-6666-666666666601', '77777777-7777-7777-7777-777777777701',
-          '2026-01-13', '22222222-2222-2222-2222-222222222201', 'recurring', 'closed', now(),
+          session_day(86), '22222222-2222-2222-2222-222222222201', 'recurring', 'closed', now(),
           '33333333-3333-3333-3333-333333333301');
 
   insert into checkpoints (id, session_instance_id, token, expires_at, issued_by)
@@ -235,7 +249,7 @@ declare
 begin
   insert into session_instances (id, course_id, timetable_entry_id, held_on, venue_id, type, status, closed_at, created_by)
   values (v_session, '66666666-6666-6666-6666-666666666601', '77777777-7777-7777-7777-777777777701',
-          '2026-01-20', '22222222-2222-2222-2222-222222222201', 'recurring', 'closed', now(),
+          session_day(87), '22222222-2222-2222-2222-222222222201', 'recurring', 'closed', now(),
           '33333333-3333-3333-3333-333333333301');
 
   insert into checkpoints (id, session_instance_id, token, expires_at, issued_by)
@@ -422,7 +436,7 @@ $$, 'a paper batch cannot be submitted with a token justification');
 
 select assert_rejects($$
   insert into grace_periods (academic_session_id, scope, level, expires_on, reason, granted_by)
-  values ('11111111-1111-1111-1111-111111111111', 'department', 400, '2026-05-12', 'Hardship', '33333333-3333-3333-3333-333333333302')
+  values ('11111111-1111-1111-1111-111111111111', 'department', 400, (current_date + 30)::text, 'Hardship', '33333333-3333-3333-3333-333333333302')
 $$, 'a department-wide grace period cannot also name a level');
 
 select assert_rejects($$
@@ -474,7 +488,8 @@ end $$;
 
 select assert_rejects($$
   insert into academic_sessions (name, starts_on, ends_on, is_active)
-  values ('2026/2027', '2026-09-14', '2027-07-30', true)
+  values (to_char(current_date + 120, 'YYYY') || '/' || to_char(current_date + 300, 'YYYY'),
+          current_date + 120, current_date + 300, true)
 $$, 'only one academic session can be active at a time');
 
 -- ---------------------------------------------------------------------------
@@ -930,7 +945,7 @@ begin
   insert into compliance_statuses (student_id, academic_session_id, state)
   values (v_student, v_session, 'uncleared');
   insert into enrolments (student_id, course_id, source, enrolled_on)
-  values (v_student, v_course, 'carry_over', date '2025-09-15');
+  values (v_student, v_course, 'carry_over', session_day(0));
 
   insert into session_scores (student_id, session_instance_id, score)
   select v_student, si.id, 1.0
@@ -1050,7 +1065,7 @@ begin
   values (v_late, 'student', 'Late', 'Joiner', '+2348059999999');
   insert into students (id, matric_no, level) values (v_late, 'CMP/2021/999', 300);
   insert into enrolments (student_id, course_id, source, enrolled_on)
-  values (v_late, v_cmp301, 'carry_over', date '2025-11-18');
+  values (v_late, v_cmp301, 'carry_over', session_day(64));
 
   -- Counted rather than hardcoded: an earlier assertion in this suite cancels
   -- a lecture, and a fixed number here would break on that rather than on
@@ -1058,7 +1073,7 @@ begin
   select count(*) into v_mine
   from session_instances si
   where si.course_id = v_cmp301 and si.status = 'closed'
-    and si.held_on >= date '2025-11-18';
+    and si.held_on >= session_day(64);
 
   select count(*) into v_all
   from session_instances si
@@ -1082,7 +1097,7 @@ begin
   select v_late, si.id, 1.0
   from session_instances si
   where si.course_id = v_cmp301 and si.status = 'closed'
-    and si.held_on >= date '2025-11-18'
+    and si.held_on >= session_day(64)
   order by si.held_on
   limit 1;
 
@@ -1164,13 +1179,13 @@ begin
     'dropping records rather than deletes, so the join date survives'
   );
 
-  update enrolments set enrolled_on = date '2025-09-15'
+  update enrolments set enrolled_on = session_day(0)
    where student_id = v_tunde and course_id = v_sta202;
   perform add_optional_course(v_tunde, v_sta202);
 
   perform assert_true(
     (select enrolled_on from enrolments
-      where student_id = v_tunde and course_id = v_sta202) = date '2025-09-15',
+      where student_id = v_tunde and course_id = v_sta202) = session_day(0),
     're-adding a dropped course keeps its join date, so drop-and-re-add cannot erase absences'
   );
 end $$;
@@ -1210,11 +1225,11 @@ begin
   values (v_student, 'student', 'Eligible', 'Test', '+2348055555555');
   insert into students (id, matric_no, level) values (v_student, 'CMP/2021/555', 400);
   insert into enrolments (student_id, course_id, source, enrolled_on)
-  values (v_student, v_course, 'core', date '2025-09-15');
+  values (v_student, v_course, 'core', session_day(0));
 
   insert into session_instances (id, course_id, held_on, venue_id, type, status, closed_at, created_by)
-  values (v_lecture, v_course, date '2025-10-07', v_venue, 'makeup', 'closed', now(), v_lect),
-         (v_second, v_course, date '2025-10-14', v_venue, 'makeup', 'closed', now(), v_lect);
+  values (v_lecture, v_course, session_day(22), v_venue, 'makeup', 'closed', now(), v_lect),
+         (v_second, v_course, session_day(29), v_venue, 'makeup', 'closed', now(), v_lect);
 
   -- Two lectures held, one attended. 50% — below the line, and below it for a
   -- reason that has nothing to do with money. This block used to make the
@@ -1609,7 +1624,8 @@ begin
   perform reactivate_student(v_halima, v_admin, 'Restoring for the rollover assertions below.');
 
   insert into academic_sessions (id, name, starts_on, ends_on, is_active)
-  values (v_next, '2026/2027', date '2026-09-14', date '2027-07-30', false);
+  values (v_next, to_char(current_date + 120, 'YYYY') || '/' || to_char(current_date + 480, 'YYYY'),
+          current_date + 120, current_date + 300, false);
 
   begin
     perform run_level_rollover(v_session, v_admin, 'Rolling a session into itself.');
@@ -1703,7 +1719,7 @@ begin
   -- marks would return 0, because there are no marks — which is precisely the
   -- floor being tested.
   insert into session_instances (id, course_id, held_on, venue_id, type, status, closed_at, created_by)
-  values (v_paper, v_course, date '2026-02-10', v_venue, 'makeup', 'closed', now(), v_lect);
+  values (v_paper, v_course, session_day(88), v_venue, 'makeup', 'closed', now(), v_lect);
 
   insert into session_scores (student_id, session_instance_id, score, source)
   values (v_student, v_paper, 0, 'manually_entered');
@@ -1742,7 +1758,7 @@ begin
   -- never answered it, so re-scoring would legitimately produce 0 against an
   -- existing 1.0. The correction still may not dock her.
   insert into session_instances (id, course_id, held_on, venue_id, type, status, closed_at, created_by)
-  values (v_full, v_course, date '2026-02-17', v_venue, 'makeup', 'closed', now(), v_lect);
+  values (v_full, v_course, session_day(89), v_venue, 'makeup', 'closed', now(), v_lect);
 
   insert into checkpoints (id, session_instance_id, token, expires_at, issued_by)
   values (v_cp, v_full, '4417', now() + interval '1 hour', v_lect);
@@ -1975,7 +1991,7 @@ begin
   insert into compliance_statuses (student_id, academic_session_id, state)
   values (v_student, v_session, 'uncleared');
   insert into enrolments (student_id, course_id, source, enrolled_on)
-  values (v_student, '66666666-6666-6666-6666-666666666601', 'core', date '2025-09-15');
+  values (v_student, '66666666-6666-6666-6666-666666666601', 'core', session_day(0));
 
   perform assert_true(
     dues_balance_kobo(v_student, v_session) = 500000,
@@ -2386,7 +2402,54 @@ declare
   v_before  numeric;
   v_written integer;
   v_extra   uuid := gen_random_uuid();
+  v_falling uuid := gen_random_uuid();
+  v_faller  uuid := gen_random_uuid();
+  v_steady  uuid := gen_random_uuid();
+  v_nearly  uuid := gen_random_uuid();
+  v_fixture uuid;
+  v_entry   uuid;
+  i         integer;
 begin
+  -- ------------------------------------------------------------------------
+  -- A course of its own, with two students and two shapes
+  -- ------------------------------------------------------------------------
+  insert into courses (id, academic_session_id, code, title, level, kind, credit_units, semester, lecturer_id)
+  values (v_falling, '11111111-1111-1111-1111-111111111111', 'CMP 391', 'Forecast Fixture',
+          300, 'core', 3, 1, '33333333-3333-3333-3333-333333333301');
+
+  -- A weekly slot, so lectures_remaining() has something to count. Without one
+  -- the course projects at its current rate and there is nothing to forecast.
+  insert into timetable_entries (academic_session_id, course_id, day_of_week, start_time, end_time, venue_id)
+  values ('11111111-1111-1111-1111-111111111111', v_falling, 2, '09:00', '11:00',
+          '22222222-2222-2222-2222-222222222201')
+  returning id into v_entry;
+
+  insert into profiles (id, role, surname, first_name, phone)
+  values (v_faller, 'student', 'Falling', 'Away', '+2348050000401'),
+         (v_steady, 'student', 'Steady', 'Hand', '+2348050000402');
+  insert into students (id, matric_no, level)
+  values (v_faller, 'CMP/2021/821', 300), (v_steady, 'CMP/2021/822', 300);
+  insert into enrolments (student_id, course_id, source, enrolled_on)
+  values (v_faller, v_falling, 'core', session_day(0)),
+         (v_steady, v_falling, 'core', session_day(0));
+
+  -- Thirteen lectures. The faller attends ten straight and then misses three;
+  -- the steady one attends all thirteen.
+  for i in 1..13 loop
+    v_fixture := gen_random_uuid();
+    insert into session_instances (id, course_id, timetable_entry_id, held_on, venue_id,
+                                  type, status, closed_at, created_by)
+    values (v_fixture, v_falling, v_entry, session_day(i * 6),
+            '22222222-2222-2222-2222-222222222201',
+            'recurring', 'closed', now(), '33333333-3333-3333-3333-333333333301');
+
+    insert into session_scores (student_id, session_instance_id, score, source)
+    values (v_faller, v_fixture, case when i <= 10 then 1.0 else 0 end, 'digital'),
+           (v_steady, v_fixture, 1.0, 'digital');
+  end loop;
+
+  perform compute_risk_predictions();
+
   v_written := compute_risk_predictions();
   perform assert_true(v_written > 0, 'the advisory baseline writes predictions from real attendance');
 
@@ -2396,20 +2459,74 @@ begin
   select predicted_pct into v_before
   from risk_predictions where student_id = v_halima and course_id = v_cmp301;
 
+  -- The assertion this replaced was the whole problem. It required the
+  -- prediction to EQUAL the student's rate so far, which is not a prediction —
+  -- it is the number the meter already shows, copied into a second table. A
+  -- student who attended ten lectures and then stopped read 76.92% on both, sat
+  -- comfortably above the line, and nothing warned anybody.
+  --
+  -- Asserted against a course of its own rather than against CMP 301: earlier
+  -- blocks in this suite add lectures to CMP 301, which moves the live
+  -- percentage of every student on it, and a test whose premise ("she is above
+  -- the line today") is quietly falsified by an unrelated block is a test that
+  -- fails for the wrong reason.
   perform assert_true(
-    v_before = round(
-      (select coalesce(sum(ss.score), 0) / count(si.id) * 100
-       from session_instances si
-       left join session_scores ss
-         on ss.session_instance_id = si.id and ss.student_id = v_halima
-       where si.course_id = v_cmp301 and si.status = 'closed'), 2),
-    'the prediction is the student''s own rate carried forward, not a number from anywhere else'
+    attendance_pct(v_faller, v_falling) >= 75,
+    'a student who attended ten straight and then missed three is above the line today'
+  );
+
+  perform assert_true(
+    (select predicted_pct from risk_predictions
+      where student_id = v_faller and course_id = v_falling) < 75,
+    'and the forecast has them finishing below it — a scoreboard would show them green and say nothing'
+  );
+
+  perform assert_true(
+    (select trend from risk_predictions
+      where student_id = v_faller and course_id = v_falling) < 0,
+    'the trend is what carries that: negative means falling away'
+  );
+
+  perform assert_true(
+    (select tier from risk_predictions
+      where student_id = v_faller and course_id = v_falling) = 'critical',
+    'projected under 75% is Critical, whatever the current percentage says'
+  );
+
+  -- The two numbers every alert is written from. A warning that says "your
+  -- attendance is low" is what these exist to prevent.
+  perform assert_true(
+    (select must_attend from risk_predictions
+      where student_id = v_faller and course_id = v_falling) > 0,
+    'a student below the line is told exactly how many lectures they must attend'
+  );
+
+  perform assert_true(
+    (select must_attend + can_still_miss from risk_predictions
+      where student_id = v_faller and course_id = v_falling)
+    = (select lectures_expected - lectures_held from risk_predictions
+        where student_id = v_faller and course_id = v_falling),
+    'and the two numbers account for every remaining lecture between them'
+  );
+
+  -- A student attending steadily is Safe, and the same machinery says so —
+  -- otherwise "Critical" means only that the model is pessimistic.
+  perform assert_true(
+    (select tier from risk_predictions
+      where student_id = v_steady and course_id = v_falling) = 'safe',
+    'a student attending steadily is projected Safe by the same fit'
+  );
+
+  perform assert_true(
+    (select can_still_miss from risk_predictions
+      where student_id = v_steady and course_id = v_falling) > 0,
+    'and is told how many they can afford to miss, which is the number a student on track reads'
   );
 
   -- And it moves with the attendance. A prediction that did not would be a
   -- constant wearing a percentage sign.
   insert into session_instances (id, course_id, held_on, venue_id, type, status, closed_at, created_by)
-  values (v_extra, v_cmp301, date '2026-03-03', '22222222-2222-2222-2222-222222222201',
+  values (v_extra, v_cmp301, session_day(90), '22222222-2222-2222-2222-222222222201',
           'makeup', 'closed', now(), '33333333-3333-3333-3333-333333333301');
 
   insert into session_scores (student_id, session_instance_id, score, source)
@@ -2432,15 +2549,82 @@ begin
   );
 
   perform assert_true(
+    (select tier from risk_predictions
+      where student_id = v_chidera and course_id = v_mth205) = 'critical',
+    'and it is Critical on its own, rather than averaged away against a course she does attend'
+  );
+
+  perform assert_true(
     (select pattern from risk_predictions
       where student_id = v_chidera and course_id = v_mth205) = 'disengagement',
     'not turning up at all reads as disengagement'
   );
 
+  -- Asserted against the steady student rather than against Tunde. Tunde sits
+  -- at exactly 75% on MTH 205 and drifts very slightly down, which under a
+  -- scoreboard was "fine" and under a forecast is a student heading below the
+  -- line — correctly, and the assertion that called him fine was asserting the
+  -- old semantics.
   perform assert_true(
     (select pattern from risk_predictions
-      where student_id = v_tunde and course_id = v_mth205) is null,
+      where student_id = v_steady and course_id = v_falling) is null,
     'a student who is not falling short carries no pattern — a label that explains nothing is noise'
+  );
+
+  -- And Tunde is §5.2's Watch band, exactly: sitting on 75% with a slightly
+  -- falling trend, projected to land just above the line with no buffer at
+  -- all. A scoreboard says 75% and says nothing; Watch says "one illness from
+  -- ineligible", which is the true thing.
+  perform assert_true(
+    attendance_pct(v_tunde, v_mth205) = 75.00,
+    'Tunde is on exactly 75% today'
+  );
+
+  perform assert_true(
+    (select tier from risk_predictions
+      where student_id = v_tunde and course_id = v_mth205) = 'watch',
+    'and lands in Watch — on track for the line itself, with nothing spare'
+  );
+
+  perform assert_true(
+    (select trend from risk_predictions
+      where student_id = v_tunde and course_id = v_mth205) < 0,
+    'because his trend is falling, which is what turns "fine" into "watch this"'
+  );
+
+  -- The over-extrapolation guard. An early version projected the OLS slope
+  -- forward lecture by lecture, and one absence in ten was a steep enough
+  -- slope to project a 90% student down to 54%. Warning that student is worse
+  -- than useless: an alert system that cries wolf in week six is one nobody
+  -- reads in week eleven, when it is the only thing that could have helped.
+  perform assert_true(
+    (select predicted_pct from risk_predictions
+      where student_id = v_steady and course_id = v_falling) >= 80,
+    'a student who has attended everything is projected Safe, not talked into a panic'
+  );
+
+  -- The exact shape that broke it: nine of ten, with the single absence late
+  -- enough in the sequence to make the slope steep. Nothing about that student
+  -- is in trouble, and a forecast that says otherwise has disqualified itself.
+  insert into profiles (id, role, surname, first_name, phone)
+  values (v_nearly, 'student', 'Nearly', 'Perfect', '+2348050000403');
+  insert into students (id, matric_no, level) values (v_nearly, 'CMP/2021/823', 300);
+  insert into enrolments (student_id, course_id, source, enrolled_on)
+  values (v_nearly, v_falling, 'core', session_day(0));
+
+  insert into session_scores (student_id, session_instance_id, score, source)
+  select v_nearly, si.id,
+         case when row_number() over (order by si.held_on) = 9 then 0 else 1.0 end,
+         'digital'
+  from session_instances si
+  where si.course_id = v_falling and si.status = 'closed';
+
+  perform compute_risk_predictions();
+
+  perform assert_true(
+    (select tier from risk_predictions
+      where student_id = v_nearly and course_id = v_falling) = 'safe',
+    'missing one lecture of thirteen leaves a student Safe — the forecast is damped, not extrapolated'
   );
 
   -- The one that matters. A prediction is about the future; eligibility is a
@@ -2463,6 +2647,204 @@ begin
     (select predicted_pct from risk_predictions
       where student_id = v_halima and course_id = v_cmp301) < 99.99,
     'recomputing replaces stale predictions rather than leaving them beside the new ones'
+  );
+end $$;
+
+
+-- ---------------------------------------------------------------------------
+-- Turning a forecast into a warning
+--
+-- The forecast is only half of §5. The other half is that something happens
+-- because of it, on channels that scale with how bad it is, saying a sentence
+-- a student can act on.
+-- ---------------------------------------------------------------------------
+
+do $$
+declare
+  v_session  uuid := '11111111-1111-1111-1111-111111111111';
+  v_course   uuid := gen_random_uuid();
+  v_entry    uuid;
+  v_critical uuid := gen_random_uuid();
+  v_watchful uuid := gen_random_uuid();
+  v_doomed   uuid := gen_random_uuid();
+  v_lecture  uuid;
+  v_final    uuid;
+  v_sent     integer;
+  v_again    integer;
+  v_note     uuid;
+  v_body     text;
+  v_pct      numeric;
+  v_eligible boolean;
+  i          integer;
+begin
+  insert into courses (id, academic_session_id, code, title, level, kind, credit_units, semester, lecturer_id)
+  values (v_course, v_session, 'STA 391', 'Alert Fixture', 300, 'core', 3, 1,
+          '33333333-3333-3333-3333-333333333301');
+
+  insert into timetable_entries (academic_session_id, course_id, day_of_week, start_time, end_time, venue_id)
+  values (v_session, v_course, 4, '13:00', '15:00', '22222222-2222-2222-2222-222222222201')
+  returning id into v_entry;
+
+  insert into profiles (id, role, surname, first_name, phone)
+  values (v_critical, 'student', 'Critical', 'Case', '+2348050000501'),
+         (v_watchful, 'student', 'Watchful', 'Case', '+2348050000502'),
+         (v_doomed, 'student', 'Beyond', 'Saving', '+2348050000503');
+  insert into students (id, matric_no, level)
+  values (v_critical, 'CMP/2021/831', 300), (v_watchful, 'CMP/2021/832', 300),
+         (v_doomed, 'CMP/2021/833', 300);
+  insert into enrolments (student_id, course_id, source, enrolled_on)
+  values (v_critical, v_course, 'core', session_day(0)),
+         (v_watchful, v_course, 'core', session_day(0)),
+         (v_doomed, v_course, 'core', session_day(0));
+
+  for i in 1..10 loop
+    v_lecture := gen_random_uuid();
+    insert into session_instances (id, course_id, timetable_entry_id, held_on, venue_id,
+                                  type, status, closed_at, created_by)
+    values (v_lecture, v_course, v_entry, session_day(i * 8),
+            '22222222-2222-2222-2222-222222222201', 'recurring', 'closed', now(),
+            '33333333-3333-3333-3333-333333333301');
+
+    -- One student misses more than half; the other misses one late on, which
+    -- is enough to shave the buffer without taking them under.
+    insert into session_scores (student_id, session_instance_id, score, source)
+    values
+      -- Below the line and falling, but not beyond saving: there is still
+      -- slack, so this is a Critical warning rather than the final one.
+      (v_critical, v_lecture, case when i <= 7 then 1.0 else 0 end, 'digital'),
+      -- On track with almost no buffer.
+      (v_watchful, v_lecture, case when i = 9 then 0 else 1.0 end, 'digital'),
+      -- Beyond saving: cannot reach 75% even by attending everything left.
+      (v_doomed, v_lecture, 0, 'digital');
+  end loop;
+
+  perform compute_risk_predictions();
+
+  perform assert_true(
+    (select tier from risk_predictions where student_id = v_critical and course_id = v_course)
+      = 'critical',
+    'a student projected under 75% is Critical'
+  );
+
+  -- ------------------------------------------------------------------------
+  -- The channels scale with the tier (§5.3)
+  -- ------------------------------------------------------------------------
+  v_sent := send_risk_alerts();
+  perform assert_true(v_sent > 0, 'a forecast below the line produces a warning');
+
+  select notification_id into v_note
+  from risk_alerts_sent
+  where student_id = v_critical and course_id = v_course;
+
+  perform assert_true(
+    exists (select 1 from notification_deliveries
+             where notification_id = v_note and channel = 'whatsapp'),
+    'Critical reaches WhatsApp'
+  );
+
+  perform assert_true(
+    exists (select 1 from notification_deliveries
+             where notification_id = v_note and channel = 'web_push'),
+    'and Web Push'
+  );
+
+  perform assert_true(
+    not exists (select 1 from notification_deliveries
+                 where notification_id = v_note and channel = 'sms'),
+    'but not SMS while there is still slack — a text in week six leaves nothing to escalate to in week eleven'
+  );
+
+  perform assert_true(
+    (select can_still_miss from risk_predictions
+      where student_id = v_critical and course_id = v_course) > 0,
+    'because this student can still afford to miss one'
+  );
+
+  -- The student who cannot reach 75% however hard they try. There is nothing
+  -- after this warning, which is exactly what an SMS is for: it costs money,
+  -- it needs no data connection, and it is the last thing the system can do.
+  select notification_id into v_final
+  from risk_alerts_sent where student_id = v_doomed and course_id = v_course;
+
+  perform assert_true(
+    (select can_still_miss from risk_predictions
+      where student_id = v_doomed and course_id = v_course) = 0,
+    'a student with no slack left has nothing they can afford to miss'
+  );
+
+  perform assert_true(
+    exists (select 1 from notification_deliveries
+             where notification_id = v_final and channel = 'sms'),
+    'and only they earn the SMS — the final warning, on the channel that needs no data'
+  );
+
+  perform assert_true(
+    (select body from notifications where id = v_final) like '%every one of them%',
+    'and it says so plainly rather than repeating the general warning'
+  );
+
+  -- ------------------------------------------------------------------------
+  -- The copy names the course and the number (§5.4)
+  -- ------------------------------------------------------------------------
+  select body into v_body from notifications where id = v_note;
+
+  perform assert_true(
+    v_body like '%STA 391%',
+    'the warning names the course — a student takes four of them'
+  );
+
+  perform assert_true(
+    v_body ~ '[0-9]+ (of the )?[0-9]* ?lectures',
+    'and names a number of lectures rather than saying "your attendance is low"'
+  );
+
+  -- ------------------------------------------------------------------------
+  -- Once per tier, not once per night
+  -- ------------------------------------------------------------------------
+  v_again := send_risk_alerts();
+  perform assert_true(
+    v_again = 0,
+    'nothing has changed, so nothing is sent — an alert that repeats nightly is one a student mutes'
+  );
+
+  perform assert_true(
+    (select count(*) from risk_alerts_sent
+      where student_id = v_critical and course_id = v_course) = 1,
+    'and exactly one warning is on record for that tier'
+  );
+
+  -- ------------------------------------------------------------------------
+  -- The what-if calculator (§5.5)
+  -- ------------------------------------------------------------------------
+  select resulting_pct, still_eligible into v_pct, v_eligible
+  from attendance_what_if(v_watchful, v_course, 0);
+
+  perform assert_true(
+    v_eligible,
+    'missing nothing from here keeps a student on track above the line'
+  );
+
+  select resulting_pct into v_body from attendance_what_if(v_watchful, v_course, 0);
+  select resulting_pct, still_eligible into v_pct, v_eligible
+  from attendance_what_if(v_watchful, v_course, 999);
+
+  perform assert_true(
+    not v_eligible,
+    'missing every remaining lecture does not'
+  );
+
+  perform assert_true(
+    v_pct = (select resulting_pct from attendance_what_if(v_watchful, v_course,
+              (select remaining from attendance_what_if(v_watchful, v_course, 0)))),
+    'asking about more lectures than remain is answered as "all of them" rather than as nonsense'
+  );
+
+  -- The calculator and the eligibility rule are the same arithmetic, which is
+  -- why the calculator lives in the database rather than in the browser.
+  perform assert_true(
+    (select resulting_pct from attendance_what_if(v_watchful, v_course, 0)) >=
+    (select resulting_pct from attendance_what_if(v_watchful, v_course, 1)),
+    'missing one more can only ever lower the result'
   );
 end $$;
 
@@ -2616,10 +2998,10 @@ begin
   values (v_student, 'student', 'Permit', 'Holder', '+2348056666666');
   insert into students (id, matric_no, level) values (v_student, 'STA/2021/444', 400);
   insert into enrolments (student_id, course_id, source, enrolled_on)
-  values (v_student, v_course, 'core', date '2025-09-15');
+  values (v_student, v_course, 'core', session_day(0));
 
   insert into session_instances (id, course_id, held_on, venue_id, type, status, closed_at, created_by)
-  values (v_lecture, v_course, date '2025-10-07', v_venue, 'makeup', 'closed', now(), v_lect);
+  values (v_lecture, v_course, session_day(22), v_venue, 'makeup', 'closed', now(), v_lect);
 
   insert into session_scores (student_id, session_instance_id, score, source)
   values (v_student, v_lecture, 1.0, 'digital');

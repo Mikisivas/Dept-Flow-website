@@ -24,6 +24,37 @@ export type AppRole = "student" | "lecturer" | "hod" | "admin";
 
 export type RiskPattern = "disengagement" | "partial_attendance";
 
+/**
+ * §5.2, and the three bands are not arbitrary. 75% is the eligibility rule, so
+ * Watch is where a student is projected to land ON the line with nothing
+ * spare — one illness from ineligible. Safe means there is room for something
+ * to go wrong.
+ */
+export type RiskTier = "safe" | "watch" | "critical";
+
+/**
+ * What the warning system knows about one student on one course.
+ *
+ * `currentPct` and `projectedPct` are different numbers and the gap between
+ * them is the product: a student at 77% heading for 66% is the case a
+ * scoreboard shows green and says nothing about.
+ */
+export type CourseForecast = {
+  courseId: string;
+  courseCode: string;
+  tier: RiskTier;
+  projectedPct: number;
+  /** Percentage points per lecture. Negative is a student falling away. */
+  trend: number;
+  lecturesHeld: number;
+  lecturesExpected: number;
+  /** Of the lectures still to come, how many are needed to reach the line. */
+  mustAttend: number;
+  /** And how many can be missed. The number a student on track actually reads. */
+  canStillMiss: number;
+  pattern: RiskPattern | null;
+};
+
 export type ProgrammeCode = "MTH" | "CMP" | "STA";
 
 /** One lecture, as the AttendanceStrip draws it. */

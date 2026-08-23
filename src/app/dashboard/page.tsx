@@ -6,6 +6,7 @@ import { AttendanceMeter } from "@/components/attendance-meter";
 import { AttendanceLegend, AttendanceStrip } from "@/components/attendance-strip";
 import { ComplianceBanner } from "@/components/compliance-banner";
 import { EmptyState } from "@/components/empty-state";
+import { ForecastPanel } from "@/components/forecast-panel";
 import { StatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 import { requireStudent } from "@/lib/data/require-student";
@@ -22,12 +23,15 @@ export const metadata: Metadata = {
  * Order is not cosmetic:
  *   1. compliance state, with the fix attached — never under a greeting
  *   2. overall attendance against the 75% line
- *   3. per-course meters and attendance strips
- *   4. the risk nudge, worded by pattern
+ *   3. where each course is HEADED, and what to do about it
+ *   4. per-course meters and attendance strips
  *   5. today's classes
+ *
+ * 3 sits above 4 deliberately. Where a student is going is more actionable
+ * than where they are, and a student who reads one section reads the first.
  */
 export default async function DashboardPage() {
-  const { student, compliance, dues, courses, today, risk } = await requireStudent();
+  const { student, compliance, dues, courses, today, forecasts } = await requireStudent();
 
   const totalAttended = courses.reduce((sum, course) => sum + course.attendedCount, 0);
   const totalHeld = courses.reduce((sum, course) => sum + course.sessionsHeld, 0);
@@ -88,24 +92,22 @@ export default async function DashboardPage() {
             />
           </section>
 
-          {risk ? (
-            <section className="mt-4 rounded-lg border border-danger p-4">
-              <StatusBadge variant="atRisk" />
-              <p className="mt-2 text-[15px] leading-relaxed text-slate">
-                {risk.pattern === "partial_attendance" ? (
-                  <>
-                    Your attendance in{" "}
-                    <strong className="font-semibold text-ink">{risk.courseCode}</strong> has become
-                    patchy. Attending the next few would bring you back toward 75%.
-                  </>
-                ) : (
-                  <>
-                    You&apos;ve missed several classes in a row in{" "}
-                    <strong className="font-semibold text-ink">{risk.courseCode}</strong>. Attending
-                    the next few would bring you back toward 75%.
-                  </>
-                )}
-              </p>
+          {/* Where each course is HEADED, worst first.
+              This was one sentence about whichever course had the lowest
+              number, which meant a student in trouble on two courses heard
+              about one of them. The forecast is per course because the action
+              is per course: "attend three more of CMP 301" is something a
+              student can do, and "your attendance is low" is not. */}
+          {forecasts.length > 0 ? (
+            <section aria-labelledby="forecast-heading" className="mt-6">
+              <h2 id="forecast-heading" className="text-[13px] font-semibold text-slate">
+                Where you&apos;re heading
+              </h2>
+              <div className="mt-3 flex flex-col gap-3">
+                {forecasts.map((forecast) => (
+                  <ForecastPanel key={forecast.courseId} forecast={forecast} />
+                ))}
+              </div>
             </section>
           ) : null}
 

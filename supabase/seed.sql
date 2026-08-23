@@ -36,8 +36,30 @@ end $$;
 -- Academic session, venues, dues
 -- ---------------------------------------------------------------------------
 
+-- ---------------------------------------------------------------------------
+-- Everything below is dated RELATIVE TO TODAY
+-- ---------------------------------------------------------------------------
+--
+-- This seed used to carry absolute dates, and it rotted: written during a
+-- session that was in progress, it described a session that had ENDED by the
+-- time anyone ran it again. That was survivable while the product reported the
+-- past. It is not survivable now — a forecast needs lectures still to come, and
+-- against a finished session every projection collapses to the current
+-- percentage. The demo would show a warning system that never warns anybody,
+-- which is precisely the failure the rebuild exists to fix.
+--
+-- So: the session started thirteen weeks ago and runs for seventeen more.
+-- Thirteen weeks is enough for the trend to mean something, and seventeen
+-- ahead is enough that a student who has stopped attending is genuinely
+-- projected to fail rather than merely reported as behind.
 insert into academic_sessions (id, name, starts_on, ends_on, is_active) values
-  ('11111111-1111-1111-1111-111111111111', '2025/2026', '2025-09-15', '2026-07-31', true);
+  (
+    '11111111-1111-1111-1111-111111111111',
+    to_char(current_date - 91, 'YYYY') || '/' || to_char(current_date + 119, 'YYYY'),
+    current_date - 91,
+    current_date + 119,
+    true
+  );
 
 insert into venues (id, name) values
   ('22222222-2222-2222-2222-222222222201', 'Lecture Theatre A'),
@@ -45,14 +67,14 @@ insert into venues (id, name) values
 
 -- ₦5,000 = 500000 kobo.
 insert into dues_periods (academic_session_id, resumption_date, dues_amount_kobo) values
-  ('11111111-1111-1111-1111-111111111111', '2025-09-15', 500000);
+  ('11111111-1111-1111-1111-111111111111', current_date - 91, 500000);
 
 -- Seven days from resumption, which is what the department actually allows.
 -- The window is what makes the deadline in the gate a real date rather than a
 -- policy nobody configured — with no row here, attendance is ungated and
 -- confirm_registration() has nothing to backfill from.
 insert into registration_periods (academic_session_id, semester, opens_on, closes_on) values
-  ('11111111-1111-1111-1111-111111111111', 1, '2025-09-15', '2025-09-22');
+  ('11111111-1111-1111-1111-111111111111', 1, current_date - 91, current_date - 84);
 
 -- ---------------------------------------------------------------------------
 -- People
@@ -109,7 +131,7 @@ insert into courses (id, academic_session_id, code, title, level, kind, credit_u
 -- would put all thirteen seeded CMP 301 lectures before every student's
 -- enrolment and give the whole cohort a denominator of zero.
 insert into enrolments (student_id, course_id, source, enrolled_on)
-select s.id, c.id, m.source::enrolment_source, date '2025-09-15'
+select s.id, c.id, m.source::enrolment_source, current_date - 91
 from students s
 cross join courses c
 join (values
@@ -170,7 +192,7 @@ declare
   halima_scores  numeric[] := array[1.0, 0, 0, 1.0, 0, 0, 1.0, 0, 1.0, 0, 0, 1.0, 0];
 begin
   for i in 1..13 loop
-    v_day := date '2025-09-16' + (7 * (i - 1));
+    v_day := (current_date - 90) + (7 * (i - 1));
     v_session := gen_random_uuid();
 
     insert into session_instances (
@@ -303,7 +325,7 @@ declare
   i        integer;
 begin
   for i in 1..8 loop
-    v_day := date '2025-09-25' + ((i - 1) * 7);
+    v_day := (current_date - 81) + ((i - 1) * 7);
     v_id  := gen_random_uuid();
 
     insert into session_instances (
@@ -353,11 +375,11 @@ end $$;
 insert into course_registrations (student_id, academic_session_id, semester, status, registered_at)
 values
   ('44444444-4444-4444-4444-444444444401', '11111111-1111-1111-1111-111111111111', 1,
-   'confirmed', timestamptz '2025-09-18 09:14:00+01'),
+   'confirmed', (current_date - 88)::timestamptz + interval '9 hours 14 minutes'),
   ('44444444-4444-4444-4444-444444444402', '11111111-1111-1111-1111-111111111111', 1,
-   'confirmed', timestamptz '2025-09-19 16:02:00+01'),
+   'confirmed', (current_date - 87)::timestamptz + interval '16 hours 2 minutes'),
   ('44444444-4444-4444-4444-444444444403', '11111111-1111-1111-1111-111111111111', 1,
-   'confirmed', timestamptz '2025-09-22 23:11:00+01');
+   'confirmed', (current_date - 84)::timestamptz + interval '23 hours 11 minutes');
 
 -- Last in the file, and it has to be: it reads every lecture and every mark, so
 -- running it before the sections above would predict from half a term.
@@ -370,8 +392,8 @@ values
 -- demo where every student has one number never exercises that at all.
 update profiles
    set whatsapp_phone = '+2348051111111',
-       whatsapp_verified_at = timestamptz '2025-09-19 16:04:00+01',
-       phone_verified_at = timestamptz '2025-09-19 16:02:00+01'
+       whatsapp_verified_at = (current_date - 87)::timestamptz + interval '16 hours 4 minutes',
+       phone_verified_at = (current_date - 87)::timestamptz + interval '16 hours 2 minutes'
  where id = '44444444-4444-4444-4444-444444444402';
 
 update profiles

@@ -5,13 +5,17 @@ Every number below was produced by running these steps against a fresh
 of step — open `/api/health` first, which names any migration that has not been
 run.
 
+The seed is written relative to `current_date`, so the session is always
+mid-term and there are always lectures still to come. A forecast of a term that
+has already ended is not a forecast.
+
 Every seeded account logs in with **`demo-password`**.
 
 | Role | Identifier |
 |---|---|
-| Student — attended but has not paid | `CMP/2021/047` (Chidera Okonkwo) |
-| Student — paid | `CMP/2021/112` (Halima Sanusi) |
-| Student — locked | `MTH/2022/018` (Tunde Adeyemi) |
+| Student — attending, then stopped | `CMP/2021/047` (Chidera Okonkwo) |
+| Student — paid, but far behind | `CMP/2021/112` (Halima Sanusi) |
+| Student — exactly on the line | `MTH/2022/018` (Tunde Adeyemi) |
 | Lecturer | `STF/CMP/014` (Dr Amina Bello) |
 | HOD | `STF/CMP/001` (Dr Nnamdi Eze) |
 | Admin | `STF/ADM/007` (Ibrahim Yusuf) |
@@ -19,102 +23,228 @@ Every seeded account logs in with **`demo-password`**.
 Two browsers, or one plus a private window. Roles are separate sessions, and
 logging in as the lecturer in the same browser signs the student out.
 
+Before you start: run `select compute_risk_predictions(); select
+send_risk_alerts();` in the SQL editor. Both are nightly pg_cron jobs, and the
+walkthrough is about what they produce.
+
 ---
 
 ## 1. The argument, in one screen
 
 Log in as **Chidera** (`CMP/2021/047`).
 
-Her dashboard reads **0%**. She has attended ten of thirteen lectures in
-CMP 301 and every one of them is recorded — the checkpoint strip shows them.
-None of them count, because she has not paid her dues.
+Her CMP 301 attendance reads **76.92%** — above the line, comfortably. A
+scoreboard stops there and tells her she is fine.
 
-This is the whole thesis in one number, and it is worth pausing on: the system
-is not withholding a record, it is withholding *credit* for one. The strip
-shows what she did; the meter shows what it is worth to her.
+Underneath it, the forecast reads **66.5%, Critical**.
 
-**Pay ₦5,000** → Paystack test card `4084 0840 8408 4081`, any future expiry,
-CVV `408`, PIN `0000`, OTP `123456`.
+That gap is the entire product. She attended ten lectures straight and then
+missed the last three, and a percentage cannot tell those two facts apart from
+a student who missed three at the start and has been perfect since. The strip
+shows the shape; the forecast says where the shape is going.
 
-Come back and the same ten sessions now read **76.92%**. Nothing was added.
-Thirteen provisional scores were confirmed in one transaction, and she crossed
-the 75% line without attending anything further.
+Her notification, verbatim from the seed:
 
-Scroll down. Her **MTH 205 is still 0%** — a 200-level course she is carrying
-and has never attended. Eligibility is per course, not per student: paying
-fixed the course she turned up to and did nothing for the one she did not.
+> **CMP 301: you are on course to miss the 75% mark**
+> CMP 301 is projected to finish at 66.5%. Attend 13 of the 17 lectures left
+> and you reach 75%. You can miss 4.
+
+Read that aloud and note what it does not say. Not "your attendance is low" —
+a student cannot act on that. It names the course, the number of lectures, and
+how much room is left.
+
+**Drag the what-if slider.** "What if I miss the next two?" is answered by the
+server, using the same arithmetic that decides permits, so the answer a student
+explores and the answer that bars them from a hall can never disagree.
+
+Now scroll to **MTH 205**, a 200-level course she is carrying and has never
+attended:
+
+> **MTH 205: 75% is no longer reachable**
+> MTH 205 is projected to finish at 0.0%. Even attending all 17 remaining
+> lectures finishes below 75%. Attendance alone cannot fix this now — speak to
+> the department office about a waiver or a dispute.
+
+This is the message worth pausing on. The system could have told her to attend
+everything and reach 75%, and it would have been a lie she could not detect —
+she would have done exactly that for eleven weeks and found out at the permit
+screen. There is a schema test whose only job is to keep that sentence out.
 
 ---
 
-## 2. A lecture, start to finish
+## 2. Escalation, one rung at a time
+
+Still as Chidera, then in the SQL editor:
+
+```sql
+select d.channel, d.status, count(*)
+from notification_deliveries d
+join notifications n on n.id = d.notification_id
+where n.kind = 'attendance_warning'
+group by 1, 2;
+```
+
+Four warnings went out to three students. In-app: 4. Web Push: 4. WhatsApp: 3.
+SMS: 2.
+
+The ladder is deliberate and it is about scarcity, not technology. Watch gets
+in-app and push. Critical adds WhatsApp, which costs the department nothing.
+SMS is spent only where there is nothing left to escalate to — a student who
+gets a text in week six has nothing louder waiting in week eleven.
+
+**Turn on notifications** from `/notifications`. It asks the browser once, from
+behind a button, next to a sentence saying what will arrive: a permission
+prompt fired on page load gets denied, and a denied prompt cannot be asked
+again.
+
+---
+
+## 3. A lecture, start to finish
 
 Log in as **Dr Bello** (`STF/CMP/014`).
 
-Her dashboard lists today's classes from the timetable. **Start session** on
-one, then **issue the first checkpoint** — a four-digit code appears, valid for
-five minutes (`app_config.checkpoint_token_ttl_seconds`).
+Her dashboard lists today's classes from the timetable. **Start session**, then
+**issue the code** — four digits, valid for a few minutes.
 
-In the student's browser, `/attend`, enter the code. It is submitted with the
-phone's position and checked against the venue's geo-fence. The screen does not
-say "Recorded" until the server has said so.
+In the student's browser, `/attend`, enter it. One code, one submission. No
+location, no second checkpoint, nothing to calculate a distance from. Attendance
+is trust-based now, and the code on the board is the whole mechanism.
 
-Issue the second checkpoint, submit it, then **End session**. Everyone present
-for both is scored 1.0; one checkpoint only is 0.5; neither is 0. Marks land
-provisional for anyone who has not paid.
+The screen does not say "Recorded" until the server has said so. Prove it:
+switch the phone to airplane mode and submit. It reads
 
-Coordinates are never displayed, and the student never sees the code before the
-lecturer issues it — students have no read access to `checkpoints` at all.
+> **Waiting for a connection — you are not recorded yet**
 
----
+with the instruction to leave the tab open. Turn the network back on and it
+sends itself, carrying the timestamp from the moment the student pressed
+Submit rather than the moment the signal returned. A code answered in the hall
+and delivered from the car park is a record of the hall.
 
-## 3. A dispute, corrected
-
-Log in as the **HOD** (`STF/CMP/001`) → **Disputes**.
-
-Halima says she was in the hall for the lecture of 28 October but was marked
-outside. Her score for it is **0.5**.
-
-**Correct** it, with a reason. Her score becomes **1.0**, and the audit row
-records `score_before: 0.5, score_after: 1.0` — not merely that something
-changed. Six months later at an exam board, "it changed" is not an answer.
-
-**Uphold the rejection** is equally a decision: it also takes a reason and also
-writes a row. A student told no is owed the same record as one told yes.
+**End session**, and `resolve_session_score()` scores everyone: present or
+absent, 1 or 0. There are no half marks any more, because there is no second
+checkpoint to be half of.
 
 ---
 
-## 4. A waiver, granted
+## 4. What gates attendance now
 
-Still as the HOD → **Waivers**.
+Log in as the **admin** → **Configuration**, and look at the registration
+window. Past its deadline, a student who has not confirmed their semester
+registration cannot record attendance at all — `attendance_eligibility()`
+returns `not_registered` and the code screen says so.
 
-Tunde is **locked**: day 30 passed, he never paid, and the payment portal is
-shut to him as well as attendance recording. His counted attendance is
-**0.00%** — though he holds 4.5 marks across six lectures.
+Confirming late does not quietly forgive the gap. `confirm_registration()`
+stamps `registered_at` on the server and **backfills an absence for every
+lecture held between the deadline and the moment they confirmed**. A student
+who registers in week six has six weeks of absences, because that is what
+happened.
 
-Grant his waiver. He becomes **cleared at exactly 75.00%**.
-
-That is the point to make aloud: the waiver did not change his attendance by
-one lecture. It changed whether the attendance counted, and that was the
-difference between not sitting the paper and sitting it.
-
----
-
-## 5. Freezing the eligibility list
-
-HOD → **Eligibility** → pick a course → **Authorize list**.
-
-The list freezes with the HOD's name and a timestamp, and every percentage is
-**copied as it stands**. Prove it afterwards: clear another student on that
-course and their live percentage moves while the authorized list does not.
-
-That is what freezing is for. A grace period opened next week must not
-retroactively rewrite the list a board already sat with, and the database
-refuses any edit to the entries rather than trusting the screen to hide the
-buttons.
+The HOD can grant an individual exception where a student has a real reason —
+under **Exceptions**, with a reason and an audit row.
 
 ---
 
-## 6. Governance
+## 5. Payment, which gates nothing here
+
+Log back in as **Chidera**. She owes **₦5,000** and has paid nothing.
+
+Her attendance still counts. Every one of those ten CMP 301 lectures is
+counted, her percentage is 76.92%, and her forecast runs on the same numbers as
+everybody else's. This is the change from the original design: dues used to
+decide whether a lecture counted at all.
+
+**Pay ₦5,000** → Paystack test card `4084 0840 8408 4081`, any future expiry,
+CVV `408`, PIN `0000`, OTP `123456`. Nothing about her attendance moves,
+because there is nothing for it to move.
+
+Pay half instead, from a second account, and watch the balance run down rather
+than the payment being refused for not matching. Instalments are how students
+actually pay.
+
+---
+
+## 6. Where dues and attendance meet: the permit
+
+`/permit`, as **Chidera**. She has not paid, and the seed ships no authorized
+eligibility list, so the first thing she sees is the live panel and
+
+> **Not issued yet** — your permit becomes available once the Head of
+> Department authorizes the eligibility list for your courses.
+
+That is the department not having decided, which is a different thing from
+having decided against her, and the screen never collapses the two.
+
+**Authorize the list.** As the HOD (`STF/CMP/001`) → **Eligibility** → CMP 301
+→ **Authorize list**. Come back as Chidera and the headline changes:
+
+> Your attendance clears you — your dues do not.
+
+The department has cleared her for the paper she is above the line in, and the
+permit prints once the ₦5,000 outstanding is paid. Both conditions, and the
+screen says which one is missing.
+
+Above it — and above every one of those states, including this one — the live
+panel says exactly what is outstanding, per course:
+
+| | |
+|---|---|
+| Dues | ₦5,000 outstanding |
+| CMP 301 · 76.92% | above the 75% line |
+| MTH 205 · 0.00% | attending all 17 remaining lectures still finishes below 75% |
+
+Now look at **Halima** (`CMP/2021/112`), who has paid in full and is on
+**38.46%** in CMP 301. She has the opposite half of the problem, and her panel
+says so: dues clear, one course out of reach. Two students, two different
+things missing, and neither of them is shown a flat "not eligible".
+
+Once a permit issues, it carries a **QR code** to `/check/permit`. The QR is
+not what makes it hard to forge — anyone can generate a QR. What makes it hard
+is that it carries a reference the database has to recognise, and the page it
+opens reads the record from the server rather than from the paper: edit a name
+on a screenshot and the code still opens the real record, under the real name.
+The reference is printed beside it in full, because a check that only works
+with a working camera fails at the one door it was built for.
+
+---
+
+## 7. The HOD's afternoon
+
+Log in as the **HOD** (`STF/CMP/001`).
+
+**At-risk students** is sorted by severity and every row is a link. "Chidera is
+projected at 66.5% in CMP 301" is where a conversation starts, not where it
+ends — the drill-through shows whether she stopped coming in week four or has
+been at half marks all term, which are the same number on the list and
+completely different meetings.
+
+Each row also carries the number that makes the meeting useful: **13 of the 17
+remaining**. Not a percentage the student already knew.
+
+**Message students** — one student, a whole level, or everyone currently
+registered for a course. The audience count is fetched from the server before
+you send, because "message 412 students" is a different decision from "message
+12". Messages go out on the same channels as the warnings, with the same
+delivery record, and never on SMS: an HOD who could spend the SMS budget on a
+routine notice would eventually spend it, and then the final attendance warning
+arrives on a channel nobody reads.
+
+**Payment compliance** exists *because* payment was decoupled. Dues used to be
+readable off the attendance screens as a side effect of gating them; they gate
+nothing now, so the department's money would be invisible unless there were
+somewhere to look. Three columns rather than paid/unpaid — a student who has
+paid half is not a student who has not paid.
+
+**Eligibility** → pick a course → **Authorize list**, which you did in §6. The
+list freezes with the HOD's name and a timestamp and every percentage is copied
+as it stands. Prove
+it afterwards: change another student's attendance on that course and their
+live percentage moves while the authorized list does not. A board that has sat
+must not be rewritten by next week's grace period, and the database refuses the
+edit rather than trusting the screen to hide the button.
+
+---
+
+## 8. Governance
 
 Log in as the **admin** (`STF/ADM/007`).
 
@@ -127,9 +257,10 @@ Log in as the **admin** (`STF/ADM/007`).
   many new, changed, already claimed. Rows a student has already registered
   against are never rewritten, and rows absent from the paste are never
   deleted.
-- **Registration disputes** — revoking frees the matric number *and* freezes
-  the claiming account, because the real student cannot register while their
-  own number is marked claimed.
+- **No individual risk data.** The admin has no at-risk list, no forecast and
+  no student record. That is not a hidden menu item — `risk_predictions` is
+  readable by the student it concerns and the HOD, and by nobody else. Ask to
+  see it as the admin and the row is simply not there.
 
 ---
 
@@ -137,25 +268,33 @@ Log in as the **admin** (`STF/ADM/007`).
 
 Say so rather than being asked.
 
-- **A trained model.** The advisory signal is computed — a student's own
-  attendance rate carried forward, per course — rather than fitted. Say why if
-  asked: the department has one session of history, and a classifier trained on
-  three students has memorised them rather than learned anything. The rule also
-  has the property a first-deployment model could not: a student flagged by it
-  can be told exactly why. `risk_predictions` is the seam, and swapping the
-  writer changes no reader.
-- **SMS delivery.** The OTP seam throws in production; in development the code
-  is printed to the server terminal. Registration and password reset are
-  otherwise complete.
+- **A trained model.** The advisory signal is computed — half a student's
+  recent attendance, half their whole term, carried forward per course — rather
+  than fitted. Say why if asked: the department has one session of history, and
+  a classifier trained on three students has memorised them rather than learned
+  anything. The rule also has the property a first-deployment model could not:
+  a student flagged by it can be told exactly why. `risk_predictions` is the
+  seam, and swapping the writer changes no reader.
+- **WhatsApp and SMS delivery.** Both seams report failure in production rather
+  than pretending to have sent. In development they print to the server
+  terminal. The queue, the fallback and the delivery record around them are
+  real and tested — what is missing is one HTTP call per provider, which
+  depends on which number the department registers with Meta.
 - **Deployment.**
 
-## Two things to set up first
+Web Push **is** wired end to end. It needs only VAPID keys —
+`npx web-push generate-vapid-keys`.
 
-- **pg_cron.** Without it nothing advances the compliance ladder on a schedule,
-  so no student ever locks on their own. The seed has one locked student by
-  hand, which is enough for the walkthrough. `/api/health` reports whether the
-  extension is installed; the migration comment in
-  `20260728001600_compliance_schedule.sql` has the `cron.schedule` call.
+## Three things to set up first
+
+- **pg_cron.** Without it the forecast never refreshes, no warnings go out, and
+  no lecture reminder fires — which is most of the system. `/api/health`
+  reports whether the extension is installed. Run
+  `compute_risk_predictions()`, `send_risk_alerts()` and
+  `send_lecture_reminders()` by hand for the walkthrough.
 - **`NEXT_PUBLIC_SITE_URL`.** Paystack sends the student back here after
-  checkout. Left unset it defaults to `localhost:3000`, which lands a phone on
-  its own loopback.
+  checkout, and the permit's QR code is built from it. Left unset it defaults
+  to `localhost:3000`, which lands a phone on its own loopback.
+- **VAPID keys**, if you want to demonstrate a notification arriving with the
+  site closed. Without them the push channel reports failure and the escalation
+  falls through to WhatsApp, which is the correct behaviour and a duller demo.

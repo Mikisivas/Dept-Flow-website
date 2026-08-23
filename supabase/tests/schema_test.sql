@@ -2778,9 +2778,35 @@ begin
     'and only they earn the SMS — the final warning, on the channel that needs no data'
   );
 
+  -- The copy bug this block exists to keep out.
+  --
+  -- This student cannot reach 75% by attending everything that is left —
+  -- zero of ten, with seventeen to come, finishes at 17/27 = 63%. The warning
+  -- used to tell them "you have 17 lectures left and need every one of them to
+  -- reach 75%", which is a promise the arithmetic cannot keep.
+  --
+  -- It is the worst kind of wrong available here: undetectable by the student.
+  -- They do exactly what the message asked, attend for eleven weeks, and find
+  -- out at the permit screen. Every other warning in this system is designed
+  -- to be acted on; that one could only be acted on uselessly.
   perform assert_true(
-    (select body from notifications where id = v_final) like '%every one of them%',
-    'and it says so plainly rather than repeating the general warning'
+    lectures_needed(v_doomed, v_course) > lectures_remaining(v_course),
+    'this student cannot reach the threshold however many lectures they attend'
+  );
+
+  perform assert_true(
+    (select body from notifications where id = v_final) like '%finishes below 75%%',
+    'so the warning says the line is gone'
+  );
+
+  perform assert_true(
+    (select body from notifications where id = v_final) not like '%need every one of them to reach 75%%',
+    'and never promises a threshold the arithmetic cannot deliver'
+  );
+
+  perform assert_true(
+    (select body from notifications where id = v_final) like '%waiver%',
+    'it names the route that is actually left — a waiver or a dispute, not more attendance'
   );
 
   -- ------------------------------------------------------------------------

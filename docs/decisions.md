@@ -1,10 +1,37 @@
 # Dept-Flow — agreed decisions
 
 Decisions taken during the shared-components review, before any code was
-written. Where these disagree with `system-operation-and-logic.md`,
-`ui-build-specification.md` or `dept-flow-design-skill.md`, **these win** — the
-older documents were written earlier and are kept as the reasoning behind the
-design, not as the current specification.
+written. Where these disagree with `ui-build-specification.md` or
+`dept-flow-design-skill.md`, **these win** — those were written earlier and are
+kept as the reasoning behind the design, not as the current specification.
+
+## Superseded by the August 2026 supervisor revision
+
+**`operational-flow.md` and `system-operation-and-logic.md` now outrank this
+file.** The supervisor's revision reversed three premises that several decisions
+below were built on.
+
+This document has been left as it was written, deliberately. A decision log
+that gets edited every time a decision changes is not a log — it is a summary
+of the present with the reasoning deleted, and the reasoning is the only part
+worth keeping. What follows is a map of what changed, so a reader can tell
+which sections are history and which are still in force.
+
+| Section | Status |
+|---|---|
+| **The attendance path** | **Superseded.** Two checkpoints, GPS, geo-fence, distance and proxy detection are gone. One short-lived code, no location, binary scoring. |
+| **Paying dues** | **Superseded in its central claim.** Dues no longer decide whether a lecture counts, so there are no provisional scores to confirm. The Paystack mechanics — HMAC over the raw body, verify rather than trust, the reference's uniqueness — all stand, and instalments were added on top. |
+| **The payment window closes with the lock** · **What drives the deadline** | Still in force for dues. They no longer affect attendance. |
+| **Grace periods** | **Repointed.** Same mechanism, same audit trail, now restoring access to students shut out by the *registration* deadline rather than by dues. |
+| **Waivers and disputes** | In force. What a waiver changes is now the dues balance and the permit, not whether attendance counts. |
+| **The exam permit** | **Extended.** It now needs dues paid in full *and* 75% per course, carries a QR to a verification endpoint, and is fronted by a live panel saying what is outstanding. |
+| **The paper register** | In force, with one column instead of two. |
+| **Shell per role** | In force, with one sentence amended in place: there is now a manifest and a service worker. Website-first was not conceded. |
+| Naming · Identity and registration · Authentication · Money · OTP · Shared components · Course registration · The administrator's actions · Schedule changes · Password reset · Authorizing an eligibility list · Uploading the register · SECURITY INVOKER · Knowing whether the database is up to date · Palette | **Untouched by the revision, and still the reference.** |
+
+Two additions the revision made that this file never anticipated: the
+notification layer with its channel escalation, and the forecast. Both are
+specified in `system-operation-and-logic.md` §11–12.
 
 ---
 
@@ -186,6 +213,13 @@ students have.
 links to real routes; every tab is a URL that can be pasted into WhatsApp, and
 back/forward behave normally. No install prompt, no service worker, no web
 manifest.
+
+> **Amended, August 2026.** The first three sentences stand and are the reason
+> the nav is built the way it is. The last one does not: the revision asks for a
+> PWA, so there is now a manifest and a service worker. The website-first part
+> was not conceded — every screen still works with no service worker at all, and
+> the worker does exactly two things, neither of which is caching a page. See
+> `CLAUDE.md`, "A website first, installable second".
 
 ## Build order
 

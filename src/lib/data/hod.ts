@@ -483,12 +483,20 @@ export type GracePeriodRecord = {
 export type GraceScreen = {
   active: GracePeriodRecord | null;
   history: GracePeriodRecord[];
-  impact: { lockedStudents: number; sessionsWaiting: number };
+  /**
+   * Students shut out of recording attendance because a registration deadline
+   * passed without them confirming. This used to count students locked out by
+   * dues; the exception was repointed at registration and the number the HOD
+   * decides on had to move with it.
+   */
+  impact: { shutOut: number; lecturesMissed: number };
   levelCounts: Record<string, number>;
 };
 
 function scopeLabel(scope: string, level: number | null): string {
-  return scope === "department" ? "The whole department" : `Level ${level} only`;
+  if (scope === "department") return "The whole department";
+  if (scope === "student") return "One student";
+  return `Level ${level} only`;
 }
 
 export async function loadGraceScreen(): Promise<GraceScreen> {
@@ -501,35 +509,60 @@ export async function loadGraceScreen(): Promise<GraceScreen> {
     .eq("is_active", true)
     .single();
 
-  const [{ data: periods }, { data: locked }, { data: waiting }] = await Promise.all([
-    db
-      .from("grace_periods")
-      .select(
-        "id, scope, level, expires_on, reason, granted_at, students_affected, revoked_at, profiles:granted_by(surname, first_name)",
+  const [{ data: periods }, { data: students }, { data: closedWindows }, { data: confirmed }] =
+    await Promise.all([
+      db
+        .from("grace_periods")
+        .select(
+          "id, scope, level, expires_on, reason, granted_at, students_affected, revoked_at, profiles:granted_by(surname, first_name)",
+        )
+        .eq("academic_session_id", session?.id ?? "")
+        .order("granted_at", { ascending: false }),
+      db.from("students").select("id, level").neq("status", "deactivated"),
+      db
+        .from("registration_periods")
+        .select("semester")
+        .eq("academic_session_id", session?.id ?? "")
+        .lt("closes_on", new Date().toISOString().slice(0, 10)),
+      db
+        .from("course_registrations")
+        .select("student_id, semester")
+        .eq("academic_session_id", session?.id ?? "")
+        .eq("status", "confirmed"),
+    ]);
+
+  // A student is shut out when some semester's window has closed and they
+  // never confirmed for it. Computed the same way `grace_period_impact()`
+  // computes it, because the screen's number and the number stored on the
+  // record must be the same number.
+  const closedSemesters = (closedWindows ?? []).map((row) => Number(row.semester));
+  const confirmedFor = new Set(
+    (confirmed ?? []).map((row) => `${row.student_id}:${row.semester}`),
+  );
+
+  const shutOutIds = new Set(
+    (students ?? [])
+      .filter((student) =>
+        closedSemesters.some((semester) => !confirmedFor.has(`${student.id}:${semester}`)),
       )
-      .eq("academic_session_id", session?.id ?? "")
-      .order("granted_at", { ascending: false }),
-    db
-      .from("compliance_statuses")
-      .select("student_id, students(level)")
-      .eq("academic_session_id", session?.id ?? "")
-      .eq("state", "locked"),
-    db.from("session_scores").select("student_id, score").eq("status", "provisional"),
-  ]);
+      .map((student) => student.id),
+  );
 
-  const lockedIds = new Set((locked ?? []).map((row) => row.student_id));
+  // Lectures they are being marked absent from while they stay shut out. The
+  // number that makes the decision concrete rather than procedural.
+  const { data: missed } = shutOutIds.size
+    ? await db
+        .from("session_scores")
+        .select("student_id, score")
+        .in("student_id", [...shutOutIds])
+    : { data: [] };
 
-  // Only the marks belonging to locked students. The total across everyone
-  // would be a bigger, more persuasive number and would not be the one the
-  // HOD is deciding about.
-  const sessionsWaiting = (waiting ?? [])
-    .filter((row) => lockedIds.has(row.student_id))
-    .reduce((sum, row) => sum + Number(row.score), 0);
+  const lecturesMissed = (missed ?? []).filter((row) => Number(row.score) === 0).length;
 
   const levelCounts: Record<string, number> = { "100": 0, "200": 0, "300": 0, "400": 0 };
-  for (const row of locked ?? []) {
-    const student = one(row.students as unknown as { level: number });
-    const key = String(student?.level ?? "");
+  for (const student of students ?? []) {
+    if (!shutOutIds.has(student.id)) continue;
+    const key = String(student.level ?? "");
     if (key in levelCounts) levelCounts[key] += 1;
   }
 
@@ -555,7 +588,7 @@ export async function loadGraceScreen(): Promise<GraceScreen> {
   return {
     active,
     history: records.filter((record) => record.id !== active?.id),
-    impact: { lockedStudents: lockedIds.size, sessionsWaiting: Math.round(sessionsWaiting) },
+    impact: { shutOut: shutOutIds.size, lecturesMissed },
     levelCounts,
   };
 }

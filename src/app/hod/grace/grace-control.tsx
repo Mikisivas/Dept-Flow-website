@@ -14,9 +14,14 @@ import { cn } from "@/lib/utils";
 /**
  * The highest-consequence control on the site.
  *
- * A grace period restores attendance access to every locked student in scope.
- * The HOD is entitled to do it, so the screen does not argue — but it must not
- * be possible to do it without seeing exactly who it touches. The impact
+ * It used to restore attendance access to students locked out by DUES. It now
+ * restores it to students shut out by the REGISTRATION deadline — the same
+ * mechanism, repointed, and narrowed at the bottom end to a single student,
+ * because "hospitalised through the registration window" is the case the
+ * department actually meets and reopening a whole level for it would be absurd.
+ *
+ * The HOD is entitled to do this, so the screen does not argue — but it must
+ * not be possible to do it without seeing exactly who it touches. The impact
  * numbers are computed before the confirmation, shown inside it, and stored
  * with the record, so the history shows what the HOD was told at the moment
  * they decided rather than what the numbers look like now.
@@ -30,11 +35,13 @@ export function GraceControl({
 }: {
   active: GracePeriodRecord | null;
   history: GracePeriodRecord[];
-  impact: { lockedStudents: number; sessionsWaiting: number };
+  impact: { shutOut: number; lecturesMissed: number };
   levelCounts: Record<string, number>;
 }) {
-  const [scope, setScope] = useState<"department" | "level">("department");
+  const [scope, setScope] = useState<"department" | "level" | "student">("student");
   const [level, setLevel] = useState("400");
+  const [matricNo, setMatricNo] = useState("");
+  const [matricError, setMatricError] = useState<string | null>(null);
   const [expiresOn, setExpiresOn] = useState("");
   const [error, setError] = useState<string | null>(null);
   /** Kept apart from `error`: one is about this field, the other about the request. */
@@ -77,11 +84,14 @@ export function GraceControl({
     }
   }
 
-  const affected = scope === "department" ? impact.lockedStudents : (levelCounts[level] ?? 0);
-  const sessionsWaiting =
+  const affected =
     scope === "department"
-      ? impact.sessionsWaiting
-      : Math.round((impact.sessionsWaiting * affected) / Math.max(impact.lockedStudents, 1));
+      ? impact.shutOut
+      : scope === "level"
+        ? (levelCounts[level] ?? 0)
+        : // One, by definition — and the server will refuse the matric number
+          // if it names nobody, so the screen does not pretend to know better.
+          1;
 
   if (active) {
     return (
@@ -150,12 +160,14 @@ export function GraceControl({
   return (
     <>
       <section className="rounded-lg border border-line bg-surface p-4">
-        <h2 className="text-[15px] font-semibold text-ink">No grace period is open</h2>
+        <h2 className="text-[15px] font-semibold text-ink">No exception is open</h2>
         <p className="mt-1 text-[14px] leading-relaxed text-slate">
-          <strong className="font-semibold text-ink tabular">{impact.lockedStudents}</strong>{" "}
-          students are currently locked out of recording attendance, with{" "}
-          <strong className="font-semibold text-ink tabular">{impact.sessionsWaiting}</strong>{" "}
-          sessions waiting to be counted.
+          <strong className="font-semibold text-ink tabular">{impact.shutOut}</strong>{" "}
+          {impact.shutOut === 1 ? "student is" : "students are"} shut out of recording attendance
+          because a registration deadline passed without them confirming.{" "}
+          <strong className="font-semibold text-ink tabular">{impact.lecturesMissed}</strong>{" "}
+          {impact.lecturesMissed === 1 ? "lecture has" : "lectures have"} been recorded against them
+          as absences in the meantime.
         </p>
       </section>
 
@@ -174,8 +186,9 @@ export function GraceControl({
           <div className="mt-3 flex flex-col gap-2">
             {(
               [
-                ["department", "The whole department"],
+                ["student", "One student"],
                 ["level", "A single level"],
+                ["department", "The whole department"],
               ] as const
             ).map(([value, label]) => (
               <label
@@ -198,6 +211,25 @@ export function GraceControl({
           </div>
         </fieldset>
 
+        {scope === "student" ? (
+          <Field
+            label="Matric number"
+            htmlFor="matric"
+            hint="The student this exception is for. Nobody else is affected."
+            error={matricError ?? undefined}
+          >
+            <Input
+              id="matric"
+              value={matricNo}
+              onChange={(event) => setMatricNo(event.target.value.toUpperCase())}
+              placeholder="CMP/2021/047"
+              autoCapitalize="characters"
+              autoCorrect="off"
+              spellCheck={false}
+            />
+          </Field>
+        ) : null}
+
         {scope === "level" ? (
           <Field label="Level" htmlFor="level">
             <select
@@ -207,7 +239,7 @@ export function GraceControl({
             >
               {["100", "200", "300", "400"].map((value) => (
                 <option key={value} value={value}>
-                  {value} level · {levelCounts[value] ?? 0} locked
+                  {value} level · {levelCounts[value] ?? 0} shut out
                 </option>
               ))}
             </select>
@@ -230,23 +262,35 @@ export function GraceControl({
         {/* Shown before the confirmation opens, not only inside it. */}
         <div className="rounded-lg border border-dashed border-cell-provisional p-4">
           <p className="text-[15px] leading-relaxed text-slate">
-            This will restore attendance access for{" "}
-            <strong className="font-semibold text-ink tabular">{affected} locked students</strong>
+            This will let{" "}
+            <strong className="font-semibold text-ink tabular">
+              {scope === "student"
+                ? matricNo || "one student"
+                : `${affected} shut-out student${affected === 1 ? "" : "s"}`}
+            </strong>{" "}
+            record attendance again
             {expiresOn ? (
               <>
                 {" "}
                 until <strong className="font-semibold text-ink">{formatDate(expiresOn)}</strong>
               </>
             ) : null}
-            . Their provisional sessions stay uncounted until each student clears.
+            . It does not register them — the exception suspends the consequence rather than
+            forging the record, so they should still confirm.
           </p>
         </div>
 
         <Button
           size="lg"
           onClick={() => {
+            if (scope === "student" && !/^(MTH|CMP|STA)\/\d{4}\/\d{3,4}$/.test(matricNo.trim())) {
+              setMatricError("Enter a matric number like CMP/2021/047.");
+              return;
+            }
+            setMatricError(null);
+
             if (!expiresOn) {
-              setDateError("Choose the date the grace period ends.");
+              setDateError("Choose the date the exception ends.");
               return;
             }
             setDateError(null);
@@ -254,7 +298,7 @@ export function GraceControl({
             setConfirming(true);
           }}
         >
-          Open grace period
+          Open registration exception
         </Button>
       </section>
 
@@ -286,26 +330,46 @@ export function GraceControl({
       <ConfirmDialog
         open={confirming}
         onOpenChange={setConfirming}
-        title={`Open a grace period for ${affected} locked students?`}
+        title={
+          scope === "student"
+            ? `Open a registration exception for ${matricNo}?`
+            : `Open a registration exception for ${affected} shut-out students?`
+        }
         description={
           <>
-            This restores attendance access until{" "}
+            They can record attendance again until{" "}
             <strong className="font-semibold text-ink">
               {expiresOn ? formatDate(expiresOn) : "—"}
             </strong>
-            . Their provisional sessions stay uncounted until each student clears.
+            . This does not register them — they should still confirm, and the absences already
+            recorded against them stay recorded.
           </>
         }
         impact={[
+          {
+            label: "Covers",
+            value:
+              scope === "student"
+                ? matricNo
+                : scope === "level"
+                  ? `Level ${level}`
+                  : "Whole department",
+          },
           { label: "Students affected", value: String(affected) },
-          { label: "Scope", value: scope === "department" ? "Whole department" : `Level ${level} only` },
-          { label: "Sessions waiting", value: String(sessionsWaiting) },
+          { label: "Ends", value: expiresOn ? formatDate(expiresOn) : "—" },
         ]}
         reasonHint="Required. Senior staff can see who granted this and why."
-        confirmLabel="Open grace period"
+        confirmLabel="Open exception"
         working={working}
         onConfirm={async (reason) => {
-          await send({ action: "open", scope, level: Number(level), expiresOn, reason });
+          await send({
+            action: "open",
+            scope,
+            level: Number(level),
+            matricNo: matricNo.trim(),
+            expiresOn,
+            reason,
+          });
           setConfirming(false);
         }}
       />

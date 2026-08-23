@@ -465,7 +465,7 @@ begin
   );
 
   perform assert_rejects(
-    format('insert into eligibility_entries (list_id, student_id, attendance_pct, score_total, sessions_held, eligible) values (%L, %L, 26.92, 3.5, 13, false)',
+    format('insert into eligibility_entries (list_id, student_id, attendance_pct, score_total, sessions_held, eligible) values (%L, %L, 38.46, 5.0, 13, false)',
            v_list, '44444444-4444-4444-4444-444444444402'),
     'no student can be added to an authorized list'
   );
@@ -741,8 +741,16 @@ begin
     'a locked student cannot record attendance'
   );
 
+  -- The impact preview counts students shut out by the REGISTRATION deadline,
+  -- not by dues — the exception was repointed at registration and the number
+  -- the HOD is shown had to move with it. Every seeded student confirmed
+  -- inside the window, so the honest answer here is zero; the registration
+  -- section below creates one who did not and checks the count follows.
   select students_affected into v_count from grace_period_impact(v_session, 'department', null);
-  perform assert_true(v_count >= 1, 'the impact preview counts the locked students in scope');
+  perform assert_true(
+    v_count = 0,
+    'the impact preview counts nobody when every student registered on time'
+  );
 
   v_grace := open_grace_period(v_session, 'department', null, current_date + 14,
                                'Payment portal was unreachable for four days.', v_hod);
@@ -1751,6 +1759,199 @@ end $$;
 
 
 -- ---------------------------------------------------------------------------
+-- Registration is the gate
+--
+-- Dues used to decide whether a lecture counted. Registration decides whether
+-- one can be RECORDED, which is a different question asked at a different
+-- moment, and these assertions are about the moment: what happens to a student
+-- who never confirmed, and what happens to one who confirms in week eight.
+-- ---------------------------------------------------------------------------
+
+do $$
+declare
+  v_session  uuid := '11111111-1111-1111-1111-111111111111';
+  -- A course of its own, with a known number of lectures on it. Reusing CMP
+  -- 301 made the backfill count depend on every lecture the seed and the
+  -- earlier blocks of this suite had put on it, which is a test that fails
+  -- whenever something unrelated adds a lecture.
+  v_course   uuid := gen_random_uuid();
+  v_venue    uuid := '22222222-2222-2222-2222-222222222201';
+  v_lect     uuid := '33333333-3333-3333-3333-333333333301';
+  v_hod      uuid := '33333333-3333-3333-3333-333333333302';
+  v_late     uuid := gen_random_uuid();
+  v_never    uuid := gen_random_uuid();
+  v_deadline date;
+  v_lecture  uuid;
+  v_status   text;
+  v_courses  integer;
+  v_absences integer;
+  v_count    integer;
+  i          integer;
+begin
+  select closes_on into v_deadline
+  from registration_periods
+  where academic_session_id = v_session and semester = 1;
+
+  perform assert_true(v_deadline < current_date, 'the seeded registration window has closed');
+
+  perform assert_true(
+    not is_registration_open(v_session, 1::smallint),
+    'a window whose closing date has passed reports closed'
+  );
+
+  -- A session with no window configured at all is OPEN, not closed. Failing
+  -- the other way bars a department from recording attendance because nobody
+  -- inserted a row.
+  perform assert_true(
+    is_registration_open(v_session, 2::smallint),
+    'a semester with no window configured is open — an absent deadline is not an expired one'
+  );
+
+  insert into courses (id, academic_session_id, code, title, level, kind, credit_units, semester, lecturer_id)
+  values (v_course, v_session, 'CMP 390', 'Registration Gate Fixture', 300, 'core', 3, 1, v_lect);
+
+  -- Two students, same course, neither registered yet.
+  insert into profiles (id, role, surname, first_name, phone)
+  values (v_late, 'student', 'Latecomer', 'Ada', '+2348050000101'),
+         (v_never, 'student', 'Absentee', 'Bola', '+2348050000102');
+  insert into students (id, matric_no, level)
+  values (v_late, 'CMP/2021/901', 300), (v_never, 'CMP/2021/902', 300);
+  insert into enrolments (student_id, course_id, source, enrolled_on)
+  values (v_late, v_course, 'core', current_date), (v_never, v_course, 'core', current_date);
+
+  perform assert_true(
+    attendance_eligibility(v_late, v_course) = 'not_registered',
+    'after the deadline, an unconfirmed student cannot record attendance'
+  );
+
+  -- Three lectures held after the deadline and before either confirms.
+  for i in 1..3 loop
+    v_lecture := gen_random_uuid();
+    insert into session_instances (id, course_id, held_on, venue_id, type, status, closed_at, created_by)
+    values (v_lecture, v_course, v_deadline + i, v_venue, 'makeup', 'closed', now(), v_lect);
+  end loop;
+
+  -- ------------------------------------------------------------------------
+  -- Confirming late
+  -- ------------------------------------------------------------------------
+  select status, courses_registered, absences_backfilled
+    into v_status, v_courses, v_absences
+  from confirm_registration(v_late, v_session, 1::smallint);
+
+  perform assert_true(v_status = 'confirmed_late', 'confirming after the deadline says so');
+  perform assert_true(v_courses >= 1, 'and reports what was registered');
+  perform assert_true(
+    v_absences = 3,
+    'the backfill writes an absence for every lecture held between the deadline and the moment they confirmed'
+  );
+
+  perform assert_true(
+    attendance_eligibility(v_late, v_course) = 'ok',
+    'and they can record attendance from then on'
+  );
+
+  perform assert_true(
+    (select registered_at is not null from course_registrations
+      where student_id = v_late and academic_session_id = v_session and semester = 1),
+    'the registration carries a server-stamped time'
+  );
+
+  -- The half that is easy to forget: without back-dating the join date, the
+  -- absences sit outside the denominator and count for nothing, and
+  -- registering late is strictly better than registering on time.
+  perform assert_true(
+    (select enrolled_on from enrolments where student_id = v_late and course_id = v_course)
+      = v_deadline,
+    'the denominator is back-dated to the deadline, so the backfilled absences are inside it'
+  );
+
+  perform assert_true(
+    attendance_pct(v_late, v_course) = 0,
+    'three lectures held, none attended: the late registrant reads 0%, not a blank slate'
+  );
+
+  -- Idempotent. A double-tapped confirm button must not backfill twice.
+  select status, absences_backfilled into v_status, v_absences
+  from confirm_registration(v_late, v_session, 1::smallint);
+  perform assert_true(
+    v_status = 'already_confirmed' and v_absences = 0,
+    'confirming twice is a no-op — the backfill does not run again'
+  );
+
+  -- ------------------------------------------------------------------------
+  -- The HOD's individual exception
+  -- ------------------------------------------------------------------------
+  select students_affected into v_count
+  from grace_period_impact(v_session, 'student', null, v_never);
+  perform assert_true(
+    v_count = 1,
+    'the impact preview counts the one student an individual exception would admit'
+  );
+
+  perform assert_rejects(
+    format('select open_grace_period(%L, %L, null, current_date + 7, %L, %L)',
+           v_session, 'student', 'No student named on an individual exception.', v_hod),
+    'an individual exception must name the student it is for'
+  );
+
+  perform open_grace_period(v_session, 'student', null, current_date + 7,
+                            'Hospitalised through the registration window; letter on file.',
+                            v_hod, v_never);
+
+  perform assert_true(
+    attendance_eligibility(v_never, v_course) = 'ok',
+    'an individual exception lets an unregistered student record attendance'
+  );
+
+  perform assert_true(
+    not exists (
+      select 1 from course_registrations
+      where student_id = v_never and academic_session_id = v_session and semester = 1
+    ),
+    'and does it without registering them — the exception suspends the consequence, it does not forge the record'
+  );
+
+  perform assert_true(
+    (select count(*) from audit_log
+      where action = 'grace_period.opened'
+        and metadata->>'student_id' = v_never::text) = 1,
+    'the exception is audited with the student it names'
+  );
+end $$;
+
+-- A confirmation with nothing to confirm is a student who has not started,
+-- and saying so is more useful than recording it.
+do $$
+declare
+  v_session uuid := '11111111-1111-1111-1111-111111111111';
+  v_empty   uuid := gen_random_uuid();
+  v_status  text;
+begin
+  insert into profiles (id, role, surname, first_name, phone)
+  values (v_empty, 'student', 'Unstarted', 'Chike', '+2348050000103');
+  insert into students (id, matric_no, level) values (v_empty, 'CMP/2021/903', 300);
+
+  select status into v_status from confirm_registration(v_empty, v_session, 1::smallint);
+  perform assert_true(v_status = 'no_courses', 'confirming an empty list is refused, not recorded');
+
+  perform assert_true(
+    not exists (select 1 from course_registrations where student_id = v_empty),
+    'and leaves no registration row behind'
+  );
+end $$;
+
+select assert_rejects($$
+  insert into course_registrations (student_id, academic_session_id, semester, status)
+  values ('44444444-4444-4444-4444-444444444401', '11111111-1111-1111-1111-111111111111', 2, 'confirmed')
+$$, 'a confirmed registration cannot exist without the time it was confirmed');
+
+select assert_rejects($$
+  insert into registration_periods (academic_session_id, semester, opens_on, closes_on)
+  values ('11111111-1111-1111-1111-111111111111', 2, '2026-02-10', '2026-02-01')
+$$, 'a registration window cannot close before it opens');
+
+
+-- ---------------------------------------------------------------------------
 -- The advisory baseline
 --
 -- Computed, not typed in. The point of these assertions is the last one: the
@@ -2173,7 +2374,7 @@ select assert_true(
 );
 
 -- And the proof that SECURITY INVOKER is doing the work: Chidera asking for
--- Halima's attendance gets zero, not Halima's real 26.92%.
+-- Halima's attendance gets zero, not Halima's real 38.46%.
 set local role authenticated;
 set local request.jwt.claim.sub = '44444444-4444-4444-4444-444444444401';
 

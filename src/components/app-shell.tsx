@@ -68,7 +68,7 @@ const NAV: Record<AppRole, NavItem[]> = {
   hod: [
     { href: "/hod", label: "Overview", icon: Gauge },
     { href: "/hod/risk", label: "At-risk students", icon: TriangleAlert },
-    { href: "/hod/grace", label: "Grace period", icon: ShieldAlert },
+    { href: "/hod/grace", label: "Exceptions", icon: ShieldAlert },
     { href: "/hod/waivers", label: "Waivers", icon: BadgeCheck },
     { href: "/hod/disputes", label: "Disputes", icon: ClipboardList },
     { href: "/hod/eligibility", label: "Eligibility list", icon: ListChecks },

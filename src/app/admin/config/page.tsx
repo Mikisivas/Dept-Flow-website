@@ -98,6 +98,30 @@ export default async function ConfigPage() {
         </dl>
       </section>
 
+      <section aria-labelledby="registration-heading" className="mt-8">
+        <h2 id="registration-heading" className="text-[13px] font-semibold text-slate">
+          Registration windows
+        </h2>
+        <dl className="mt-3 divide-y divide-line overflow-hidden rounded-lg border border-line bg-surface">
+          {config.registrationWindows.length === 0 ? (
+            <Row
+              label="Not set"
+              value="—"
+              detail="With no window configured, registration never closes and attendance is never gated on it. Nobody is locked out — which is the right way to fail, but it is not the intended state."
+            />
+          ) : (
+            config.registrationWindows.map((window) => (
+              <Row
+                key={window.semester}
+                label={`${window.semester === 1 ? "First" : "Second"} semester`}
+                value={`${formatDate(window.opensOn)} – ${formatDate(window.closesOn)}`}
+                detail="After the closing date, a student who has not confirmed cannot record attendance on any course, and confirming late records an absence for every lecture already held."
+              />
+            ))
+          )}
+        </dl>
+      </section>
+
       <section aria-labelledby="venues-heading" className="mt-8">
         <h2 id="venues-heading" className="text-[13px] font-semibold text-slate">
           Halls

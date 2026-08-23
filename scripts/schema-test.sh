@@ -43,6 +43,25 @@ run "harness"  "$HERE/scripts/schema-harness.sql"
 run "schema"   "$HERE/supabase/setup.sql"
 run "seed"     "$HERE/supabase/seed.sql"
 
+# setup.sql is meant to be pasted into the Supabase SQL Editor, which runs the
+# paste as ONE transaction. psql does not, so a statement that is only illegal
+# inside a transaction applies cleanly here and fails for the one person
+# following the setup guide. `alter type ... add value` followed by a use of
+# that value is the specific trap, and it cost a debugging session once.
+psql -h "$PGROOT" -p "$PORT" -U postgres -tAc "drop database if exists deptflow_tx" >/dev/null
+psql -h "$PGROOT" -p "$PORT" -U postgres -tAc "create database deptflow_tx" >/dev/null
+psql -h "$PGROOT" -p "$PORT" -U postgres -d deptflow_tx -q -f "$HERE/scripts/schema-harness.sql" >/dev/null 2>&1
+tx=$( { echo "begin;"; cat "$HERE/supabase/setup.sql"; echo "commit;"; } |
+      psql -h "$PGROOT" -p "$PORT" -U postgres -d deptflow_tx 2>&1 |
+      grep -E "^psql.*ERROR" | head -1 )
+psql -h "$PGROOT" -p "$PORT" -U postgres -tAc "drop database if exists deptflow_tx" >/dev/null
+if [ -n "$tx" ]; then
+  echo "FAILED — schema does not apply as a single transaction (the SQL Editor runs it as one)"
+  echo "$tx"
+  exit 1
+fi
+echo "ok — schema applies as one transaction"
+
 # Deliberately NOT ON_ERROR_STOP: the suite is one transaction, so the first
 # error aborts it and every statement after reports the abort rather than its
 # own result. The first error is the only informative one — anything that greps

@@ -47,6 +47,13 @@ insert into venues (id, name) values
 insert into dues_periods (academic_session_id, resumption_date, dues_amount_kobo) values
   ('11111111-1111-1111-1111-111111111111', '2025-09-15', 500000);
 
+-- Seven days from resumption, which is what the department actually allows.
+-- The window is what makes the deadline in the gate a real date rather than a
+-- policy nobody configured — with no row here, attendance is ungated and
+-- confirm_registration() has nothing to backfill from.
+insert into registration_periods (academic_session_id, semester, opens_on, closes_on) values
+  ('11111111-1111-1111-1111-111111111111', 1, '2025-09-15', '2025-09-22');
+
 -- ---------------------------------------------------------------------------
 -- People
 -- ---------------------------------------------------------------------------
@@ -334,6 +341,28 @@ end $$;
 -- hand, which meant the at-risk list showed figures with no relationship to the
 -- attendance beside them — and which would not have moved if a student's did.
 --
+-- ---------------------------------------------------------------------------
+-- Registration, confirmed
+-- ---------------------------------------------------------------------------
+
+-- All three registered inside the window. Written directly rather than through
+-- confirm_registration(), because the seed is describing history: these were
+-- confirmed in September, and calling the function would stamp them now and
+-- backfill an absence for every lecture of the term.
+--
+-- The late path and the HOD's individual exception are exercised in the schema
+-- tests instead, against students created for it. Seeding a permanently
+-- shut-out student would leave every screen in the demo showing an error state
+-- somebody has to explain.
+insert into course_registrations (student_id, academic_session_id, semester, status, registered_at)
+values
+  ('44444444-4444-4444-4444-444444444401', '11111111-1111-1111-1111-111111111111', 1,
+   'confirmed', timestamptz '2025-09-18 09:14:00+01'),
+  ('44444444-4444-4444-4444-444444444402', '11111111-1111-1111-1111-111111111111', 1,
+   'confirmed', timestamptz '2025-09-19 16:02:00+01'),
+  ('44444444-4444-4444-4444-444444444403', '11111111-1111-1111-1111-111111111111', 1,
+   'confirmed', timestamptz '2025-09-22 23:11:00+01');
+
 -- Last in the file, and it has to be: it reads every lecture and every mark, so
 -- running it before the sections above would predict from half a term.
 select compute_risk_predictions();

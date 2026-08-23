@@ -3,12 +3,12 @@ import { currentUser } from "@/lib/auth/current-user";
 import { createServiceClient } from "@/lib/supabase/client";
 
 /**
- * Opening and revoking a grace period.
+ * Opening and revoking a registration exception.
  *
- * An authority action: it changes the standing of a whole level at once, so
- * every rule the hard rules demand — a reason, an actor, an audit row — is
- * enforced inside the database functions rather than here. This route decides
- * who is allowed to call them and nothing else.
+ * An authority action: it decides who may record attendance, so every rule the
+ * hard rules demand — a reason, an actor, an audit row — is enforced inside the
+ * database functions rather than here. This route decides who is allowed to
+ * call them, resolves a matric number to a student, and nothing else.
  */
 export async function POST(request: Request) {
   const session = await currentUser();
@@ -23,6 +23,7 @@ export async function POST(request: Request) {
     action?: string;
     scope?: string;
     level?: number;
+    matricNo?: string;
     expiresOn?: string;
     reason?: string;
     graceId?: string;
@@ -63,7 +64,37 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "There is no active academic session." }, { status: 409 });
   }
 
-  const scope = body.scope === "level" ? "level" : "department";
+  const scope =
+    body.scope === "level" ? "level" : body.scope === "student" ? "student" : "department";
+
+  // The matric number is what the HOD typed; the student id is what the
+  // function needs. Resolved here rather than trusted from the client, and a
+  // number that names nobody is told so plainly — the alternative is an
+  // exception silently opened for no one.
+  let studentId: string | null = null;
+  if (scope === "student") {
+    const matricNo = String(body.matricNo ?? "").trim().toUpperCase();
+    const { data: student } = await db
+      .from("students")
+      .select("id, status")
+      .eq("matric_no", matricNo)
+      .maybeSingle();
+
+    if (!student) {
+      return NextResponse.json(
+        { error: `No student is registered under ${matricNo || "that matric number"}.` },
+        { status: 404 },
+      );
+    }
+    if (student.status === "deactivated") {
+      return NextResponse.json(
+        { error: "That account is deactivated. Reactivate it before granting an exception." },
+        { status: 409 },
+      );
+    }
+    studentId = student.id;
+  }
+
   const { error } = await db.rpc("open_grace_period", {
     p_academic_session_id: active.id,
     p_scope: scope,
@@ -71,6 +102,7 @@ export async function POST(request: Request) {
     p_expires_on: String(body.expiresOn ?? ""),
     p_reason: reason,
     p_actor_id: session.profileId,
+    p_student_id: studentId,
   });
 
   if (error) return NextResponse.json({ error: readable(error.message) }, { status: 400 });

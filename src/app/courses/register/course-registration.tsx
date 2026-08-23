@@ -2,11 +2,14 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { BookOpen, Minus, Plus, RotateCcw } from "lucide-react";
+import { BookOpen, CheckCircle2, Lock, Minus, Plus, RotateCcw, TriangleAlert } from "lucide-react";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { EmptyState } from "@/components/empty-state";
 import { StatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
+import { StickyActionBar } from "@/components/sticky-action-bar";
 import type { StudentRegistration } from "@/lib/data/courses";
+import { formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 /**
@@ -21,14 +24,68 @@ import { cn } from "@/lib/utils";
  * Nothing here decides whether an action is allowed. The server does, and this
  * screen shows what it said — including the refusals, which are answers rather
  * than errors and so are not dressed up as failures.
+ *
+ * Registration now ENDS somewhere. Adding and dropping is a draft; confirming
+ * is the deliberate final act, and after the deadline an unconfirmed student
+ * cannot record attendance at all. That consequence is stated on the
+ * confirmation rather than discovered in a lecture hall, and the cost of
+ * confirming late — an absence for every lecture already held — is stated
+ * there too, because it is the part a student will not guess.
  */
 export function CourseRegistration({ registration }: { registration: StudentRegistration }) {
   const router = useRouter();
   const [working, setWorking] = useState<string | null>(null);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
 
-  const { creditCap, unitsUsed, registered, available, semester } = registration;
+  const [confirming, setConfirming] = useState(false);
+  const [sealing, setSealing] = useState(false);
+
+  const { creditCap, unitsUsed, registered, available, semester, confirmation } = registration;
   const overCap = unitsUsed > creditCap;
+  const confirmed = confirmation.status === "confirmed";
+  const late = !confirmation.open && !confirmed;
+
+  async function confirm() {
+    setSealing(true);
+    setMessage(null);
+
+    try {
+      const response = await fetch("/api/courses/confirm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ semester }),
+      });
+      const body = await response.json();
+
+      if (body.ok) {
+        setMessage({
+          ok: true,
+          text:
+            body.absencesBackfilled > 0
+              ? `Registration confirmed. ${body.absencesBackfilled} lecture${
+                  body.absencesBackfilled === 1 ? "" : "s"
+                } held since the deadline have been recorded as absences.`
+              : "Registration confirmed.",
+        });
+        router.refresh();
+      } else {
+        setMessage({
+          ok: false,
+          text:
+            body.status === "no_courses"
+              ? "Add at least one course before confirming."
+              : body.status === "already_confirmed"
+                ? "Your registration is already confirmed."
+                : (body.error ?? "We couldn't confirm that."),
+        });
+      }
+    } catch {
+      setMessage({ ok: false, text: "No connection. Nothing was confirmed." });
+    }
+
+    setSealing(false);
+    setConfirming(false);
+  }
 
   async function change(courseId: string, action: "add" | "drop") {
     setWorking(courseId);
@@ -78,6 +135,69 @@ export function CourseRegistration({ registration }: { registration: StudentRegi
         <p className="mt-2 text-[14px] leading-relaxed text-slate">
           Core courses are counted too, so they take up part of the limit before you add anything.
         </p>
+      </section>
+
+      {/* Where the student stands, before the lists rather than after them.
+          A student who has not confirmed and whose deadline has gone is
+          looking at the reason their code will be rejected this afternoon. */}
+      <section
+        className={cn(
+          "rounded-lg border p-4",
+          confirmed
+            ? "border-ok bg-ok-tint"
+            : late
+              ? "border-danger bg-danger-tint"
+              : "border-line bg-surface",
+        )}
+      >
+        <div className="flex gap-3">
+          {confirmed ? (
+            <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-ok" aria-hidden="true" />
+          ) : late ? (
+            <Lock className="mt-0.5 h-5 w-5 shrink-0 text-danger" aria-hidden="true" />
+          ) : (
+            <TriangleAlert className="mt-0.5 h-5 w-5 shrink-0 text-slate" aria-hidden="true" />
+          )}
+          <div>
+            <h2 className="text-[15px] font-semibold text-ink">
+              {confirmed
+                ? "Registration confirmed"
+                : late
+                  ? "Your registration deadline has passed"
+                  : "Not confirmed yet"}
+            </h2>
+            <p className="mt-1 text-[14px] leading-relaxed text-slate">
+              {confirmed ? (
+                <>
+                  Confirmed
+                  {confirmation.confirmedAt ? ` on ${formatDate(confirmation.confirmedAt)}` : ""}.
+                  Your attendance is counted against the courses below.
+                </>
+              ) : late ? (
+                <>
+                  Until you confirm, no attendance can be recorded for you — the code will be
+                  rejected in the hall. Confirming now will also record an absence for every lecture
+                  held since the deadline. If that is unfair in your case, your HOD can grant a
+                  registration exception.
+                </>
+              ) : confirmation.daysLeft === null ? (
+                <>
+                  Add your electives and carry-overs, then confirm. Confirming is what makes this
+                  list the one your attendance is counted against.
+                </>
+              ) : (
+                <>
+                  <strong className="font-semibold text-ink tabular">
+                    {confirmation.daysLeft}
+                  </strong>{" "}
+                  {confirmation.daysLeft === 1 ? "day" : "days"} left — the deadline is{" "}
+                  {confirmation.deadline ? formatDate(confirmation.deadline) : "soon"}. After it,
+                  attendance cannot be recorded until you confirm.
+                </>
+              )}
+            </p>
+          </div>
+        </div>
       </section>
 
       <div aria-live="polite">
@@ -206,6 +326,54 @@ export function CourseRegistration({ registration }: { registration: StudentRegi
         A course you add starts counting from today. Lectures held before you joined it are not
         counted against you.
       </p>
+
+      {!confirmed ? (
+        <StickyActionBar>
+          <Button
+            size="lg"
+            className="w-full"
+            onClick={() => setConfirming(true)}
+            aria-disabled={sealing || registered.length === 0 || overCap}
+          >
+            {sealing ? "Confirming…" : "Confirm registration"}
+          </Button>
+        </StickyActionBar>
+      ) : null}
+
+      <ConfirmDialog
+        open={confirming}
+        onOpenChange={setConfirming}
+        title={late ? "Confirm late — this will record absences" : "Confirm your registration?"}
+        description={
+          late ? (
+            <>
+              The deadline was{" "}
+              <strong className="font-semibold text-ink">
+                {confirmation.deadline ? formatDate(confirmation.deadline) : "earlier"}
+              </strong>
+              . Every lecture held on these courses since then will be recorded as an absence,
+              because you were not registered when they ran. Confirming is still better than not
+              confirming — until you do, no attendance can be recorded for you at all.
+            </>
+          ) : (
+            <>
+              This ends your registration for the semester. You can still add a carry-over later,
+              but the list below is what your attendance will be counted against.
+            </>
+          )
+        }
+        impact={[
+          { label: "Courses", value: String(registered.length) },
+          { label: "Credit units", value: `${unitsUsed} of ${creditCap}` },
+          {
+            label: "Deadline",
+            value: confirmation.deadline ? formatDate(confirmation.deadline) : "none set",
+          },
+        ]}
+        confirmLabel={late ? "Confirm anyway" : "Confirm registration"}
+        working={sealing}
+        onConfirm={confirm}
+      />
     </div>
   );
 }

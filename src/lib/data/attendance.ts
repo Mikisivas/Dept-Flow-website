@@ -129,9 +129,7 @@ export async function submitCheckpointMark(input: {
 
   const { data: checkpoint } = await db
     .from("checkpoints")
-    .select(
-      "id, token, expires_at, session_instance_id, session_instances(id, course_id, status, courses(academic_session_id))",
-    )
+    .select("id, token, expires_at, session_instance_id, session_instances(id, course_id, status)")
     .eq("id", input.checkpointId)
     .maybeSingle();
 
@@ -142,25 +140,21 @@ export async function submitCheckpointMark(input: {
       id: string;
       course_id: string;
       status: string;
-      courses: { academic_session_id: string } | null;
     },
   );
   if (!instance) return { outcome: "rejected", reason: "invalid_or_expired_token" };
 
-  // Enrolment is an authorisation check, not a convenience: without it a
-  // student holding a code shouted across a corridor could mark themselves
-  // present in a course they do not take.
-  const { data: enrolment } = await db
-    .from("enrolments")
-    .select("id")
-    .eq("student_id", input.studentId)
-    .eq("course_id", instance.course_id)
-    .is("dropped_at", null)
-    .maybeSingle();
+  // Whether this student may record attendance on this course at all —
+  // enrolment, account status, the registration deadline and the HOD's
+  // exception, decided in one place in the database rather than reassembled
+  // here. `attendance_eligibility` returns the reason, and its values are the
+  // same vocabulary the screen has copy for.
+  const { data: eligibility } = await db.rpc("attendance_eligibility", {
+    p_student_id: input.studentId,
+    p_course_id: instance.course_id,
+  });
 
-  if (!enrolment) return { outcome: "rejected", reason: "not_registered" };
-
-  const academicSessionId = one(instance.courses)?.academic_session_id;
+  const gate = typeof eligibility === "string" ? eligibility : "not_registered";
 
   // An accepted mark is final. A rejected one is not — a student who mistyped
   // must be able to try again inside the window, which is why the write below
@@ -174,7 +168,7 @@ export async function submitCheckpointMark(input: {
 
   if (existing?.accepted) return { outcome: "rejected", reason: "already_submitted" };
 
-  const reason = await decide();
+  const reason = decide();
 
   const row = {
     student_id: input.studentId,
@@ -196,14 +190,13 @@ export async function submitCheckpointMark(input: {
 
   return { outcome: "accepted", result: { sessionScore: 1 } };
 
-  async function decide(): Promise<SubmitRejection | null> {
-    if (academicSessionId) {
-      const { data: locked } = await db.rpc("is_attendance_locked", {
-        p_student_id: input.studentId,
-        p_academic_session_id: academicSessionId,
-      });
-      if (locked === true) return "account_locked";
-    }
+  function decide(): SubmitRejection | null {
+    // The gate first, because it produces the most useful instruction. A
+    // student who never confirmed their registration is told that, rather than
+    // being sent back to the board to retype a code that was never going to be
+    // accepted.
+    if (gate === "not_registered") return "not_registered";
+    if (gate === "account_locked") return "account_locked";
 
     if (instance!.status !== "open") return "invalid_or_expired_token";
 

@@ -5,7 +5,7 @@ import { loadGraceScreen } from "@/lib/data/hod";
 import { GraceControl } from "./grace-control";
 
 export const metadata: Metadata = {
-  title: "Grace period",
+  title: "Registration exceptions",
 };
 
 // Opening one changes who can record attendance right now, so this screen is
@@ -18,8 +18,8 @@ export default async function GracePeriodPage() {
   return (
     <AppShell role="hod">
       <PageHeader
-        title="Grace period"
-        subtitle="Restores attendance access for students locked out by unpaid dues."
+        title="Registration exceptions"
+        subtitle="Lets a student record attendance when the registration deadline passed without them."
       />
       <div className="mt-6">
         <GraceControl

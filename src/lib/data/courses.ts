@@ -214,6 +214,21 @@ export type StudentRegistration = {
     CatalogueCourse & { source: "core" | "elective" | "carry_over"; canDrop: boolean }
   >;
   available: RegistrationOption[];
+  /**
+   * Registration is a deliberate, final action rather than the accumulation of
+   * clicks it used to be. Until it is confirmed there is no moment at which a
+   * student has finished, and after the deadline an unconfirmed student cannot
+   * record attendance at all — so the screen has to say where they stand.
+   */
+  confirmation: {
+    status: "draft" | "confirmed";
+    confirmedAt: string | null;
+    /** Null when the department has not configured a window for this semester. */
+    deadline: string | null;
+    open: boolean;
+    /** Whole days until the deadline. Negative once it has passed. */
+    daysLeft: number | null;
+  };
 };
 
 /**
@@ -232,7 +247,11 @@ export async function loadStudentRegistration(
   const [{ data: student }, { data: config }, { data: session }] = await Promise.all([
     db.from("students").select("level").eq("id", studentId).single(),
     db.from("app_config").select("max_credit_units_per_semester").eq("id", 1).single(),
-    db.from("academic_sessions").select("starts_on, ends_on").eq("is_active", true).single(),
+    db
+      .from("academic_sessions")
+      .select("id, starts_on, ends_on")
+      .eq("is_active", true)
+      .single(),
   ]);
 
   // Defaulting to 1 would show a student their first-semester courses in
@@ -276,7 +295,60 @@ export async function loadStudentRegistration(
       enrolledAlready: false,
     }));
 
-  return { level, semester: resolved, creditCap, unitsUsed, registered, available };
+  const [{ data: period }, { data: confirmation }] = await Promise.all([
+    session?.id
+      ? db
+          .from("registration_periods")
+          .select("closes_on")
+          .eq("academic_session_id", session.id)
+          .eq("semester", resolved)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
+    session?.id
+      ? db
+          .from("course_registrations")
+          .select("status, registered_at")
+          .eq("student_id", studentId)
+          .eq("academic_session_id", session.id)
+          .eq("semester", resolved)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
+  ]);
+
+  const deadline = (period?.closes_on as string | undefined) ?? null;
+
+  return {
+    level,
+    semester: resolved,
+    creditCap,
+    unitsUsed,
+    registered,
+    available,
+    confirmation: {
+      status: confirmation?.status === "confirmed" ? "confirmed" : "draft",
+      confirmedAt: (confirmation?.registered_at as string | null) ?? null,
+      deadline,
+      // No window configured is OPEN, matching is_registration_open(). An
+      // absent deadline is not a deadline that has passed, and showing it as
+      // one would tell a whole department they had missed something that was
+      // never set.
+      open: deadline === null || daysUntil(deadline) >= 0,
+      daysLeft: deadline === null ? null : daysUntil(deadline),
+    },
+  };
+}
+
+/**
+ * Whole days from today to a date, counted in dates rather than in elapsed
+ * milliseconds. A deadline of "today" is 0 whether it is read at 9am or at
+ * 11pm; dividing a duration would make the same day read as -1 after noon.
+ */
+function daysUntil(isoDate: string): number {
+  const [y, m, d] = isoDate.split("-").map(Number);
+  const target = Date.UTC(y, (m ?? 1) - 1, d ?? 1);
+  const now = new Date();
+  const today = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+  return Math.round((target - today) / 86_400_000);
 }
 
 /**
@@ -315,6 +387,42 @@ export async function addCourse(studentId: string, courseId: string): Promise<st
   });
   if (error) throw new Error(error.message);
   return String(data);
+}
+
+export type ConfirmRegistrationResult = {
+  status: "confirmed" | "confirmed_late" | "already_confirmed" | "no_courses" | "no_such_student";
+  coursesRegistered: number;
+  absencesBackfilled: number;
+};
+
+/**
+ * Ending registration for a semester.
+ *
+ * Everything that makes this more than a status flip — the server-stamped
+ * time, the back-dated join dates, the absences for lectures missed since the
+ * deadline — happens inside `confirm_registration()`. It has to: those three
+ * are only correct together, and a partial failure leaves a percentage that is
+ * wrong in whichever direction it stopped.
+ */
+export async function confirmRegistration(
+  studentId: string,
+  academicSessionId: string,
+  semester: number,
+): Promise<ConfirmRegistrationResult> {
+  const db = createServiceClient();
+  const { data, error } = await db.rpc("confirm_registration", {
+    p_student_id: studentId,
+    p_academic_session_id: academicSessionId,
+    p_semester: semester,
+  });
+  if (error) throw new Error(error.message);
+
+  const row = Array.isArray(data) ? data[0] : data;
+  return {
+    status: (row?.status ?? "no_such_student") as ConfirmRegistrationResult["status"],
+    coursesRegistered: Number(row?.courses_registered ?? 0),
+    absencesBackfilled: Number(row?.absences_backfilled ?? 0),
+  };
 }
 
 export async function dropCourse(studentId: string, courseId: string): Promise<string> {

@@ -422,6 +422,12 @@ export type SystemConfig = {
   pendingBufferHours: number;
   attendanceThresholdPct: number;
   maxCreditUnits: number;
+  /**
+   * When students may confirm their courses, per semester. The one deadline
+   * that decides whether attendance can be recorded at all, so it belongs on
+   * the screen that shows what the system is currently set to do.
+   */
+  registrationWindows: Array<{ semester: number; opensOn: string; closesOn: string }>;
   tokenTtlSeconds: number;
   timetableToleranceMinutes: number;
   venues: Array<{ id: string; name: string }>;
@@ -441,6 +447,12 @@ export async function loadSystemConfig(): Promise<SystemConfig> {
     db.from("venues").select("id, name").order("name"),
   ]);
 
+  const { data: windows } = await db
+    .from("registration_periods")
+    .select("semester, opens_on, closes_on")
+    .eq("academic_session_id", sessionId ?? "")
+    .order("semester");
+
   const row = config?.[0];
 
   return {
@@ -453,6 +465,11 @@ export async function loadSystemConfig(): Promise<SystemConfig> {
     maxCreditUnits: row?.max_credit_units_per_semester ?? 24,
     tokenTtlSeconds: row?.checkpoint_token_ttl_seconds ?? 90,
     timetableToleranceMinutes: row?.timetable_tolerance_minutes ?? 15,
+    registrationWindows: (windows ?? []).map((row) => ({
+      semester: Number(row.semester),
+      opensOn: row.opens_on as string,
+      closesOn: row.closes_on as string,
+    })),
     venues: (venues ?? []).map((venue) => ({ id: venue.id, name: venue.name })),
   };
 }

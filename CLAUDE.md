@@ -22,7 +22,7 @@ Where anything below still describes the old system, the new one wins:
 | `docs/system-operation-and-logic.md` | Functional reference: roles, entities, the compliance state machine, attendance logic, payment and registration flows. |
 | `docs/ui-build-specification.md` | Screen-by-screen build spec: every route, its role, contents and required states. |
 | `docs/dept-flow-design-skill.md` | Design system: palette, typography, the checkpoint motif, per-role patterns, pre-ship checklist. |
-| `design/*.dc.html` | The design mockups — six groups covering shared components and all forty routes. Open in a browser. |
+| `design/*.dc.html` | The design mockups — six groups, drawn before the revision and **superseded** by it. Each carries a banner saying what changed. Open in a browser; the running app is the current reference. |
 | `supabase/README.md` | The schema, what it enforces, and how to run its tests. |
 | `docs/demo.md` | The walkthrough: logins, the order of screens, and the numbers that will appear. |
 

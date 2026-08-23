@@ -82,9 +82,20 @@ export default async function DashboardPage() {
             aria-labelledby="overall-heading"
             className="mt-6 rounded-lg border border-line bg-surface p-4"
           >
-            <h2 id="overall-heading" className="text-[13px] font-semibold text-slate">
-              Across all courses
-            </h2>
+            <div className="flex items-baseline justify-between gap-3">
+              <h2 id="overall-heading" className="text-[13px] font-semibold text-slate">
+                Across all courses
+              </h2>
+              {/* Not a sixth item in the bottom bar. Five is already the limit
+                  on a phone, and reports are something a student goes looking
+                  for rather than something they need one tap away. */}
+              <Link
+                href="/reports"
+                className="rounded text-[13px] font-medium text-brand-text underline underline-offset-2 hover:text-brand-pressed focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand-text)]"
+              >
+                Weekly and monthly
+              </Link>
+            </div>
             <AttendanceMeter
               className="mt-3"
               attendedCount={totalAttended}

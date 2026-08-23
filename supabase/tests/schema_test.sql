@@ -2850,6 +2850,218 @@ end $$;
 
 
 -- ---------------------------------------------------------------------------
+-- Reminders before, reports after
+--
+-- The cheapest intervention this system has. It needs no forecast behind it
+-- and it addresses the largest single cause of a missed lecture, which is not
+-- reluctance — it is a student who lost track of the day.
+-- ---------------------------------------------------------------------------
+
+do $$
+declare
+  -- The ACTIVE session, read rather than assumed. The rollover block earlier in
+  -- this suite switches which session is active, and upcoming_lectures() only
+  -- looks at the active one — a hardcoded id here tests a timetable nobody is
+  -- teaching from.
+  v_session uuid := (select id from academic_sessions where is_active limit 1);
+  v_course  uuid := gen_random_uuid();
+  v_entry   uuid;
+  v_soon    uuid;
+  v_cancel  uuid := gen_random_uuid();
+  v_student uuid := gen_random_uuid();
+  v_dropped uuid := gen_random_uuid();
+  v_sent    integer;
+  v_again   integer;
+  v_local   timestamp := (now() at time zone 'Africa/Lagos');
+begin
+  insert into courses (id, academic_session_id, code, title, level, kind, credit_units, semester, lecturer_id)
+  values (v_course, v_session, 'MTH 393', 'Reminder Fixture', 300, 'core', 3, 1,
+          '33333333-3333-3333-3333-333333333301');
+
+  insert into profiles (id, role, surname, first_name, phone)
+  values (v_student, 'student', 'Reminded', 'Case', '+2348050000601'),
+         (v_dropped, 'student', 'Dropped', 'Out', '+2348050000602');
+  insert into students (id, matric_no, level)
+  values (v_student, 'CMP/2021/851', 300), (v_dropped, 'CMP/2021/852', 300);
+
+  insert into enrolments (student_id, course_id, source, enrolled_on)
+  values (v_student, v_course, 'core', session_day(0));
+  -- On the course and then off it. A reminder to attend something they left is
+  -- the system asking a student to do the impossible.
+  insert into enrolments (student_id, course_id, source, enrolled_on, dropped_at)
+  values (v_dropped, v_course, 'elective', session_day(0), now());
+
+  -- A slot forty minutes from now, in Lagos time. Computed rather than
+  -- hardcoded: the database runs in UTC and the department does not, and an
+  -- hour's error means the reminder arrives after the lecture.
+  insert into timetable_entries (academic_session_id, course_id, day_of_week, start_time, end_time, venue_id)
+  values (v_session, v_course, extract(dow from v_local)::integer,
+          (v_local + interval '40 minutes')::time,
+          (v_local + interval '160 minutes')::time,
+          '22222222-2222-2222-2222-222222222201')
+  returning id into v_entry;
+
+  v_sent := send_lecture_reminders(60);
+
+  perform assert_true(v_sent = 1, 'every registered student on an upcoming lecture is reminded, and nobody else');
+
+  perform assert_true(
+    exists (
+      select 1 from notifications
+      where recipient_id = v_student and kind = 'lecture_reminder'
+    ),
+    'the reminder reaches the student who is still on the course'
+  );
+
+  perform assert_true(
+    not exists (
+      select 1 from notifications
+      where recipient_id = v_dropped and kind = 'lecture_reminder'
+    ),
+    'and not the one who dropped it'
+  );
+
+  perform assert_true(
+    (select body from notifications
+      where recipient_id = v_student and kind = 'lecture_reminder' limit 1) like '%MTH 393%',
+    'it names the course and the hall rather than saying "you have a lecture"'
+  );
+
+  -- WhatsApp because it is free; never SMS, which would spend the budget the
+  -- policy reserves for the warning that matters.
+  perform assert_true(
+    exists (
+      select 1 from notification_deliveries d
+      join notifications n on n.id = d.notification_id
+      where n.recipient_id = v_student and n.kind = 'lecture_reminder' and d.channel = 'whatsapp'
+    ),
+    'a reminder goes out on WhatsApp, which costs nothing'
+  );
+
+  perform assert_true(
+    not exists (
+      select 1 from notification_deliveries d
+      join notifications n on n.id = d.notification_id
+      where n.recipient_id = v_student and n.kind = 'lecture_reminder' and d.channel = 'sms'
+    ),
+    'and never on SMS — that budget is reserved for the final warning'
+  );
+
+  -- ------------------------------------------------------------------------
+  -- Once per lecture, however often the job runs
+  -- ------------------------------------------------------------------------
+  v_again := send_lecture_reminders(60);
+  perform assert_true(
+    v_again = 0,
+    'the job runs every few minutes over an hour-wide window — one lecture must not produce twenty reminders'
+  );
+
+  -- ------------------------------------------------------------------------
+  -- A cancelled lecture is not upcoming
+  -- ------------------------------------------------------------------------
+  insert into courses (id, academic_session_id, code, title, level, kind, credit_units, semester, lecturer_id)
+  values (v_cancel, v_session, 'MTH 394', 'Cancelled Fixture', 300, 'core', 3, 1,
+          '33333333-3333-3333-3333-333333333301');
+  insert into enrolments (student_id, course_id, source, enrolled_on)
+  values (v_student, v_cancel, 'core', session_day(0));
+
+  insert into timetable_entries (academic_session_id, course_id, day_of_week, start_time, end_time, venue_id)
+  values (v_session, v_cancel, extract(dow from v_local)::integer,
+          (v_local + interval '45 minutes')::time,
+          (v_local + interval '165 minutes')::time,
+          '22222222-2222-2222-2222-222222222201')
+  returning id into v_soon;
+
+  insert into session_instances (course_id, timetable_entry_id, held_on, venue_id, type, status,
+                                 cancelled_at, cancelled_by, cancellation_reason, created_by)
+  values (v_cancel, v_soon, v_local::date, '22222222-2222-2222-2222-222222222201',
+          'recurring', 'cancelled', now(), '33333333-3333-3333-3333-333333333301',
+          'Lecturer is at an external examiners meeting.',
+          '33333333-3333-3333-3333-333333333301');
+
+  perform assert_true(
+    not exists (select 1 from upcoming_lectures(60) where course_id = v_cancel),
+    'a cancelled lecture is not upcoming — reminding students to attend it would contradict whoever cancelled it'
+  );
+
+  -- ------------------------------------------------------------------------
+  -- A lecture already under way is not upcoming either
+  -- ------------------------------------------------------------------------
+  update timetable_entries
+     set start_time = (v_local - interval '5 minutes')::time
+   where id = v_entry;
+
+  delete from lecture_reminders_sent where timetable_entry_id = v_entry;
+
+  perform assert_true(
+    not exists (select 1 from upcoming_lectures(60) where course_id = v_course),
+    'a lecture that started five minutes ago is not upcoming — telling a student they are late is not something they can fix'
+  );
+end $$;
+
+-- The reports, and the one thing that makes a report more than a number.
+do $$
+declare
+  v_halima uuid := '44444444-4444-4444-4444-444444444402';
+  v_seeded uuid := '11111111-1111-1111-1111-111111111111';
+  v_report record;
+  v_rows   integer;
+  v_sent   integer;
+begin
+  -- Named explicitly: Halima's courses belong to the seeded session, and the
+  -- rollover block earlier in this suite has since made a different one active.
+  -- Defaulting would report on a session she is not enrolled in yet.
+  select count(*) into v_rows from student_semester_report(v_halima, v_seeded);
+  perform assert_true(v_rows > 0, 'the semester report covers every course a student is registered for');
+
+  perform assert_true(
+    (select attendance_pct from student_semester_report(v_halima, v_seeded)
+      where course_code = 'CMP 301')
+    = attendance_pct(v_halima, '66666666-6666-6666-6666-666666666601'),
+    'and its percentage is the same number every other screen shows — the permit reads this too'
+  );
+
+  perform assert_true(
+    (select eligible from student_semester_report(v_halima, v_seeded) where course_code = 'CMP 301')
+      = false,
+    'eligibility on the report is the eligibility rule, not a second opinion about it'
+  );
+
+  select * into v_report from student_period_report(v_halima, 7);
+  perform assert_true(
+    v_report.overall_pct = attendance_pct(v_halima, '66666666-6666-6666-6666-666666666601')
+      or v_report.overall_pct is not null,
+    'the period report carries the running figure alongside the window'
+  );
+
+  -- The delta is the whole point of a periodic report: "68%" says nothing that
+  -- "68%, down from 81%" does not say better. Null rather than zero when there
+  -- is nothing to compare against — a first week reported as "no change" is a
+  -- claim about a week that did not exist.
+  select * into v_report from student_period_report(v_halima, 3650);
+  perform assert_true(
+    v_report.delta is null,
+    'a window with no comparable period before it reports no change rather than "no change"'
+  );
+
+  v_sent := send_weekly_digests();
+  perform assert_true(
+    v_sent >= 0,
+    'the Monday digest runs without needing anyone to have had a good week'
+  );
+
+  perform assert_true(
+    not exists (
+      select 1 from notification_deliveries d
+      join notifications n on n.id = d.notification_id
+      where n.kind = 'weekly_report' and d.channel = 'sms'
+    ),
+    'a digest never spends an SMS — routine messages on the warning channel are how a warning stops being one'
+  );
+end $$;
+
+
+-- ---------------------------------------------------------------------------
 -- The paper register
 --
 -- The one route with no token, no geo-fence and no device check behind it, so

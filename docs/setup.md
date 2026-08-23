@@ -111,6 +111,46 @@ select cron.schedule(
 One less moving part than an HTTP cron, no shared secret to leak, and it keeps
 running while the web deployment is down or being redeployed.
 
+### Two more schedules, and why they are separate
+
+The compliance transition runs nightly. The other two do not, and folding them
+into it would break both.
+
+```sql
+-- Reminders, and the Monday digest. Every five minutes, because the reminder
+-- window is an hour wide and a job that runs hourly over an hour-wide window
+-- misses lectures. It is idempotent per slot per day, so running it often is
+-- the design rather than a risk.
+select cron.schedule(
+  'dept-flow-reminders',
+  '*/5 * * * *',
+  $$select send_lecture_reminders(60)$$
+);
+
+-- Draining the notification queue. Separate from writing notifications on
+-- purpose: queue_notification() runs inside whatever transaction produced the
+-- event, and a provider call in there would hold that transaction open for as
+-- long as the provider felt like taking.
+select cron.schedule(
+  'dept-flow-dispatch',
+  '* * * * *',
+  $$select net.http_post(
+      url := '<your site>/api/cron/notifications',
+      headers := jsonb_build_object('Authorization', 'Bearer <CRON_SECRET>')
+    )$$
+);
+```
+
+The dispatch one has to be an HTTP call rather than pure SQL: sending a WhatsApp
+message means calling Meta, and the database is not where that belongs. The
+other two are pure SQL and stay inside Supabase.
+
+**Nothing is sent until dispatch runs.** `queue_notification()` writes rows and
+stops. A deployment with reminders scheduled and dispatch not scheduled looks
+completely healthy — every notification row exists, every screen shows them —
+and no student receives anything. `/api/health` reports whether the queue is
+draining, which is the fastest way to catch it.
+
 If your host cannot do that, `POST /api/cron/compliance` does the same thing.
 It needs `CRON_SECRET` in `.env.local` and the same value as a bearer token, and
 it refuses to run if the secret is unset — the endpoint can lock a whole

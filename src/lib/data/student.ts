@@ -654,3 +654,89 @@ export async function loadExamPermit(): Promise<PermitStatus> {
     },
   };
 }
+
+/* -------------------------------------------------------------------------
+   Reports (§6)
+
+   Three windows on the same term. The computation is in the database, in
+   `student_period_report()` and `student_semester_report()` — the second of
+   which the exam permit also reads, so the report and the permit cannot
+   disagree about who may sit.
+   ------------------------------------------------------------------------- */
+
+export type PeriodReport = {
+  lecturesHeld: number;
+  attended: number;
+  /** Null when no lecture fell in the window — not zero, which is a claim. */
+  periodPct: number | null;
+  previousPct: number | null;
+  delta: number | null;
+  overallPct: number;
+};
+
+export type SemesterReportRow = {
+  courseId: string;
+  courseCode: string;
+  courseTitle: string;
+  lecturesHeld: number;
+  attended: number;
+  attendancePct: number;
+  eligible: boolean;
+  mustAttend: number;
+  projectedPct: number | null;
+};
+
+export type StudentReports = {
+  weekly: PeriodReport;
+  monthly: PeriodReport;
+  semester: SemesterReportRow[];
+  thresholdPct: number;
+};
+
+export async function loadStudentReports(): Promise<StudentReports> {
+  const session = await currentUser();
+  if (!session) throw new Error("Not signed in.");
+
+  const db = createUserClient(await currentAccessToken());
+
+  const [{ data: weekly }, { data: monthly }, { data: semester }, { data: config }] =
+    await Promise.all([
+      db.rpc("student_period_report", { p_student_id: session.profileId, p_days: 7 }),
+      db.rpc("student_period_report", { p_student_id: session.profileId, p_days: 30 }),
+      db.rpc("student_semester_report", { p_student_id: session.profileId }),
+      db.from("app_config").select("attendance_threshold_pct").eq("id", 1).maybeSingle(),
+    ]);
+
+  return {
+    weekly: periodOf(weekly),
+    monthly: periodOf(monthly),
+    semester: (semester ?? []).map((row: Record<string, unknown>) => ({
+      courseId: String(row.course_id),
+      courseCode: String(row.course_code ?? ""),
+      courseTitle: String(row.course_title ?? ""),
+      lecturesHeld: Number(row.lectures_held ?? 0),
+      attended: Number(row.attended ?? 0),
+      attendancePct: Number(row.attendance_pct ?? 0),
+      eligible: Boolean(row.eligible),
+      mustAttend: Number(row.must_attend ?? 0),
+      projectedPct: row.projected_pct === null ? null : Number(row.projected_pct),
+    })),
+    thresholdPct: Number(config?.attendance_threshold_pct ?? 75),
+  };
+}
+
+function periodOf(data: unknown): PeriodReport {
+  const row = (Array.isArray(data) ? data[0] : data) as Record<string, unknown> | null;
+
+  return {
+    lecturesHeld: Number(row?.lectures_held ?? 0),
+    attended: Number(row?.attended ?? 0),
+    // Null is preserved rather than coalesced to zero. "0%" and "no lectures
+    // were held" are different sentences, and only one of them is about the
+    // student.
+    periodPct: row?.period_pct == null ? null : Number(row.period_pct),
+    previousPct: row?.previous_pct == null ? null : Number(row.previous_pct),
+    delta: row?.delta == null ? null : Number(row.delta),
+    overallPct: Number(row?.overall_pct ?? 0),
+  };
+}

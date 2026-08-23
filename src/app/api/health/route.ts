@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createServiceClient, createUserClient } from "@/lib/supabase/client";
 import { currentAccessToken, currentUser } from "@/lib/auth/current-user";
 import { paystackReachability } from "@/lib/paystack";
+import { channelIsConfigured } from "@/lib/messaging";
 
 /**
  * Reports what the signed-in user can actually reach, one table at a time.
@@ -110,9 +111,66 @@ export async function GET() {
     // Distinguishes a missing key from a rejected one from a blocked network,
     // which are three different fixes.
     paystack: await paystackReachability(),
+    // The failure mode that looks like health. queue_notification() writes
+    // rows and stops; if nothing drains them, every notification exists, every
+    // screen shows them, and no student receives anything.
+    notifications: await queueHealth(),
     // If this is false, the token is not being accepted and every table below
     // will read zero — that is the first thing to check.
     env,
     tables: Object.fromEntries(results),
   });
+}
+
+/**
+ * Whether notifications are actually going out.
+ *
+ * This is the failure that looks like health from every other angle. A
+ * deployment with reminders scheduled and dispatch not scheduled has a full
+ * `notifications` table, a working dashboard, and a student body nobody has
+ * warned about anything. The oldest queued row is the tell: a queue that is
+ * draining never has one more than a few minutes old.
+ */
+async function queueHealth() {
+  try {
+    const db = createServiceClient();
+
+    const [{ count: queued }, { data: oldest }, { count: failed }] = await Promise.all([
+      db
+        .from("notification_deliveries")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "queued"),
+      db
+        .from("notification_deliveries")
+        .select("created_at")
+        .eq("status", "queued")
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .maybeSingle(),
+      db
+        .from("notification_deliveries")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "failed"),
+    ]);
+
+    const oldestAge = oldest?.created_at
+      ? Math.round((Date.now() - Date.parse(oldest.created_at)) / 60_000)
+      : null;
+
+    return {
+      queued: queued ?? 0,
+      failed: failed ?? 0,
+      oldestQueuedMinutes: oldestAge,
+      // Ten minutes is generous against a dispatch schedule of one minute. A
+      // backlog older than that means nothing is draining the queue.
+      draining: oldestAge === null || oldestAge <= 10,
+      channels: {
+        whatsapp: channelIsConfigured("whatsapp"),
+        sms: channelIsConfigured("sms"),
+        webPush: channelIsConfigured("web_push"),
+      },
+    };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "unreadable" };
+  }
 }

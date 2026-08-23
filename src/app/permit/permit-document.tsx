@@ -102,16 +102,44 @@ export function PermitDocument({ permit }: { permit: ExamPermit }) {
           </section>
         ) : null}
 
-        <footer className="mt-6 border-t border-line pt-4">
-          <dl className="grid grid-cols-2 gap-x-6 gap-y-3">
-            <Field label="Permit reference" value={permit.reference} mono />
-            <Field label="Issued" value={formatDateTime(permit.issuedAt)} />
-          </dl>
-          <p className="mt-3 text-[13px] leading-relaxed text-slate">
-            Verify this permit at <span className="font-medium text-ink">/check/permit</span> using the
-            reference above. Attendance figures are taken from the eligibility list authorized by
-            the Head of Department and do not change after that authorization.
-          </p>
+        <footer className="mt-6 flex flex-col gap-4 border-t border-line pt-4 sm:flex-row sm:items-start sm:gap-6">
+          <div className="min-w-0 flex-1">
+            <dl className="grid grid-cols-2 gap-x-6 gap-y-3">
+              <Field label="Permit reference" value={permit.reference} mono />
+              <Field label="Issued" value={formatDateTime(permit.issuedAt)} />
+            </dl>
+            <p className="mt-3 text-[13px] leading-relaxed text-slate">
+              Scan the code, or check the reference by hand at{" "}
+              <span className="font-medium text-ink">/check/permit</span>. Attendance figures are
+              taken from the eligibility list authorized by the Head of Department and do not
+              change after that authorization.
+            </p>
+          </div>
+
+          {/* §9.3.
+              
+              The QR is not what makes this hard to forge — anyone can generate
+              a QR pointing anywhere. What makes it hard to forge is that it
+              carries a reference the department's database has to recognise,
+              and the page it opens reads that record from the server rather
+              than from the paper. Edit a name on a screenshot and the code
+              still opens the real record, under the real name.
+              
+              Which is why the reference is printed beside it in full: a phone
+              with no camera, or an invigilator who does not trust one, must
+              still be able to check the document. A verification route that
+              exists only behind a scan is a route that fails at the one door
+              it was built for. */}
+          <figure className="shrink-0 self-center text-center sm:self-start">
+            <div
+              aria-hidden="true"
+              className="h-28 w-28 [&>svg]:h-full [&>svg]:w-full"
+              dangerouslySetInnerHTML={{ __html: permit.qrSvg }}
+            />
+            <figcaption className="mt-1.5 max-w-28 text-[11px] leading-tight text-muted">
+              Scan to verify this permit
+            </figcaption>
+          </figure>
         </footer>
       </article>
     </>

@@ -9,9 +9,17 @@ import { createServiceClient } from "@/lib/supabase/client";
  * allocated once. Re-issuing on every download would make every previously
  * printed copy unverifiable, which is the opposite of what a reference is for.
  *
- * It returns null when no authorized eligibility list marks the student
- * eligible for anything — before the department has decided, there is no
- * permit to issue.
+ * It answers in three ways, and each needs relaying differently:
+ *
+ *   * null — no authorized eligibility list marks the student eligible for
+ *     anything. Before the department has decided, there is no permit.
+ *   * an error naming outstanding dues — §9.1's other half. Recoverable, and
+ *     the student is the one who can recover it.
+ *   * a reference — both conditions met.
+ *
+ * The permit page already refuses to render while dues are outstanding, so
+ * this branch catches the request that came from somewhere else: a stale tab,
+ * a reversed payment between page load and click, a direct POST.
  */
 export async function POST() {
   const session = await currentUser();
@@ -37,6 +45,27 @@ export async function POST() {
   });
 
   if (error) {
+    // §9.1. The database refuses while dues are outstanding, and the refusal
+    // is worth relaying properly: "could not issue your permit" tells a
+    // student nothing, while the balance tells them exactly what to do. The
+    // amount is read back rather than parsed out of the error text, so a
+    // reworded exception cannot turn into a wrong number on a screen.
+    if (/dues outstanding/i.test(error.message)) {
+      const { data: owed } = await db.rpc("dues_balance_kobo", {
+        p_student_id: session.profileId,
+        p_academic_session_id: active.id,
+      });
+
+      return NextResponse.json(
+        {
+          error:
+            "Your permit needs your dues paid in full. Pay the balance and it becomes available straight away.",
+          duesOutstandingKobo: Number(owed ?? 0),
+        },
+        { status: 409 },
+      );
+    }
+
     return NextResponse.json({ error: "Could not issue your permit." }, { status: 400 });
   }
 

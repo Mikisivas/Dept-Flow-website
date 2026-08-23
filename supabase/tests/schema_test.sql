@@ -3339,16 +3339,169 @@ end $$;
 
 
 -- ---------------------------------------------------------------------------
--- The exam permit
+-- What is still outstanding (§9.2)
+--
+-- The panel that replaces a flat yes/no, and the arithmetic under it.
+--
+-- Everything here is deterministic: the threshold, the lectures the course
+-- will have held by the end, and subtraction. The forecast never appears,
+-- which is the cross-cutting rule stated as a test — "ML stays advisory;
+-- actual eligibility is always the deterministic 75% rule". The last
+-- assertion in this block deletes every prediction and checks the numbers do
+-- not move.
+-- ---------------------------------------------------------------------------
+
+do $$
+declare
+  v_session   uuid := '11111111-1111-1111-1111-111111111111';
+  v_lect      uuid := '33333333-3333-3333-3333-333333333301';
+  v_venue     uuid := '22222222-2222-2222-2222-222222222201';
+  v_course    uuid := gen_random_uuid();
+  v_full      uuid := gen_random_uuid();
+  v_none      uuid := gen_random_uuid();
+  v_entry     uuid;
+  v_fixture   uuid;
+  v_remaining integer;
+  v_needed    integer;
+  v_panel     record;
+  v_before    integer;
+begin
+  insert into courses (id, academic_session_id, code, title, level, kind, credit_units, semester, lecturer_id)
+  values (v_course, v_session, 'CMP 392', 'Permit Panel Fixture', 300, 'core', 3, 1, v_lect);
+
+  -- A weekly slot, so the course has lectures still to come. Without one the
+  -- denominator is what has already been held, and the panel would be a
+  -- scoreboard reporting the past rather than a route out of it.
+  insert into timetable_entries (academic_session_id, course_id, day_of_week, start_time, end_time, venue_id)
+  values (v_session, v_course, 3, '13:00', '15:00', v_venue)
+  returning id into v_entry;
+
+  insert into profiles (id, role, surname, first_name, phone)
+  values (v_full, 'student', 'Perfect', 'Attendance', '+2348050000501'),
+         (v_none, 'student', 'Never', 'Came', '+2348050000502');
+  insert into students (id, matric_no, level)
+  values (v_full, 'CMP/2021/931', 300), (v_none, 'CMP/2021/932', 300);
+  insert into enrolments (student_id, course_id, source, enrolled_on)
+  values (v_full, v_course, 'core', session_day(0)),
+         (v_none, v_course, 'core', session_day(0));
+
+  -- Ten held. One student attended all ten, the other none of them.
+  for i in 1..10 loop
+    v_fixture := gen_random_uuid();
+    insert into session_instances (id, course_id, timetable_entry_id, held_on, venue_id,
+                                   type, status, closed_at, created_by)
+    values (v_fixture, v_course, v_entry, session_day(i * 2), v_venue,
+            'recurring', 'closed', now(), v_lect);
+
+    insert into session_scores (student_id, session_instance_id, score, source)
+    values (v_full, v_fixture, 1.0, 'digital'),
+           (v_none, v_fixture, 0, 'digital');
+  end loop;
+
+  v_remaining := lectures_remaining(v_course);
+  perform assert_true(v_remaining > 0, 'the fixture course has lectures still to come');
+
+  -- ------------------------------------------------------------------------
+  -- The requirement lands exactly on the line
+  --
+  -- This is the assertion that would catch a ceiling in the wrong direction,
+  -- which is the bug this arithmetic is prone to and the one a student would
+  -- discover by being turned away at the door with a screen behind them saying
+  -- they had done enough.
+  -- ------------------------------------------------------------------------
+  v_needed := lectures_needed(v_full, v_course);
+
+  perform assert_true(
+    (10 + v_needed)::numeric / (10 + v_remaining) * 100 >= 75,
+    'attending the number asked for finishes at or above the threshold'
+  );
+  perform assert_true(
+    v_needed = 0 or (10 + v_needed - 1)::numeric / (10 + v_remaining) * 100 < 75,
+    'and one fewer does not — the number is the smallest that works, not a round-up'
+  );
+
+  perform assert_true(
+    lectures_needed(v_none, v_course) > lectures_needed(v_full, v_course),
+    'a student who has attended nothing needs more of what is left than one who has attended everything'
+  );
+
+  -- ------------------------------------------------------------------------
+  -- Out of reach, said out loud
+  -- ------------------------------------------------------------------------
+  select * into v_panel from permit_eligibility(v_none, v_session) where course_code = 'CMP 392';
+
+  perform assert_true(
+    not v_panel.eligible and v_panel.attendance_pct = 0,
+    'the student who attended nothing is not eligible'
+  );
+  perform assert_true(
+    not v_panel.reachable,
+    'and cannot reach 75% however many of the remaining lectures they attend'
+  );
+  perform assert_true(
+    v_panel.must_attend = v_panel.lectures_remaining,
+    'so the instruction is capped at what exists — never "attend 21 of the 17 left"'
+  );
+
+  select * into v_panel from permit_eligibility(v_full, v_session) where course_code = 'CMP 392';
+
+  perform assert_true(
+    v_panel.eligible and v_panel.reachable and v_panel.attendance_pct = 100,
+    'the student who attended everything is eligible and stays reachable'
+  );
+  perform assert_true(
+    v_panel.must_attend > 0,
+    'and is still told how many of the lectures to come they need — 100% today is not a finished term'
+  );
+
+  -- ------------------------------------------------------------------------
+  -- One generator, two documents (§6.3)
+  -- ------------------------------------------------------------------------
+  perform assert_true(
+    (select count(*) from permit_eligibility(v_full, v_session)) =
+    (select count(*) from student_semester_report(v_full, v_session)),
+    'the permit panel and the semester report cover the same courses'
+  );
+  perform assert_true(
+    (select r.attendance_pct from student_semester_report(v_full, v_session) r
+      where r.course_code = 'CMP 392') = v_panel.attendance_pct,
+    'and agree on the figure — they are one generator, not two'
+  );
+
+  -- ------------------------------------------------------------------------
+  -- The model does not decide this
+  -- ------------------------------------------------------------------------
+  perform compute_risk_predictions();
+  v_before := (select pe.must_attend from permit_eligibility(v_full, v_session) pe
+                where pe.course_code = 'CMP 392');
+
+  delete from risk_predictions where course_id = v_course;
+
+  perform assert_true(
+    (select pe.must_attend from permit_eligibility(v_full, v_session) pe
+      where pe.course_code = 'CMP 392') = v_before,
+    'deleting every prediction changes nothing — eligibility is arithmetic, not a forecast'
+  );
+end $$;
+
+
+-- ---------------------------------------------------------------------------
+-- The exam permit (§9)
 --
 -- On its own student and course: an earlier block authorizes a list marking
 -- Chidera eligible, so borrowing her would test that collision rather than
 -- this.
 --
--- What is asserted hardest is that the permit reads the AUTHORIZED list rather
--- than live attendance. A permit computed from current figures could
--- contradict the list the exam board sat with, and the system would have
--- forged it itself.
+-- Two things are asserted hardest here.
+--
+-- The first is that the permit reads the AUTHORIZED list rather than live
+-- attendance. A permit computed from current figures could contradict the list
+-- the exam board sat with, and the system would have forged it itself.
+--
+-- The second is the dual condition. Payment gates nothing on the way in — a
+-- lecture counts whether or not a naira has been paid — and it gates this. If
+-- the dues half of §9.1 is ever quietly dropped, a student walks into the hall
+-- owing the department five thousand naira and the schema said it was fine.
 -- ---------------------------------------------------------------------------
 
 do $$
@@ -3364,6 +3517,9 @@ declare
   v_ref     text;
   v_again   text;
   v_check   jsonb;
+  v_pay     uuid;
+  v_ok      boolean;
+  v_panel   record;
 begin
   insert into courses (id, academic_session_id, code, title, level, lecturer_id, kind, credit_units, semester)
   values (v_course, v_session, 'STA 401', 'Inference', 400, v_lect, 'core', 3, 1);
@@ -3385,12 +3541,66 @@ begin
     'no permit before the department has authorized anything — not an empty one, none'
   );
 
-  -- Paying is what makes the attendance count; authorizing is what fixes it.
-  perform clear_student(v_student, v_session, 'payment');
   perform authorize_eligibility_list(v_course, v_hod, 'Final list for the 2025/2026 first semester.');
 
+  -- §9.1. Attendance is not in question here — this student attended the one
+  -- lecture that was held and the HOD has authorized the list saying so. The
+  -- dues are, and on their own they are enough to hold the document.
+  begin
+    v_ref := issue_exam_permit(v_student, v_session);
+    v_ok := false;
+  exception when others then v_ok := true;
+  end;
+  perform assert_true(
+    v_ok,
+    'an authorized list is not enough on its own — dues outstanding hold the permit'
+  );
+
+  perform assert_true(
+    (select count(*) from exam_permits where student_id = v_student) = 0,
+    'and no reference is allocated on the way to refusing, or it would verify against nothing'
+  );
+
+  -- The panel that replaces the flat no. It says what is outstanding, in the
+  -- terms the student can act on.
+  select * into v_panel
+  from permit_eligibility(v_student, v_session)
+  where course_code = 'STA 401';
+
+  perform assert_true(
+    v_panel.attendance_pct = 100 and v_panel.eligible,
+    'the panel reports the attendance half as met'
+  );
+  perform assert_true(
+    dues_balance_kobo(v_student, v_session) = 500000,
+    'and the balance is the other half of what it has to report'
+  );
+
+  -- Paid in full, in two instalments, because that is how students pay.
+  insert into payments (student_id, academic_session_id, paystack_reference, channel,
+                        status, amount_kobo, verified_at)
+  values (v_student, v_session, 'ref-permit-1', 'transfer', 'success', 200000, now())
+  returning id into v_pay;
+  perform apply_payment(v_pay);
+
+  begin
+    v_ref := issue_exam_permit(v_student, v_session);
+    v_ok := false;
+  exception when others then v_ok := true;
+  end;
+  perform assert_true(v_ok, 'part paid is not paid — the permit is still held');
+
+  insert into payments (student_id, academic_session_id, paystack_reference, channel,
+                        status, amount_kobo, verified_at)
+  values (v_student, v_session, 'ref-permit-2', 'card', 'success', 300000, now())
+  returning id into v_pay;
+  perform apply_payment(v_pay);
+
   v_ref := issue_exam_permit(v_student, v_session);
-  perform assert_true(v_ref is not null, 'once the list is authorized the permit can be issued');
+  perform assert_true(
+    v_ref is not null,
+    'authorized list and dues paid in full — both conditions, and the permit issues'
+  );
   perform assert_true(
     v_ref ~ '^DF-[0-9]{4}-[A-Z0-9]{6}$',
     'the reference is in a form somebody can read off paper'

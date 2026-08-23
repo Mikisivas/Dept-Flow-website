@@ -4,6 +4,7 @@ import { createUserClient } from "@/lib/supabase/client";
 import { currentAccessToken, currentUser } from "@/lib/auth/current-user";
 import { loadLiveCheckpoint } from "@/lib/data/attendance";
 import { lagosToday } from "@/lib/format";
+import { permitQr, permitVerifyUrl } from "@/lib/permit-qr";
 import type {
   ComplianceState,
   CourseAttendance,
@@ -523,25 +524,72 @@ export type ExamPermit = {
   courses: Array<{ code: string; title: string; attendancePct: number }>;
   /** Authorized lists that decided against them. Shown, never hidden. */
   refused: Array<{ code: string; title: string; attendancePct: number }>;
+  /** Where the QR on the document points. Absolute — it is scanned off paper. */
+  verifyUrl: string;
+  /** The QR itself, as an inline SVG. See `permitQr()` for why it is a string. */
+  qrSvg: string;
 };
 
-export type PermitStatus =
+/** One course on the live panel: where the student stands and what would fix it. */
+export type PermitOutstanding = {
+  courseId: string;
+  code: string;
+  title: string;
+  attendancePct: number;
+  lecturesHeld: number;
+  attended: number;
+  lecturesRemaining: number;
+  /** Of the lectures still to come, how many they must attend. Capped at what exists. */
+  mustAttend: number;
+  /** False when even attending every remaining lecture finishes below the line. */
+  reachable: boolean;
+  eligible: boolean;
+};
+
+/**
+ * §9.2 — what is outstanding, per student, instead of a flat yes/no.
+ *
+ * Shown in every state including the good one. A student who has met both
+ * conditions still wants to see that they have, and a panel that only appears
+ * when something is wrong is one students learn to dread and then avoid.
+ */
+export type PermitPanel = {
+  courses: PermitOutstanding[];
+  thresholdPct: number;
+  duesTotalKobo: number;
+  duesPaidKobo: number;
+  duesOutstandingKobo: number;
+};
+
+export type PermitStatus = { panel: PermitPanel } & (
   | { state: "issued"; permit: ExamPermit }
   /** Cleared for at least one paper, but no reference allocated yet. */
   | { state: "needs_issue"; eligibleCourses: string[] }
+  /** §9.1 — the attendance half is met and the dues half is not. */
+  | { state: "dues_outstanding"; eligibleCourses: string[] }
   /** Authorized, and it decided against them everywhere. */
   | { state: "not_eligible"; refused: Array<{ code: string; title: string; attendancePct: number }> }
   /** The HOD has not authorized any list this student is on. */
-  | { state: "not_authorized"; pendingCourses: string[] };
+  | { state: "not_authorized"; pendingCourses: string[] }
+);
 
 /**
- * The student's own exam permit.
+ * The student's own exam permit, and the panel of what is still outstanding.
  *
- * Everything on it comes from AUTHORIZED eligibility lists, never from live
- * attendance. A permit computed from current figures could contradict the list
- * the exam board sat with — a student clearing dues after authorization would
- * print a document saying they may sit a paper the department's record says
- * they may not, and the system would have forged it itself.
+ * Two figures for the same courses, and the difference between them is the
+ * point rather than a bug:
+ *
+ *   * The PANEL is live. It answers "what do I still have to do", and a stale
+ *     answer to that is useless — the student is asking so they can act today.
+ *
+ *   * The DOCUMENT comes from AUTHORIZED eligibility lists, never from live
+ *     attendance. A permit computed from current figures could contradict the
+ *     list the exam board sat with, and the system would have forged it
+ *     itself.
+ *
+ * The screen labels which is which. A student comparing the two is entitled to
+ * know that one is the department's decision and the other is where they stand
+ * this morning.
  */
 export async function loadExamPermit(): Promise<PermitStatus> {
   const session = await currentUser();
@@ -608,14 +656,29 @@ export async function loadExamPermit(): Promise<PermitStatus> {
   const eligible = decided.filter((row) => row.entry.eligible).map(toRow);
   const refused = decided.filter((row) => !row.entry.eligible).map(toRow);
 
+  const panel = await loadPermitPanel(db, session.profileId, activeSession.id);
+
   if (decided.length === 0) {
     return {
+      panel,
       state: "not_authorized",
       pendingCourses: [...courseInfo.values()].map((course) => course.code).sort(),
     };
   }
 
-  if (eligible.length === 0) return { state: "not_eligible", refused };
+  if (eligible.length === 0) return { panel, state: "not_eligible", refused };
+
+  const eligibleCourses = eligible.map((course) => course.code).sort();
+
+  // §9.1, the dues half, applied to the DOCUMENT.
+  //
+  // Checked before the issued state rather than only at issue, so that a
+  // reversed payment takes the permit back. Without this, a student could pay,
+  // print, charge back, and still be holding a rendered permit — and §8 says a
+  // reversal re-locks, which has to mean something here too.
+  if (panel.duesOutstandingKobo > 0) {
+    return { panel, state: "dues_outstanding", eligibleCourses };
+  }
 
   // Issuing needs to write, so it goes through the API rather than here. The
   // page asks for the permit; the route allocates the reference.
@@ -630,10 +693,13 @@ export async function loadExamPermit(): Promise<PermitStatus> {
   // reference is a write, so it goes through the API rather than a page load —
   // opening a screen should not create a record.
   if (!existing) {
-    return { state: "needs_issue", eligibleCourses: eligible.map((course) => course.code).sort() };
+    return { panel, state: "needs_issue", eligibleCourses };
   }
 
+  const verifyUrl = permitVerifyUrl(existing.reference);
+
   return {
+    panel,
     state: "issued",
     permit: {
       reference: existing.reference,
@@ -651,7 +717,64 @@ export async function loadExamPermit(): Promise<PermitStatus> {
       },
       courses: eligible.sort((a, b) => a.code.localeCompare(b.code)),
       refused: refused.sort((a, b) => a.code.localeCompare(b.code)),
+      verifyUrl,
+      qrSvg: await permitQr(verifyUrl),
     },
+  };
+}
+
+/**
+ * The live panel (§9.2).
+ *
+ * `permit_eligibility()` is built on `student_semester_report()`, which is
+ * what §6.3 asks for: the permit and the semester report are one generator.
+ * Two functions computing the same percentage would eventually disagree, and
+ * they would disagree in front of the student they are about.
+ */
+async function loadPermitPanel(
+  db: ReturnType<typeof createUserClient>,
+  studentId: string,
+  academicSessionId: string,
+): Promise<PermitPanel> {
+  const [{ data: rows }, { data: config }, { data: dues }, { data: paid }, { data: balance }] =
+    await Promise.all([
+      db.rpc("permit_eligibility", {
+        p_student_id: studentId,
+        p_academic_session_id: academicSessionId,
+      }),
+      db.from("app_config").select("attendance_threshold_pct").eq("id", 1).maybeSingle(),
+      db
+        .from("dues_periods")
+        .select("dues_amount_kobo")
+        .eq("academic_session_id", academicSessionId)
+        .maybeSingle(),
+      db.rpc("dues_paid_kobo", {
+        p_student_id: studentId,
+        p_academic_session_id: academicSessionId,
+      }),
+      db.rpc("dues_balance_kobo", {
+        p_student_id: studentId,
+        p_academic_session_id: academicSessionId,
+      }),
+    ]);
+
+  return {
+    courses: ((rows ?? []) as Record<string, unknown>[]).map((row) => ({
+      courseId: String(row.course_id ?? ""),
+      code: String(row.course_code ?? ""),
+      title: String(row.course_title ?? ""),
+      attendancePct: Number(row.attendance_pct ?? 0),
+      lecturesHeld: Number(row.lectures_held ?? 0),
+      attended: Number(row.attended ?? 0),
+      lecturesRemaining: Number(row.lectures_remaining ?? 0),
+      mustAttend: Number(row.must_attend ?? 0),
+      reachable: Boolean(row.reachable),
+      eligible: Boolean(row.eligible),
+    })),
+    thresholdPct: Number(config?.attendance_threshold_pct ?? 75),
+    duesTotalKobo: Number(dues?.dues_amount_kobo ?? 0),
+    duesPaidKobo: Number(paid ?? 0),
+    duesOutstandingKobo: Number(balance ?? 0),
   };
 }
 

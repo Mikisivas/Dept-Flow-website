@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
-import { FileCheck } from "lucide-react";
+import Link from "next/link";
+import { FileCheck, Wallet } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
 import { loadExamPermit } from "@/lib/data/student";
-import { formatPercent } from "@/lib/format";
+import { formatPercent, naira } from "@/lib/format";
+import { EligibilityPanel } from "./eligibility-panel";
 import { IssuePermitButton, PermitDocument } from "./permit-document";
 
 export const metadata: Metadata = { title: "Exam permit" };
@@ -12,13 +14,22 @@ export const metadata: Metadata = { title: "Exam permit" };
 export const dynamic = "force-dynamic";
 
 /**
- * The end of every path in this system: dues cleared, attendance counted, the
- * list authorized.
+ * The end of every path in this system: dues paid in full, attendance counted,
+ * the list authorized.
  *
- * Three states, and the distinction between the last two matters. "Not
- * authorized yet" is the department not having decided; "not eligible" is the
- * department having decided against you. Collapsing them into one message
- * would leave a student unable to tell whether to wait or to appeal.
+ * Four states, and every distinction between them matters:
+ *
+ *   * "Not authorized yet" is the department not having decided.
+ *   * "Not eligible" is the department having decided against you.
+ *   * "Dues outstanding" is the department not having been paid — the one
+ *     state the student can clear themselves, this afternoon.
+ *
+ * Collapsing any of them into one message would leave a student unable to tell
+ * whether to wait, to appeal, or to pay.
+ *
+ * The live panel (§9.2) sits above all four. Whatever the state, the question
+ * a student came here to ask is "what do I still have to do", and a verdict
+ * without an answer to that is a door with no handle.
  */
 export default async function PermitPage() {
   const status = await loadExamPermit();
@@ -30,8 +41,39 @@ export default async function PermitPage() {
         subtitle="Carry this to the hall. It lists the papers you may sit."
       />
 
-      <div className="mt-6">
+      <div className="mt-6 flex flex-col gap-6">
+        {/* Above the outcome, not below it. A student who has been refused
+            stops reading at the refusal, and what they need is underneath. */}
+        {status.state === "issued" ? null : <EligibilityPanel panel={status.panel} />}
+
         {status.state === "issued" ? <PermitDocument permit={status.permit} /> : null}
+
+        {status.state === "dues_outstanding" ? (
+          <section className="rounded-lg border border-line bg-surface p-5">
+            <h2 className="flex items-center gap-2 text-[17px] font-semibold text-ink">
+              <Wallet className="h-5 w-5 shrink-0 text-slate" aria-hidden="true" />
+              Your attendance clears you — your dues do not
+            </h2>
+            <p className="mt-1.5 text-[15px] leading-relaxed text-slate">
+              The department has cleared you to sit{" "}
+              <span className="font-medium text-ink" translate="no">
+                {status.eligibleCourses.join(", ")}
+              </span>
+              . The permit prints once the{" "}
+              <strong className="font-semibold text-ink tabular">
+                {naira(status.panel.duesOutstandingKobo)}
+              </strong>{" "}
+              still outstanding is paid. Nothing about your attendance changes in the meantime —
+              lectures have been counting all along and go on counting.
+            </p>
+            <Link
+              href="/dues"
+              className="mt-4 inline-flex min-h-11 items-center justify-center rounded-md bg-brand px-4 text-[15px] font-semibold text-black hover:bg-brand-hover active:bg-brand-pressed focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand-text)]"
+            >
+              Pay your dues
+            </Link>
+          </section>
+        ) : null}
 
         {status.state === "not_authorized" ? (
           <>

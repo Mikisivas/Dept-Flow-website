@@ -152,9 +152,11 @@ insert into timetable_entries (id, academic_session_id, course_id, day_of_week, 
 -- Compliance starting positions
 -- ---------------------------------------------------------------------------
 
--- Chidera has not paid: her scores record but do not count.
--- Halima has paid.
--- Tunde is locked out after the buffer expired.
+-- Chidera has not paid. Her attendance counts anyway — that is the decoupling
+-- — and what it costs her is the exam permit, which needs the dues cleared as
+-- well as the 75%. Halima has paid in full and can print hers. Tunde is locked
+-- out after the buffer expired. Between them the three cover every branch of
+-- the permit screen, which is the point of seeding them differently.
 insert into compliance_statuses (student_id, academic_session_id, state, cleared_at, cleared_via, locked_at) values
   ('44444444-4444-4444-4444-444444444401', '11111111-1111-1111-1111-111111111111', 'uncleared', null,  null,      null),
   ('44444444-4444-4444-4444-444444444402', '11111111-1111-1111-1111-111111111111', 'cleared',   now(), 'payment', null),

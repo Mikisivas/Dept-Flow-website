@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { CircleAlert, CircleCheck, TriangleAlert } from "lucide-react";
 import { AuthShell } from "@/components/auth-shell";
@@ -38,14 +38,12 @@ type Result =
       courses: string[];
     };
 
-export function PermitCheckForm() {
-  const [reference, setReference] = useState("");
+export function PermitCheckForm({ initialReference = "" }: { initialReference?: string }) {
+  const [reference, setReference] = useState(initialReference);
   const [result, setResult] = useState<Result>({ status: "idle" });
 
-  async function check(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
-    if (reference.trim().length < 6) {
+  const verify = useCallback(async (value: string) => {
+    if (value.trim().length < 6) {
       setResult({ status: "error", message: "Enter the full reference, e.g. DF-2025-7K3M9Q." });
       return;
     }
@@ -56,7 +54,7 @@ export function PermitCheckForm() {
       const response = await fetch("/api/permit/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reference: reference.trim() }),
+        body: JSON.stringify({ reference: value.trim() }),
       });
       const body = await response.json();
 
@@ -84,6 +82,26 @@ export function PermitCheckForm() {
     } catch {
       setResult({ status: "error", message: "Could not reach the server. Try again." });
     }
+  }, []);
+
+  /**
+   * A scanned permit checks itself.
+   *
+   * The invigilator scanned the code because they wanted the answer, not
+   * because they wanted a form with one field already filled in. Guarded so it
+   * fires once: without the ref, a re-render on any state change would send
+   * the same reference again.
+   */
+  const scanned = useRef(false);
+  useEffect(() => {
+    if (scanned.current || initialReference.trim().length < 6) return;
+    scanned.current = true;
+    void verify(initialReference);
+  }, [initialReference, verify]);
+
+  async function check(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await verify(reference);
   }
 
   return (

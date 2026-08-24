@@ -3365,6 +3365,153 @@ end $$;
 
 
 -- ---------------------------------------------------------------------------
+-- Payments that reconcile themselves (§8.4)
+--
+-- Nobody presses a re-verify button in this system, so the schedule has to be
+-- right on its own. Two properties are asserted harder than the rest:
+--
+--   * An unreachable Paystack NEVER abandons a payment. "Could not ask" is a
+--     fact about the network; recording it as "did not pay" tells a student
+--     who paid that they did not.
+--   * Giving up asking is not giving up accepting. An abandoned row keeps its
+--     money claim open — a webhook arriving on day four still resolves it.
+-- ---------------------------------------------------------------------------
+
+do $$
+declare
+  v_session uuid := '11111111-1111-1111-1111-111111111111';
+  v_student uuid := gen_random_uuid();
+  v_fresh   uuid;
+  v_old     uuid;
+  v_next    timestamptz;
+  v_before  timestamptz;
+  v_status  text;
+  v_due     integer;
+begin
+  insert into profiles (id, role, surname, first_name, phone)
+  values (v_student, 'student', 'Reconcile', 'Case', '+2348050000601');
+  insert into students (id, matric_no, level) values (v_student, 'CMP/2021/941', 300);
+
+  -- ------------------------------------------------------------------------
+  -- Every new payment schedules itself
+  -- ------------------------------------------------------------------------
+  insert into payments (student_id, academic_session_id, paystack_reference, status, amount_kobo)
+  values (v_student, v_session, 'ref-recon-fresh', 'pending', 500000)
+  returning id into v_fresh;
+
+  perform assert_true(
+    (select next_check_at from payments where id = v_fresh) is not null,
+    'a new pending payment is scheduled for a check without anybody remembering to do it'
+  );
+
+  perform assert_true(
+    (select next_check_at from payments where id = v_fresh) > now(),
+    'and not immediately — the first ninety seconds belong to the webhook'
+  );
+
+  perform assert_true(
+    (select count(*) from payments_due_for_check(50) d where d.payment_id = v_fresh) = 0,
+    'so a payment thirty seconds old is not yet swept'
+  );
+
+  -- ------------------------------------------------------------------------
+  -- The curve widens with age
+  -- ------------------------------------------------------------------------
+  insert into payments (student_id, academic_session_id, paystack_reference, status, amount_kobo,
+                        initialized_at)
+  values (v_student, v_session, 'ref-recon-old', 'pending', 500000, now() - interval '3 hours')
+  returning id into v_old;
+
+  update payments set next_check_at = now() - interval '1 minute' where id = v_old;
+
+  perform assert_true(
+    (select count(*) from payments_due_for_check(50) d where d.payment_id = v_old) = 1,
+    'a payment whose check is overdue is picked up by the sweep'
+  );
+
+  v_next := schedule_payment_check(v_old, true);
+
+  perform assert_true(
+    v_next > now() + interval '10 minutes' and v_next < now() + interval '20 minutes',
+    'a three-hour-old payment is asked about every fifteen minutes, not every minute'
+  );
+
+  perform assert_true(
+    (select check_attempts from payments where id = v_old) = 1,
+    'and the attempt is counted, so a stuck row is distinguishable from a new one'
+  );
+
+  -- ------------------------------------------------------------------------
+  -- Unreachable Paystack never abandons anybody
+  -- ------------------------------------------------------------------------
+  update payments
+     set initialized_at = now() - interval '10 days', check_attempts = 40
+   where id = v_old;
+
+  v_next := schedule_payment_check(v_old, false);
+
+  perform assert_true(
+    v_next is not null,
+    'an unreachable Paystack reschedules rather than resolving'
+  );
+
+  perform assert_true(
+    (select status from payments where id = v_old) = 'pending',
+    'a ten-day-old payment we could not ask about is STILL pending — we have learned nothing about it'
+  );
+
+  -- ------------------------------------------------------------------------
+  -- Two days of Paystack saying "pending" is an abandoned checkout
+  -- ------------------------------------------------------------------------
+  v_next := schedule_payment_check(v_old, true);
+
+  perform assert_true(v_next is null, 'past two days the polling stops');
+
+  select status into v_status from payments where id = v_old;
+  perform assert_true(
+    v_status = 'abandoned',
+    'and the row says abandoned, so the student''s screen stops claiming something is in flight'
+  );
+
+  perform assert_true(
+    (select verified_at from payments where id = v_old) is null,
+    'with nothing marked verified — there was nothing to verify'
+  );
+
+  perform assert_true(
+    (select count(*) from payments_due_for_check(50) d where d.payment_id = v_old) = 0,
+    'and it is off the sweep'
+  );
+
+  -- ------------------------------------------------------------------------
+  -- Giving up asking is not giving up accepting
+  -- ------------------------------------------------------------------------
+  -- A late webhook resolves an abandoned row. The schema has to permit it, or
+  -- a student who paid on day four is refused by the database rather than by
+  -- anybody's decision.
+  update payments
+     set status = 'success', channel = 'transfer', verified_at = now()
+   where id = v_old;
+
+  perform assert_true(
+    (select status from payments where id = v_old) = 'success',
+    'an abandoned payment can still be settled later — the polling stopped, the door did not close'
+  );
+
+  -- ------------------------------------------------------------------------
+  -- The health signal
+  -- ------------------------------------------------------------------------
+  update payments set next_check_at = now() - interval '30 minutes' where id = v_fresh;
+
+  select overdue into v_due from reconciliation_health();
+  perform assert_true(
+    v_due >= 1,
+    'an overdue payment shows in the health report — a sweep that stopped running looks exactly like one with nothing to do'
+  );
+end $$;
+
+
+-- ---------------------------------------------------------------------------
 -- What is still outstanding (§9.2)
 --
 -- The panel that replaces a flat yes/no, and the arithmetic under it.

@@ -187,9 +187,32 @@ select cron.schedule(
 exists to produce; unscheduled, every screen still works and no student is ever
 warned about anything. It is the single most important line in this file.
 
-The dispatch job has to be an HTTP call rather than pure SQL: sending a WhatsApp
-message means calling Meta, and the database is not where that belongs. The
-other three are pure SQL and stay inside Supabase.
+```sql
+-- Payments that reconcile themselves. Every two minutes.
+--
+-- This is what makes "re-verify" a button nobody needs. Paystack's webhook is
+-- the fast path and it is not a guaranteed one — a deploy mid-flight loses it,
+-- and the student's money then sits in the department's account uncredited
+-- until somebody notices. Nobody notices; the student notices, at the permit.
+--
+-- The sweep asks about anything the webhook missed, on a schedule that widens
+-- as the payment ages: every 90 seconds for the first two minutes, then 2, 15,
+-- 120, and after two days of Paystack answering "pending" it stops asking and
+-- calls the checkout abandoned. A late webhook still resolves it.
+select cron.schedule(
+  'dept-flow-reconcile',
+  '*/2 * * * *',
+  $$select net.http_post(
+      url := '<your site>/api/cron/reconcile',
+      headers := jsonb_build_object('Authorization', 'Bearer <CRON_SECRET>')
+    )$$
+);
+```
+
+The dispatch and reconcile jobs have to be HTTP calls rather than pure SQL:
+sending a WhatsApp message means calling Meta and reconciling means calling
+Paystack, and the database is not where either belongs. The other three are
+pure SQL and stay inside Supabase.
 
 **Nothing is sent until dispatch runs.** `queue_notification()` writes rows and
 stops. A deployment with reminders scheduled and dispatch not scheduled looks
@@ -263,6 +286,12 @@ Web Push **is** wired end to end. It needs only the VAPID keys above.
 
 Open `/api/health` first. It reports **which migrations are missing by name**,
 which tables the signed-in user can actually read, whether Paystack answers,
-whether pg_cron is installed, and whether the notification queue is draining. A
-half-applied migration set explains more failures than anything else, and a
-notification queue that is filling but never draining is the second.
+whether pg_cron is installed, whether the notification queue is draining, and
+whether payments are reconciling.
+
+The last two are the failures that look like health. Both have the same shape:
+the job is not scheduled, every screen renders perfectly, and something
+accumulates silently — unsent warnings in one case, uncredited payments in the
+other. `notifications.draining` and `reconciliation.sweeping` are the two
+booleans to read; a half-applied migration set is the only thing that explains
+more failures than they do.

@@ -115,11 +115,48 @@ export async function GET() {
     // rows and stops; if nothing drains them, every notification exists, every
     // screen shows them, and no student receives anything.
     notifications: await queueHealth(),
+    // The same failure shape, on the money side. Payments reconcile
+    // themselves, and a sweep that is not scheduled looks exactly like one
+    // with nothing to do.
+    reconciliation: await reconciliationHealth(),
     // If this is false, the token is not being accepted and every table below
     // will read zero — that is the first thing to check.
     env,
     tables: Object.fromEntries(results),
   });
+}
+
+/**
+ * Whether payments are actually reconciling.
+ *
+ * `overdue` is the number that matters: rows the sweep should already have
+ * picked up and has not. Zero means it is running. Persistently above zero
+ * means it is not, and every stuck payment is a student who paid and has not
+ * been credited — which nothing else on this page would reveal, because every
+ * screen renders perfectly while it happens.
+ */
+async function reconciliationHealth() {
+  try {
+    const { data } = await createServiceClient().rpc("reconciliation_health");
+    const row = (Array.isArray(data) ? data[0] : data) as Record<string, unknown> | null;
+
+    const overdue = Number(row?.overdue ?? 0);
+    const oldestOverdue = Number(row?.oldest_overdue_seconds ?? 0);
+
+    return {
+      pending: Number(row?.pending ?? 0),
+      overdue,
+      oldestOverdueMinutes: Math.round(oldestOverdue / 60),
+      // Asked ten times or more and still unresolved: Paystack unreachable for
+      // hours, or a key problem. Worth a person looking.
+      stuck: Number(row?.stuck ?? 0),
+      // Ten minutes is generous against a sweep scheduled every two. A backlog
+      // older than that means nothing is sweeping.
+      sweeping: overdue === 0 || oldestOverdue <= 600,
+    };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "unreadable" };
+  }
 }
 
 /**

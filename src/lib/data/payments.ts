@@ -271,55 +271,47 @@ export async function settlePayment(
 }
 
 /**
- * Re-ask Paystack about anything still pending.
+ * The student's own pending payments, settled while they are looking.
  *
- * A card settles in seconds and a transfer in minutes, so a row that is still
- * pending well after it was started is not "in flight" — it is a checkout that
- * was abandoned, a transfer that never landed, or a payment whose webhook we
- * never received. Left alone it spins on "Checking payment…" for ever, which
- * is a screen that generates support requests rather than answering questions.
+ * The background sweep in `reconciliation.ts` covers everybody on a schedule.
+ * This is the same work, done immediately for the one student whose screen is
+ * open — because "it will sort itself out within two minutes" is true and
+ * unhelpful to somebody staring at "Checking payment…".
  *
- * This is the nightly reconciliation job, run on read instead. It is bounded:
- * only rows older than the grace below, only a handful at a time, and
- * `last_checked_at` keeps a reload from re-asking about the same row.
+ * It reads the SAME `next_check_at` column the sweep does, so the two cannot
+ * disagree about what is due, and a student refreshing repeatedly cannot turn
+ * their own dues page into a way to hammer Paystack.
  */
-const RECONCILE_AFTER_SECONDS = 90;
-const RECONCILE_BATCH = 3;
-
 export async function reconcilePendingPayments(studentId: string): Promise<void> {
   const db = createServiceClient();
-  const cutoff = new Date(Date.now() - RECONCILE_AFTER_SECONDS * 1000).toISOString();
 
-  const { data: stale } = await db
+  const { data: due } = await db
     .from("payments")
-    .select("paystack_reference, last_checked_at")
+    .select("id, paystack_reference")
     .eq("student_id", studentId)
     .eq("status", "pending")
-    .lt("initialized_at", cutoff)
-    .order("initialized_at", { ascending: false })
-    .limit(RECONCILE_BATCH);
+    .not("next_check_at", "is", null)
+    .lte("next_check_at", new Date().toISOString())
+    .order("initialized_at", { ascending: true })
+    .limit(3);
 
-  const due = (stale ?? []).filter(
-    (row) => !row.last_checked_at || Date.parse(row.last_checked_at) < Date.parse(cutoff),
-  );
-
-  await Promise.all(
-    due.map(async (row) => {
-      try {
-        await settlePayment(row.paystack_reference, studentId);
-      } catch (error) {
-        // One unreachable reference must not blank the dues screen. The row
-        // stays pending and the next load tries again.
-        //
-        // warn, not error: this is a handled condition on a retry path, and
-        // logging it as an error makes Next's dev overlay throw a red card
-        // over a page that rendered perfectly well.
-        console.warn(
-          `reconcile deferred for ${row.paystack_reference}: ${(error as Error).message}`,
-        );
-      }
-    }),
-  );
+  for (const row of due ?? []) {
+    try {
+      await settlePayment(row.paystack_reference, studentId);
+      await db.rpc("schedule_payment_check", { p_payment_id: row.id, p_answered: true });
+    } catch (error) {
+      // One unreachable reference must not blank the dues screen. The row is
+      // pushed forward and the sweep picks it up.
+      //
+      // warn, not error: this is a handled condition on a retry path, and
+      // logging it as an error makes Next's dev overlay throw a red card over
+      // a page that rendered perfectly well.
+      await db.rpc("schedule_payment_check", { p_payment_id: row.id, p_answered: false });
+      console.warn(
+        `reconcile deferred for ${row.paystack_reference}: ${(error as Error).message}`,
+      );
+    }
+  }
 }
 
 /**

@@ -88,3 +88,13 @@ if [ -z "$count" ] || [ "$count" -eq 0 ]; then
 fi
 echo
 echo "ALL $count SCHEMA ASSERTIONS PASS"
+
+# Every column the TypeScript asks for, against the schema that just applied.
+#
+# Nothing else in the toolchain can catch a select naming a dropped column:
+# typecheck, lint and build all pass, PostgREST rejects the query at runtime,
+# and a caller reading only `data` renders an empty screen that looks exactly
+# like a student with no lectures. This runs here because here is the only
+# place a real schema and the real source are both to hand.
+echo
+node "$HERE/scripts/check-selects.mjs" "$PGROOT" "$PORT" deptflow || exit 1

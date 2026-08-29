@@ -174,11 +174,11 @@ export async function loadStudentDashboard(): Promise<StudentDashboard> {
   // Lectures actually held, and this student's score for each. Cancelled
   // instances are excluded here for the same reason the SQL excludes them:
   // a cancelled class must not count against anyone.
-  const [{ data: instances }, { data: scores }] = courseIds.length
+  const [instanceRead, scoreRead] = courseIds.length
     ? await Promise.all([
         db
           .from("session_instances")
-          .select("id, course_id, held_on, checkpoint_mode, status")
+          .select("id, course_id, held_on, status")
           .in("course_id", courseIds)
           .eq("status", "closed")
           .order("held_on"),
@@ -187,7 +187,29 @@ export async function loadStudentDashboard(): Promise<StudentDashboard> {
           .select("session_instance_id, score, source")
           .eq("student_id", session.profileId),
       ])
-    : [{ data: [] }, { data: [] }];
+    : [{ data: [], error: null }, { data: [], error: null }];
+
+  // Checked, not shrugged off.
+  //
+  // A failed read and a student with no lectures both arrive here as an empty
+  // array, and they mean opposite things: one is "nothing happened yet", the
+  // other is "we cannot see what happened". Swallowing the error renders a
+  // confident, wrong dashboard — 0% attendance for a student who attended ten
+  // lectures — with nothing anywhere to say so.
+  //
+  // This is not hypothetical. `checkpoint_mode` was dropped by the trust-based
+  // migration and left behind in this select; PostgREST rejected the query,
+  // the error went in the bin, and every student read zero for three courses
+  // while the database held the right answer all along.
+  if (instanceRead.error) {
+    throw new DashboardUnavailable("session_instances", instanceRead.error.message);
+  }
+  if (scoreRead.error) {
+    throw new DashboardUnavailable("session_scores", scoreRead.error.message);
+  }
+
+  const instances = instanceRead.data;
+  const scores = scoreRead.data;
 
   const scoreByInstance = new Map(
     (scores ?? []).map((row) => [row.session_instance_id, row]),
@@ -385,7 +407,7 @@ export async function loadCourseDetail(code: string): Promise<CourseDetail | nul
   const [{ data: instances }, { data: scores }, { data: entry }] = await Promise.all([
     db
       .from("session_instances")
-      .select("id, held_on, checkpoint_mode")
+      .select("id, held_on")
       .eq("course_id", course.id)
       .eq("status", "closed")
       .gte("held_on", enrolment.enrolled_on)

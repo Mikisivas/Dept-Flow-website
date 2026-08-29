@@ -87,7 +87,7 @@ export async function loadStandings(db: Db, courseId?: string): Promise<StudentS
         .is("dropped_at", null),
       db
         .from("session_instances")
-        .select("id, course_id, held_on, checkpoint_mode")
+        .select("id, course_id, held_on")
         .eq("status", "closed")
         .order("held_on"),
       db.from("session_scores").select("student_id, session_instance_id, score"),
@@ -875,7 +875,7 @@ export async function loadLecturerOversight(): Promise<LecturerOversight[]> {
     courseIds.length
       ? db
           .from("session_instances")
-          .select("id, course_id, status, checkpoint_mode")
+          .select("id, course_id, status")
           .in("course_id", courseIds)
       : Promise.resolve({ data: [] }),
     db.from("manual_attendance_batches").select("session_instance_id"),

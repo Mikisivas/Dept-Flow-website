@@ -135,7 +135,7 @@ export async function loadLecturerDashboard(): Promise<LecturerDashboard> {
     db
       .from("session_instances")
       .select(
-        "id, course_id, timetable_entry_id, held_on, status, checkpoint_mode, scheduled_start, scheduled_end, venue_id, timetable_entries(start_time, end_time)",
+        "id, course_id, timetable_entry_id, held_on, status, scheduled_start, scheduled_end, venue_id, timetable_entries(start_time, end_time)",
       )
       .in("course_id", courseIds)
       .or(`held_on.eq.${date},status.eq.open`),
@@ -214,7 +214,7 @@ async function loadRecent(
 ): Promise<LecturerDashboard["recent"]> {
   const { data: closed } = await db
     .from("session_instances")
-    .select("id, course_id, held_on, checkpoint_mode")
+    .select("id, course_id, held_on")
     .in("course_id", [...courseById.keys()])
     .eq("status", "closed")
     .order("held_on", { ascending: false })

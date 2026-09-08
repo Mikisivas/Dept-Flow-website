@@ -3,6 +3,7 @@ import { AppShell } from "@/components/app-shell";
 import { PageHeader } from "@/components/page-header";
 import { loadSystemConfig } from "@/lib/data/admin";
 import { formatDate, naira } from "@/lib/format";
+import { RegistrationWindowControl } from "./registration-window-control";
 
 export const metadata: Metadata = { title: "Configuration" };
 
@@ -11,6 +12,14 @@ export const dynamic = "force-dynamic";
 /**
  * Every value here changes how the system treats every student, so each one is
  * shown with what it actually does rather than as a bare field.
+ *
+ * Most of them are read-only on purpose: a threshold or a token lifetime is a
+ * decision about the whole department, and it is changed deliberately in the
+ * database, not between two clicks on a settings page. The registration window
+ * is the exception, and has to be, because it is the one value that genuinely
+ * changes every semester and whose absence is silent — an unconfigured window
+ * reads as open, so a department that never set one loses the gate without ever
+ * seeing an error.
  *
  * The geo-fence and the location-retention window used to live at the bottom
  * of this page. Both are gone with location enforcement, and the section that
@@ -120,6 +129,8 @@ export default async function ConfigPage() {
             ))
           )}
         </dl>
+
+        <RegistrationWindowControl windows={config.registrationWindows} />
       </section>
 
       <section aria-labelledby="venues-heading" className="mt-8">

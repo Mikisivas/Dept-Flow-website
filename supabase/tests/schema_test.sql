@@ -3088,11 +3088,106 @@ end $$;
 
 
 -- ---------------------------------------------------------------------------
+-- The admin setting the registration window (§2.1)
+--
+-- The gate the whole revision turns on, and until now it could only be opened
+-- with SQL access. What is worth asserting is that it is the admin's to set,
+-- that a moved deadline is recoverable from the audit row, and that setting one
+-- changes no registration.
+-- ---------------------------------------------------------------------------
+
+do $$
+declare
+  v_admin   uuid := '33333333-3333-3333-3333-333333333303';
+  v_hod     uuid := '33333333-3333-3333-3333-333333333302';
+  v_session uuid := '11111111-1111-1111-1111-111111111111';
+  v_id      uuid;
+  v_before  integer;
+  v_meta    jsonb;
+begin
+  select count(*) into v_before from course_registrations;
+
+  perform assert_rejects(
+    format('select set_registration_period(%L, %L, 2::smallint, %L, %L, %L)',
+           v_hod, v_session, current_date, current_date + 7,
+           'The head of department is not the administrator.'),
+    'only an administrator can set the registration window'
+  );
+
+  perform assert_rejects(
+    format('select set_registration_period(%L, %L, 2::smallint, %L, %L, %L)',
+           v_admin, v_session, current_date, current_date + 7, 'moved'),
+    'a window change must say why — "moved" is not a reason anyone can act on later'
+  );
+
+  perform assert_rejects(
+    format('select set_registration_period(%L, %L, 2::smallint, %L, %L, %L)',
+           v_admin, v_session, current_date + 7, current_date,
+           'A window that closes before it opens.'),
+    'a window cannot close before it opens'
+  );
+
+  -- Creating one where there was none. Second semester has no row seeded, which
+  -- is why is_registration_open reported it open a few blocks above.
+  v_id := set_registration_period(v_admin, v_session, 2::smallint,
+                                  current_date - 1, current_date + 6,
+                                  'Second semester resumption, seven days as usual.');
+
+  perform assert_true(
+    is_registration_open(v_session, 2::smallint),
+    'the window the admin just opened is open'
+  );
+
+  select metadata into v_meta from audit_log
+   where action = 'registration_period.set' and target_id = v_id::text
+   order by id desc limit 1;
+
+  perform assert_true(
+    (v_meta->>'created')::boolean,
+    'the audit row says a window was created rather than moved'
+  );
+
+  -- Moving it, which is the case the audit row has to survive: a student will
+  -- eventually argue they registered in time, and only the previous dates can
+  -- settle it.
+  perform set_registration_period(v_admin, v_session, 2::smallint,
+                                  current_date - 1, current_date - 1,
+                                  'Closed early; the senate calendar moved.');
+
+  select metadata into v_meta from audit_log
+   where action = 'registration_period.set' and target_id = v_id::text
+   order by id desc limit 1;
+
+  perform assert_true(
+    (v_meta->>'previous_closes_on') = (current_date + 6)::text
+      and (v_meta->>'closes_on') = (current_date - 1)::text,
+    'a moved deadline records the date it replaced, not only the one it took'
+  );
+
+  perform assert_true(
+    not is_registration_open(v_session, 2::smallint),
+    'and the gate closes behind it'
+  );
+
+  perform assert_true(
+    (select count(*) from course_registrations) = v_before,
+    'setting a window confirms, un-confirms and backfills nobody — that is confirm_registration()''s to decide'
+  );
+
+  perform assert_true(
+    (select count(*) from registration_periods
+      where academic_session_id = v_session and semester = 2) = 1,
+    'setting the same semester twice moves the one window rather than opening a second'
+  );
+end $$;
+
+
+-- ---------------------------------------------------------------------------
 -- The HOD talking to students (§7.3)
 --
--- Three audiences from one function, drawn from the registration data. What is
--- worth asserting is mostly the boundaries: who it reaches, who it does not,
--- and that it cannot spend the SMS budget.
+-- Four audiences from one function, drawn from the registration data and the
+-- matric number. What is worth asserting is mostly the boundaries: who it
+-- reaches, who it does not, and that it cannot spend the SMS budget.
 -- ---------------------------------------------------------------------------
 
 do $$
@@ -3103,8 +3198,10 @@ declare
   v_course  uuid := gen_random_uuid();
   v_on      uuid := gen_random_uuid();
   v_off     uuid := gen_random_uuid();
+  v_other   uuid := gen_random_uuid();
   v_id      uuid;
   v_count   integer;
+  v_sent    integer;
 begin
   insert into courses (id, academic_session_id, code, title, level, kind, credit_units, semester, lecturer_id)
   values (v_course, v_seeded, 'STA 394', 'Message Fixture', 300, 'core', 3, 1,
@@ -3216,6 +3313,118 @@ begin
     format('insert into hod_messages (sent_by, scope, level, subject, body) values (%L, %L, 300, %L, %L)',
            v_hod, 'student', 'Wrong', 'A student-scoped message that names a level instead.'),
     'a scope and its target cannot disagree'
+  );
+
+  -- ------------------------------------------------------------------------
+  -- One level of one programme — "300 level Computer Science"
+  -- ------------------------------------------------------------------------
+  -- A mathematician at the same level, to prove the programme half does work.
+  -- Without them the scope would be indistinguishable from `level` in a test.
+  insert into profiles (id, role, surname, first_name, phone)
+  values (v_other, 'student', 'Other', 'Programme', '+2348050000703');
+  insert into students (id, matric_no, level) values (v_other, 'MTH/2021/863', 300);
+
+  perform assert_true(
+    (select programme from students where id = v_other) = 'MTH',
+    'the programme is read off the matric number, never asked for'
+  );
+
+  -- Counted against the students themselves rather than a literal: the suite is
+  -- one transaction and earlier blocks have already added students, so a
+  -- hard-coded total here would assert the order of this file rather than the
+  -- behaviour of the function.
+  v_count := hod_message_audience('programme_level', null, 300, 'CMP');
+  perform assert_true(
+    v_count = (select count(*) from students
+                where programme = 'CMP' and level = 300 and status <> 'deactivated'),
+    'a programme-and-level audience is exactly the active students of that programme at that level'
+  );
+
+  perform assert_true(
+    hod_message_audience('programme_level', null, 300, 'MTH')
+      <> hod_message_audience('programme_level', null, 300, 'CMP')
+      or not exists (select 1 from students where programme = 'MTH' and level = 300),
+    'and the same level in another programme is a different audience'
+  );
+
+  perform assert_true(
+    v_count < hod_message_audience('level', null, 300, null),
+    'one programme at a level is narrower than the whole level, which is the point of having both'
+  );
+
+  -- The distinction the scope exists for. `v_off` dropped STA 394, so a course
+  -- message misses them; they are still a 300L CMP student, so this does not.
+  -- Sending to a course and believing you have addressed a level of a
+  -- programme is the silent under-delivery this scope removes.
+  perform assert_true(
+    hod_message_audience('programme_level', null, 300, 'CMP')
+      > hod_message_audience('course', v_course, null),
+    'the programme audience includes the student who dropped the course, which a course message cannot reach'
+  );
+
+  select message_id, recipients into v_id, v_sent
+  from send_hod_message(v_hod, 'programme_level', null, 300,
+                        'CMP 300 project briefing',
+                        'The briefing for 300 level Computer Science is on Thursday at ten.',
+                        'CMP');
+  perform assert_true(
+    v_sent = v_count,
+    'and the send reaches exactly the number the preview promised — a confirmation that lies is worse than none'
+  );
+
+  perform assert_true(
+    exists (select 1 from notifications
+             where recipient_id = v_on and title = 'CMP 300 project briefing')
+    and exists (select 1 from notifications
+             where recipient_id = v_off and title = 'CMP 300 project briefing'),
+    'both 300L CMP students receive it, the one who dropped the course included'
+  );
+
+  perform assert_true(
+    (select programme from hod_messages where id = v_id) = 'CMP'
+      and (select level from hod_messages where id = v_id) = 300,
+    'the record carries both halves of the audience, because neither names it alone'
+  );
+
+  perform assert_true(
+    not exists (
+      select 1 from notifications
+      where recipient_id = v_other and title = 'CMP 300 project briefing'
+    ),
+    'and the mathematician at the same level is not on it'
+  );
+
+  perform assert_true(
+    (select metadata->>'programme' from audit_log
+      where action = 'hod_message.sent' and target_id = v_id::text) = 'CMP',
+    'the audit row says which programme was reached, not only how many'
+  );
+
+  -- CSC is the prefix a newcomer types. Refused by name rather than by
+  -- matching nobody and reporting a successful send to zero students.
+  perform assert_rejects(
+    format('select send_hod_message(%L, %L, null, 300, %L, %L, %L)',
+           v_hod, 'programme_level', 'Notice',
+           'A programme this department does not have.', 'CSC'),
+    'CSC is refused by name — this department''s Computer Science prefix is CMP'
+  );
+
+  perform assert_rejects(
+    format('insert into hod_messages (sent_by, scope, level, subject, body) values (%L, %L, 300, %L, %L)',
+           v_hod, 'programme_level', 'Wrong',
+           'A programme-scoped message that never says which programme.'),
+    'a programme-and-level message without a programme is refused'
+  );
+
+  -- The same hole one scope over, and the reason every arm now guards with
+  -- `is not null`: `null in (100, 200, 300, 400)` is NULL, `true and NULL` is
+  -- NULL, and a CHECK accepts NULL. Before that guard this row inserted, and
+  -- the send it recorded reported success to an audience of nobody.
+  perform assert_rejects(
+    format('insert into hod_messages (sent_by, scope, subject, body) values (%L, %L, %L, %L)',
+           v_hod, 'level', 'Wrong',
+           'A level-scoped message that never says which level.'),
+    'a level message without a level is refused, rather than sent to nobody and called a success'
   );
 end $$;
 

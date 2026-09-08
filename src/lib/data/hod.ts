@@ -5,6 +5,7 @@ import { createServiceClient, createUserClient } from "@/lib/supabase/client";
 import { currentAccessToken, currentUser } from "@/lib/auth/current-user";
 import { attendancePct } from "@/lib/format";
 import type { SessionClaims } from "@/lib/auth/session";
+import { programmeLevelLabel } from "@/lib/types";
 import type { SessionCell } from "@/lib/types";
 
 /**
@@ -925,7 +926,7 @@ export async function loadLecturerOversight(): Promise<LecturerOversight[]> {
    deliver and a second set of channel rules to drift.
    ------------------------------------------------------------------------- */
 
-export type MessageScope = "student" | "level" | "course";
+export type MessageScope = "student" | "level" | "course" | "programme_level";
 
 export type SendMessageResult = { messageId: string; recipients: number };
 
@@ -933,12 +934,14 @@ export async function messageAudience(
   scope: MessageScope,
   target: string | null,
   level: number | null,
+  programme: string | null = null,
 ): Promise<number> {
   const db = createServiceClient();
   const { data } = await db.rpc("hod_message_audience", {
     p_scope: scope,
     p_target: target,
     p_level: level,
+    p_programme: programme,
   });
   return Number(data ?? 0);
 }
@@ -948,6 +951,7 @@ export async function sendHodMessage(input: {
   scope: MessageScope;
   target: string | null;
   level: number | null;
+  programme?: string | null;
   subject: string;
   body: string;
 }): Promise<SendMessageResult> {
@@ -959,6 +963,7 @@ export async function sendHodMessage(input: {
     p_level: input.level,
     p_subject: input.subject,
     p_body: input.body,
+    p_programme: input.programme ?? null,
   });
 
   if (error) throw new Error(error.message);
@@ -987,7 +992,7 @@ export async function loadSentMessages(): Promise<SentMessage[]> {
   const { data } = await db
     .from("hod_messages")
     .select(
-      "id, scope, level, subject, body, recipients, sent_at, courses(code), students(matric_no)",
+      "id, scope, level, programme, subject, body, recipients, sent_at, courses(code), students(matric_no)",
     )
     .order("sent_at", { ascending: false })
     .limit(30);
@@ -1002,9 +1007,11 @@ export async function loadSentMessages(): Promise<SentMessage[]> {
       audience:
         row.scope === "course"
           ? (course?.code ?? "a course")
-          : row.scope === "level"
-            ? `Level ${row.level}`
-            : (student?.matric_no ?? "one student"),
+          : row.scope === "programme_level"
+            ? programmeLevelLabel(row.programme, row.level)
+            : row.scope === "level"
+              ? `Level ${row.level}`
+              : (student?.matric_no ?? "one student"),
       subject: row.subject,
       body: row.body,
       recipients: row.recipients,

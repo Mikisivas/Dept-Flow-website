@@ -24,6 +24,7 @@ export async function POST(request: Request) {
     matricNo?: string;
     courseId?: string;
     level?: number;
+    programme?: string;
     subject?: string;
     body?: string;
   };
@@ -34,7 +35,13 @@ export async function POST(request: Request) {
   }
 
   const scope: MessageScope =
-    body.scope === "level" ? "level" : body.scope === "course" ? "course" : "student";
+    body.scope === "level"
+      ? "level"
+      : body.scope === "course"
+        ? "course"
+        : body.scope === "programme_level"
+          ? "programme_level"
+          : "student";
 
   const db = createServiceClient();
 
@@ -64,16 +71,34 @@ export async function POST(request: Request) {
     if (!target) return NextResponse.json({ error: "Which course?" }, { status: 400 });
   }
 
-  const level = scope === "level" ? Number(body.level) : null;
-  if (scope === "level" && ![100, 200, 300, 400].includes(level ?? 0)) {
+  // Both level-bearing scopes carry one, and the check is the same for each:
+  // the database refuses a level-scoped row with no level, and answering that
+  // refusal with a Postgres error is worse than asking the question here.
+  const level = scope === "level" || scope === "programme_level" ? Number(body.level) : null;
+  if (level !== null && ![100, 200, 300, 400].includes(level)) {
     return NextResponse.json({ error: "Which level?" }, { status: 400 });
+  }
+
+  // MTH, CMP or STA. CSC is the one that gets typed, and it names no programme
+  // in this department — said plainly rather than sent to an audience of nobody.
+  const programme = scope === "programme_level" ? String(body.programme ?? "").trim().toUpperCase() : null;
+  if (scope === "programme_level" && !["MTH", "CMP", "STA"].includes(programme ?? "")) {
+    return NextResponse.json(
+      {
+        error:
+          programme === "CSC"
+            ? "Computer Science is CMP in this department, not CSC."
+            : "Which programme? Choose Mathematics, Computer Science or Statistics.",
+      },
+      { status: 400 },
+    );
   }
 
   // The confirmation asks how many phones this reaches before it reaches them.
   // "Message 412 students" is a different decision from "message 12", and the
   // HOD should be making the one they think they are making.
   if (body.action === "audience") {
-    return NextResponse.json({ recipients: await messageAudience(scope, target, level) });
+    return NextResponse.json({ recipients: await messageAudience(scope, target, level, programme) });
   }
 
   try {
@@ -82,6 +107,7 @@ export async function POST(request: Request) {
       scope,
       target,
       level,
+      programme,
       subject: String(body.subject ?? ""),
       body: String(body.body ?? ""),
     });

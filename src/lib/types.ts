@@ -70,6 +70,38 @@ export type SessionCell = {
 };
 
 /* -------------------------------------------------------------------------
+   The three programmes
+
+   Computer Science is CMP in this department, never CSC, and the database
+   rejects the wrong prefix in both matric numbers and course codes. The
+   prefix is what `students.programme` holds, generated from the matric
+   number; the name is what a person reads.
+
+   Here rather than in the HOD's data module because the composer that offers
+   these is a client component, and that module is server-only.
+   ------------------------------------------------------------------------- */
+
+export type Programme = "MTH" | "CMP" | "STA";
+
+export const PROGRAMMES: { code: Programme; name: string }[] = [
+  { code: "MTH", name: "Mathematics" },
+  { code: "CMP", name: "Computer Science" },
+  { code: "STA", name: "Statistics" },
+];
+
+/**
+ * "300 level Computer Science", not "CMP 300".
+ *
+ * The HOD names this audience in words, and a screen that answers in matric
+ * prefixes makes them translate their own intent back before they can check
+ * it against what they meant.
+ */
+export function programmeLevelLabel(programme: string | null, level: number | null): string {
+  const named = PROGRAMMES.find((entry) => entry.code === programme);
+  return `${level ?? "?"} level ${named?.name ?? programme ?? "unknown programme"}`;
+}
+
+/* -------------------------------------------------------------------------
    The attendance code
 
    Shared between the server that decides and the client that renders the

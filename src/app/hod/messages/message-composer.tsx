@@ -8,11 +8,13 @@ import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import type { CourseChoice, MessageScope, SentMessage } from "@/lib/data/hod";
+import { PROGRAMMES, programmeLevelLabel } from "@/lib/types";
+import type { Programme } from "@/lib/types";
 import { formatDateTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 /**
- * One message, three audiences.
+ * One message, four audiences.
  *
  * The number that matters on this screen is not the message, it is how many
  * phones it reaches — "message 412 students" is a different decision from
@@ -26,10 +28,18 @@ import { cn } from "@/lib/utils";
  * it is going to arrive on WhatsApp, not sit in an inbox nobody opens.
  */
 
+// Ordered narrowest first, so the two that are easy to confuse sit next to each
+// other. A course group and a level of a programme look alike and are not: the
+// first is who registered for one course, the second is who the students are.
 const SCOPES: Array<{ value: MessageScope; label: string; detail: string }> = [
   { value: "student", label: "One student", detail: "By matric number." },
   { value: "course", label: "A course group", detail: "Everyone currently registered for it." },
-  { value: "level", label: "A whole level", detail: "Every active student at that level." },
+  {
+    value: "programme_level",
+    label: "A level of one programme",
+    detail: "Every active student on that programme at that level, whatever they registered for.",
+  },
+  { value: "level", label: "A whole level", detail: "Every active student at that level, across all three programmes." },
 ];
 
 export function MessageComposer({
@@ -44,6 +54,7 @@ export function MessageComposer({
   const [matricNo, setMatricNo] = useState("");
   const [courseId, setCourseId] = useState(courses[0]?.courseId ?? "");
   const [level, setLevel] = useState("300");
+  const [programme, setProgramme] = useState<Programme>("CMP");
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
   /**
@@ -61,8 +72,16 @@ export function MessageComposer({
   const [result, setResult] = useState<string | null>(null);
 
   // What the count is being asked for. Also the guard against a slow reply
-  // landing after the HOD has moved on to a different audience.
-  const audienceKey = scope === "course" ? `course:${courseId}` : `level:${level}`;
+  // landing after the HOD has moved on to a different audience. The programme
+  // belongs in the key as much as the level does: without it, switching from
+  // Computer Science to Statistics at the same level would keep showing the
+  // previous count against the new audience.
+  const audienceKey =
+    scope === "course"
+      ? `course:${courseId}`
+      : scope === "programme_level"
+        ? `programme:${programme}:${level}`
+        : `level:${level}`;
 
   /**
    * Asked of the server whenever the audience could have changed.
@@ -88,6 +107,7 @@ export function MessageComposer({
             scope,
             courseId,
             level: Number(level),
+            programme,
           }),
         });
         const payload = await response.json();
@@ -102,7 +122,7 @@ export function MessageComposer({
     return () => {
       cancelled = true;
     };
-  }, [scope, courseId, level, audienceKey]);
+  }, [scope, courseId, level, programme, audienceKey]);
 
   const audience =
     scope === "student"
@@ -121,7 +141,15 @@ export function MessageComposer({
       const response = await fetch("/api/hod/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scope, matricNo: matricNo.trim(), courseId, level: Number(level), subject, body }),
+        body: JSON.stringify({
+          scope,
+          matricNo: matricNo.trim(),
+          courseId,
+          level: Number(level),
+          programme,
+          subject,
+          body,
+        }),
       });
       const payload = await response.json();
 
@@ -152,7 +180,9 @@ export function MessageComposer({
       ? matricNo.trim() || "one student"
       : scope === "course"
         ? (chosenCourse?.code ?? "a course")
-        : `Level ${level}`;
+        : scope === "programme_level"
+          ? programmeLevelLabel(programme, Number(level))
+          : `Level ${level}`;
 
   const ready =
     subject.trim().length > 0 &&
@@ -222,7 +252,27 @@ export function MessageComposer({
         </Field>
       ) : null}
 
-      {scope === "level" ? (
+      {scope === "programme_level" ? (
+        <Field label="Programme" htmlFor="programme">
+          <select
+            id="programme"
+            value={programme}
+            onChange={(event) => setProgramme(event.target.value as Programme)}
+            className="h-11 w-full rounded-md border border-line bg-surface px-3 text-base text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand-text)]"
+          >
+            {PROGRAMMES.map((entry) => (
+              <option key={entry.code} value={entry.code}>
+                {entry.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+      ) : null}
+
+      {/* One picker for both level-bearing scopes. Keeping the chosen level
+          across a switch between them is deliberate: an HOD who set 400 and
+          then narrowed to one programme meant 400 either way. */}
+      {scope === "level" || scope === "programme_level" ? (
         <Field label="Level" htmlFor="level">
           <select
             id="level"

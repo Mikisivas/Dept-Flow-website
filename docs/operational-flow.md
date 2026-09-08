@@ -74,7 +74,9 @@ This is the core of Dept-Flow: a **forecast**, not a scoreboard. The model asks 
 
 1. HOD sees an attendance report that includes a live, drillable at-risk list (individual visibility preserved, just pulled via the report rather than pushed per student) alongside department-wide and per-course views.
 2. HOD sees a payment compliance report.
-3. HOD can message students at three scopes: an individual student, a whole class/level, or a course group (everyone currently registered for a given course — e.g. all students in a CMP, MATHS, or STA course). The registration data already provides this audience mapping. Messages route through the same notification channels as alerts.
+3. HOD can message students at four scopes: an individual student, a whole class/level, a course group (everyone currently registered for a given course), or **one level of one programme** — 400 level Computer Science, 100 level Statistics, 300 level Mathematics. The registration data already provides the course mapping; the programme comes from the matric-number prefix. Messages route through the same notification channels as alerts.
+
+   *The fourth scope was added after the August 2026 revision, at the HOD's request.* It is not a convenience over the other two — neither reaches that audience. A whole level spans MTH, CMP and STA together, so a CMP notice sent that way reaches mathematicians as well. A course group reaches only those registered for one course, which coincides with "400L CMP" only if every 400L CMP student happens to take it; electives and carry-overs guarantee they do not, and the student carrying a 300-level paper instead is exactly the one a 400L notice needs to reach. Sending to a course and believing the level was addressed is a silent under-delivery.
 
 ## 8. Payment Processing (independent of attendance)
 

@@ -474,9 +474,10 @@ dues, and it now restores it to students shut out by the registration deadline.
 
 ### 6.9 Message students
 **Route:** `/hod/messages` · **Role:** HOD
-**Purpose:** one message, three audiences — an individual, a whole level, or everyone currently registered for a course.
+**Purpose:** one message, four audiences — an individual, a whole level, one level of one programme, or everyone currently registered for a course.
 **Contents:**
-- Scope picker, then the field that scope needs (matric number / level / course)
+- Scope picker, then the field that scope needs (matric number / level / programme + level / course)
+- **A level of one programme is its own scope, not a shortcut.** "400 level Computer Science" is reachable by neither of the others: a whole level spans MTH, CMP and STA together, and a course group reaches only those registered for that one course, which electives and carry-overs guarantee is not the same set. The programme is read from the matric-number prefix, so it follows the student rather than their enrolments.
 - **Live audience count, above the message box and repeated in the confirmation.** "Message 412 students" is a different decision from "message 12", and an HOD should be making the one they think they are making. Fetched from the server on every scope change — counted in the browser it would be a guess.
 - Subject and body, with a floor on the body: a message reaching four hundred phones that says "see me" is a summons nobody can act on
 - Recently sent, with audience and recipient count
@@ -546,7 +547,7 @@ responsible for.
 **Contents:**
 - Dues amount
 - Resumption date (starts the 30-day window)
-- **Semester registration window** — opens_on and deadline, per semester. The control that decides who can record attendance, so it belongs to the operations role and not the academic one.
+- **Semester registration window** — opens_on and deadline, per semester, **settable here**. The control that decides who can record attendance, so it belongs to the operations role and not the academic one. It is the one editable value on this screen, because it is the one that changes every semester and because its absence is silent: an unconfigured window reads as open, so a department that never set one loses the gate without ever seeing an error. Moving it is confirmed, takes a reason, and records the dates it replaced — a student will eventually argue they registered in time, and only the previous dates can settle it. Setting a window changes nobody's registration by itself.
 - Grace window length (default 30 days)
 - Pending-verification buffer length (6–12h)
 - Attendance code lifetime

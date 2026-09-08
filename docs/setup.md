@@ -33,7 +33,7 @@ something in it. It is safe to run repeatedly.
 
 To confirm it worked, paste
 [`supabase/tests/schema_test.sql`](../supabase/tests/schema_test.sql) and run
-it. It returns a grid of 390 assertions — one row each, in plain English — then
+it. It returns a grid of 412 assertions — one row each, in plain English — then
 rolls back, changing nothing. A failure aborts with the assertion that broke.
 
 Faster, and it catches more: `./scripts/schema-test.sh` runs the same suite

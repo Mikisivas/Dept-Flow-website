@@ -55,7 +55,7 @@ exam permit at the end — which needs both dues paid in full and 75% attendance
 |---|---|---|
 | **Student** | Register (register match + OTP), confirm semester registration, pay dues in full or instalments, submit attendance codes, see own attendance, forecast and permit | See other students' data, alter payment records, see a code before the lecturer issues it |
 | **Lecturer** | Open and close lectures, issue the code, create makeup/reschedule/cancel instances for own courses, submit paper batches | Grant exceptions, deactivate students, alter dues |
-| **HOD** | Grant registration exceptions, approve waivers, see individual academic risk, message students at three scopes, resolve disputes, authorize the final eligibility list | Edit dues amount or the register |
+| **HOD** | Grant registration exceptions, approve waivers, see individual academic risk, message students at four scopes, resolve disputes, authorize the final eligibility list | Edit dues amount or the register |
 | **Admin** | Manage the register, revoke/reclaim registrations, deactivate students, run level rollover, configure dues and the registration window, record manual payments | Grant exceptions, **see any individual student's academic risk** |
 
 The last cell is a role boundary, not a screen layout. `risk_predictions` is readable
@@ -88,7 +88,9 @@ RiskPrediction    { student_id, course_id, predicted_pct, tier, trend,
 Notification      { id, recipient_id, kind, title, body, link, read_at }
 NotificationDelivery { notification_id, channel, status, destination, provider_ref }
 PushSubscription  { profile_id, endpoint (unique), subscription }
-HodMessage        { sent_by, scope (student|level|course), target, subject, body, recipients }
+HodMessage        { sent_by, scope (student|level|course|programme_level), target,
+                    programme (MTH|CMP|STA, with level, for programme_level),
+                    subject, body, recipients }
 ExamPermit        { student_id, session_id, reference (unique), issued_at }
 AuditLog          { actor_id, actor_role, action, target_id, reason, metadata, timestamp }
 ```

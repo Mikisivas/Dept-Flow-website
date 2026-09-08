@@ -29,24 +29,23 @@ where not exists (
 commit;
 
 -- ---------------------------------------------------------------------------
--- The geo-fence will reject you unless you are standing in Yaba
+-- What will stop you is the registration gate, not where you are standing
 -- ---------------------------------------------------------------------------
 --
--- 'Lecture Theatre A' is seeded at 6.5183, 3.3768 with a 40 m radius, because
--- that is a real place. Submitting from anywhere else is correctly rejected as
--- "You're not in the lecture hall" — the fence is working, not broken.
+-- Nothing about location needs setting up. Attendance is trust-based: the
+-- lecturer issues one short-lived code and the student types it in, and the
+-- venue is a name on a timetable row and nothing more. The August 2026 revision
+-- dropped venues.centre_lat, centre_lng and radius_m along with the fence, so
+-- an instruction to move the fence to wherever you are sitting would now fail
+-- on columns that do not exist.
 --
--- To test the accept path, move the fence to wherever you are. In the browser
--- console on any page of the site:
+-- The gate that will actually reject a submission is semester registration.
+-- Past the deadline an unconfirmed student cannot log attendance for any
+-- course, and the rejection says 'not_registered'. If you are walking the
+-- attendance path and the code keeps bouncing, check that the student has a
+-- confirmed course_registrations row for this session and semester before
+-- suspecting the code.
 --
---   navigator.geolocation.getCurrentPosition(p => console.log(p.coords.latitude, p.coords.longitude))
---
--- then run this with those two numbers, and put it back afterwards:
---
---   update venues
---      set centre_lat = <your latitude>,
---          centre_lng = <your longitude>
---    where name = 'Lecture Theatre A';
---
--- The radius is constrained to 30–50 m by the schema and should stay there:
--- widening it to make a test pass is how a geo-fence becomes decorative.
+-- Confirming late is not free, which is worth seeing at least once: the
+-- backfill inserts an absence for every lecture held between the deadline and
+-- the moment of confirmation.

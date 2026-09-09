@@ -271,7 +271,7 @@ export async function loadSessionRoster(id: string): Promise<SessionRoster | nul
   const [{ data: enrolments }, { data: checkpoints }] = await Promise.all([
     db
       .from("enrolments")
-      .select("student_id, students(matric_no, profiles(surname, first_name, other_names))")
+      .select("student_id, students(matric_no, profiles!students_id_fkey(surname, first_name, other_names))")
       .eq("course_id", instance.course_id),
     db.from("checkpoints").select("id").eq("session_instance_id", id),
   ]);

@@ -78,10 +78,25 @@ function one<T>(value: T | T[] | null | undefined): T | null {
   return Array.isArray(value) ? (value[0] ?? null) : value;
 }
 
+/**
+ * Note the `!students_id_fkey` on every profiles embed below, here and in the
+ * other data modules.
+ *
+ * `students` has TWO foreign keys to `profiles`: its own primary key, and
+ * `deactivated_by`. A bare `profiles(...)` is therefore ambiguous, and
+ * PostgREST answers an ambiguous embed with an error rather than a guess. The
+ * error arrives as `data: null`, which every caller here renders as an empty
+ * list — so the failure looks exactly like a department with no students in
+ * it, and says nothing about itself.
+ *
+ * Naming the relationship is also the honest thing to write. We want the
+ * student's own profile, never the profile of whoever deactivated them, and
+ * the hint says so.
+ */
 export async function loadStandings(db: Db, courseId?: string): Promise<StudentStanding[]> {
   const [{ data: students }, { data: enrolments }, { data: instances }, { data: scores }] =
     await Promise.all([
-      db.from("students").select("id, matric_no, level, profiles(surname, first_name, other_names)"),
+      db.from("students").select("id, matric_no, level, profiles!students_id_fkey(surname, first_name, other_names)"),
       db
         .from("enrolments")
         .select("student_id, course_id, enrolled_on, courses(id, code)")
@@ -415,7 +430,7 @@ export async function loadEligibilityList(courseId?: string): Promise<Eligibilit
     const { data: people } = ids.length
       ? await db
           .from("students")
-          .select("id, matric_no, profiles(surname, first_name, other_names)")
+          .select("id, matric_no, profiles!students_id_fkey(surname, first_name, other_names)")
           .in("id", ids)
       : { data: [] };
 
@@ -630,7 +645,7 @@ export async function loadDisputes(): Promise<AttendanceDispute[]> {
   const { data: rows } = await db
     .from("attendance_disputes")
     .select(
-      "id, student_id, checkpoint_id, student_note, status, raised_at, students(matric_no, profiles(surname, first_name, other_names)), session_instances(held_on, courses(code))",
+      "id, student_id, checkpoint_id, student_note, status, raised_at, students(matric_no, profiles!students_id_fkey(surname, first_name, other_names)), session_instances(held_on, courses(code))",
     )
     .eq("status", "open")
     .order("raised_at", { ascending: false });

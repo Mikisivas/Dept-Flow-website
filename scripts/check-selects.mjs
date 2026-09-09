@@ -57,9 +57,17 @@ for (const file of sourceFiles("src")) {
     // and repeatedly, because they nest: `students(profiles(surname))` needs
     // two passes, and one pass leaves a stray bracket that then reads as a
     // column name.
+    //
+    // The optional `!name` is PostgREST's disambiguating hint, written where a
+    // table has more than one foreign key to the one being embedded —
+    // `profiles!students_id_fkey(...)`, because `students` reaches `profiles`
+    // by both its primary key and `deactivated_by`. Without allowing for it
+    // here the hint's own table name survives the strip and is then reported
+    // as a missing column, which is this checker failing the exact fix it
+    // should be verifying.
     for (let previous = null; previous !== selected; ) {
       previous = selected;
-      selected = selected.replace(/[a-z_]+\s*\([^()]*\)/g, "");
+      selected = selected.replace(/[a-z_]+(?:![a-z_]+)?\s*\([^()]*\)/g, "");
     }
 
     const columns = selected

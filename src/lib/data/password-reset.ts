@@ -43,7 +43,7 @@ export async function startPasswordReset(matricNo: string): Promise<StartResetRe
 
   const { data: student } = await db
     .from("students")
-    .select("id, status, profiles(phone)")
+    .select("id, status, profiles!students_id_fkey(phone)")
     .eq("matric_no", matric)
     .maybeSingle();
 

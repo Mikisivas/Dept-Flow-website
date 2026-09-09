@@ -190,7 +190,7 @@ export async function loadAdminStudents(): Promise<AdminStudent[]> {
     db
       .from("students")
       .select(
-        "id, matric_no, level, status, deactivation_reason, deactivation_note, profiles(surname, first_name, other_names)",
+        "id, matric_no, level, status, deactivation_reason, deactivation_note, profiles!students_id_fkey(surname, first_name, other_names)",
       )
       .order("matric_no"),
     db.from("compliance_statuses").select("student_id, state"),
@@ -238,7 +238,7 @@ export async function loadPayments(): Promise<PaymentRow[]> {
   const { data: payments } = await db
     .from("payments")
     .select(
-      "id, paystack_reference, channel, status, amount_kobo, initialized_at, verified_at, last_checked_at, students(matric_no, profiles(surname))",
+      "id, paystack_reference, channel, status, amount_kobo, initialized_at, verified_at, last_checked_at, students(matric_no, profiles!students_id_fkey(surname))",
     )
     .order("initialized_at", { ascending: false })
     .limit(200);

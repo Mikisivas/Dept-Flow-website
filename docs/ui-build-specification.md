@@ -410,7 +410,7 @@ All three notify enrolled students automatically. Must be created BEFORE the ses
 - Count of students below 75% now, and **the count projected to finish below** — the second number is the one that can still be acted on
 - Compliance summary (cleared / uncleared / pending / locked counts)
 - Active registration exception (if any) with expiry
-- Pending items: dispute count, waiver requests
+- Pending items: dispute count
 **States:** loading · normal
 
 ### 6.2 At-risk students
@@ -432,7 +432,7 @@ department on it, which is the same as putting nobody on it.
 ### 6.3 Student detail
 **Route:** `/hod/students/[matric]` · **Role:** HOD
 **Contents:** profile summary, per-course attendance meters, full lecture history with AttendanceStrips, dues balance, audit trail of any decision applied to this record.
-**Actions:** grant clearance/waiver, resolve a dispute.
+**Actions:** grant a registration exception, resolve a dispute.
 
 ### 6.4 Registration exceptions
 **Route:** `/hod/grace` · **Role:** HOD
@@ -447,11 +447,10 @@ dues, and it now restores it to students shut out by the registration deadline.
 - History of previous exceptions with who granted them and why
 **States:** none active · active · creating · confirming
 
-### 6.5 Waivers & clearances
-**Route:** `/hod/waivers` · **Role:** HOD
-**Contents:** list of hardship/waiver requests and manually cleared students.
-**Action:** grant clearance with mandatory reason — states the effect on the dues balance and the permit, never on attendance, which a waiver does not touch.
-**States:** empty · pending list · history
+*There is no waivers screen. It was retired: it set a compliance state while
+`dues_balance_kobo()` went on subtracting payments alone, so a granted waiver
+left the exam permit still refusing for the money. Forgiving a fee is recorded
+on the payment side, where the balance is actually computed.*
 
 ### 6.6 Attendance disputes
 **Route:** `/hod/disputes` · **Role:** HOD
@@ -579,7 +578,7 @@ now names.
 ### 7.10 Audit log
 **Route:** `/admin/audit` · **Role:** admin
 **Contents:** immutable chronological record — actor, role, action, target, reason, timestamp. Filterable by actor, action type, date range.
-**Covers:** registration exceptions, waivers, clearances, deactivations, registration revokes, config changes, manual attendance batches, manual and reversed payments, eligibility authorizations, level rollovers, and **every HOD message** — reaching four hundred phones is an authority action and leaves a record like one.
+**Covers:** registration exceptions, clearances, deactivations, registration revokes, config changes, manual attendance batches, manual and reversed payments, eligibility authorizations, level rollovers, and **every HOD message** — reaching four hundred phones is an authority action and leaves a record like one.
 **Read-only. No delete, no edit.** Export action.
 **States:** list · filtered · empty
 
@@ -596,7 +595,7 @@ now names.
 - Semantic headings in order; skip link
 - Async updates announced to screen readers
 
-**Confirmation required** (with a reason field where noted) for: registration exceptions, waiver/clearance, student deactivation, registration revoke, level rollover, manual attendance batch, session cancellation, eligibility authorization, manual and reversed payments, HOD messages, config changes.
+**Confirmation required** (with a reason field where noted) for: registration exceptions, student deactivation, registration revoke, level rollover, manual attendance batch, session cancellation, eligibility authorization, manual and reversed payments, HOD messages, config changes.
 
 **Never in the UI:**
 - White text on orange

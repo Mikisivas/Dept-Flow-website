@@ -458,7 +458,7 @@ Academic governance; individual students visible.
   repeated in the confirmation, because "message 412 students" is a different decision
   from "message 12".
 - **Payment compliance** — by level, as a balance rather than a flag.
-- **Waivers, disputes, final eligibility list** — the eligibility list is an
+- **Disputes, final eligibility list** — the eligibility list is an
   authorization action, not an export; the confirm step is serious.
 - HOD does **not** see dues configuration or the register.
 

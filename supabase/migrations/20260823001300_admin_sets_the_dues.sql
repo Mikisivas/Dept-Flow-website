@@ -103,9 +103,9 @@ begin
   end if;
 
   -- The HOD is excluded here deliberately, and it is a separation-of-duties
-  -- line rather than an oversight: §2 says the HOD approves waivers and cannot
-  -- edit the dues amount. Someone who can both forgive a debt and decide what
-  -- the debt is has no second pair of eyes on either.
+  -- line rather than an oversight: §2 withholds the dues amount from the HOD.
+  -- The fee and the decisions taken against it belong to different people, so
+  -- that neither is set by someone with a reason to want it a certain size.
   if length(btrim(coalesce(p_reason, ''))) < 10 then
     raise exception 'setting the dues must record why';
   end if;

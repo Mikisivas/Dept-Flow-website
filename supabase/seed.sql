@@ -217,10 +217,10 @@ end $$;
 -- Enough for every screen to have something on it
 -- ---------------------------------------------------------------------------
 
--- Six screens were reachable but empty against this seed: waivers, attendance
--- disputes, registration disputes, notifications, the audit log, and the
--- lecturer's third course. An empty screen and an unbuilt screen look
--- identical, which is the wrong impression for a demo to give.
+-- Five screens were reachable but empty against this seed: attendance disputes,
+-- registration disputes, notifications, the audit log, and the lecturer's third
+-- course. An empty screen and an unbuilt screen look identical, which is the
+-- wrong impression for a demo to give.
 --
 -- Nothing here is padding. Each row is a case the product exists to handle.
 
@@ -233,15 +233,6 @@ values (
   '66666666-6666-6666-6666-666666666603',
   3, '15:00', '17:00',
   '22222222-2222-2222-2222-222222222202'
-);
-
--- Tunde is locked. This is the request that puts him in front of the HOD.
-insert into waivers (student_id, academic_session_id, status, request_note)
-values (
-  '44444444-4444-4444-4444-444444444403',
-  '11111111-1111-1111-1111-111111111111',
-  'pending',
-  'My father was hospitalised in October and the family covered the bills. I can pay in January.'
 );
 
 -- Halima was marked outside the hall on the lecture of 4 November. Her mark on
@@ -295,25 +286,19 @@ select write_audit(
   jsonb_build_object('checked', 2, 'settled', 1)
 );
 
-select write_audit(
-  '33333333-3333-3333-3333-333333333302', 'hod', 'waiver.declined',
-  'waivers', null,
-  'Hardship claim could not be supported; student advised to apply to the bursary.',
-  jsonb_build_object('academic_session', '2025/2026')
-);
-
 -- ---------------------------------------------------------------------------
--- Tunde's MTH 205, so a waiver has something to confirm
+-- Tunde's MTH 205, a student sitting exactly on the line
 -- ---------------------------------------------------------------------------
 
--- He is locked and has never paid, which since payment was decoupled affects
--- his standing with the department and not his attendance. The waiver screen
--- still needs him to have a real percentage to argue about.
+-- He has never paid, which since payment was decoupled affects his standing
+-- with the department and not his attendance. Both facts are true at once, and
+-- the permit is the one screen where they meet.
 --
--- 6 of 8 is 75.00% — exactly the threshold. Granting his waiver is the
--- difference between not sitting the paper and sitting it, which is the whole
--- argument this system makes. It used to be 4.5 of 6, which said the same
--- thing back when a lecture could be half attended.
+-- 6 of 8 is 75.00% — exactly the threshold, which makes him the case worth
+-- demonstrating: the attendance half of his permit passes on the boundary while
+-- the dues half does not, so the panel has to say precisely what is outstanding
+-- rather than a flat no. It used to be 4.5 of 6, which said the same thing back
+-- when a lecture could be half attended.
 do $$
 declare
   v_tunde  uuid := '44444444-4444-4444-4444-444444444403';

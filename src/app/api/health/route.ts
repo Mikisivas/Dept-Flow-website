@@ -27,7 +27,6 @@ const TABLES = [
   "session_instances",
   "session_scores",
   "payments",
-  "waivers",
   "attendance_disputes",
   "registration_disputes",
   "grace_periods",

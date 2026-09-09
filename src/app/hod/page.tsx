@@ -23,7 +23,7 @@ export default async function HodDashboardPage() {
   const counted = compliance.cleared + compliance.provisional + compliance.locked + compliance.pending;
 
   return (
-    <AppShell role="hod" counts={{ "/hod/risk": belowThreshold, "/hod/waivers": pending.waivers, "/hod/disputes": pending.disputes }}>
+    <AppShell role="hod" counts={{ "/hod/risk": belowThreshold, "/hod/disputes": pending.disputes }}>
       <PageHeader
         title="Department overview"
         subtitle={`${totalStudents} students across the active session`}
@@ -103,7 +103,6 @@ export default async function HodDashboardPage() {
         </h2>
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
           <LinkStat href="/hod/disputes" label="Attendance disputes" value={pending.disputes} />
-          <LinkStat href="/hod/waivers" label="Waiver requests" value={pending.waivers} />
         </div>
       </section>
     </AppShell>

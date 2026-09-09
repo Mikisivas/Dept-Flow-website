@@ -918,12 +918,19 @@ begin
 end $$;
 
 -- ---------------------------------------------------------------------------
--- Waivers and disputes
+-- The waiver is gone, and disputes
 -- ---------------------------------------------------------------------------
 
--- Both are authority actions in the same shape as a grace period. What differs
--- is the consequence: a granted waiver clears the student, and a corrected
--- dispute changes an attendance percentage after the fact.
+-- The waiver was retired in ..._retire_the_waiver.sql. It was designed when
+-- payment decided whether a lecture counted; after the decoupling its only
+-- remaining job was the permit's dues condition, and it did not do that job —
+-- it set a compliance state while `dues_balance_kobo()` went on subtracting
+-- payments alone, so a granted waiver left the permit still refusing. What is
+-- asserted now is its absence, because a half-removed mechanism is worse than
+-- either keeping or dropping it.
+--
+-- A dispute is the authority action that remains here, and the consequential
+-- one: correcting it changes an attendance percentage after the fact.
 
 do $$
 declare
@@ -931,58 +938,38 @@ declare
   v_hod     uuid := '33333333-3333-3333-3333-333333333302';
   v_halima  uuid := '44444444-4444-4444-4444-444444444402';
   v_course  uuid := '66666666-6666-6666-6666-666666666601';
-  v_student uuid := gen_random_uuid();
-  v_waiver  uuid := gen_random_uuid();
   v_lecture uuid := gen_random_uuid();
   v_cp      uuid := gen_random_uuid();
   v_dispute uuid := gen_random_uuid();
 begin
-  -- A student of this section's own, so the earlier clearing assertions are
-  -- not disturbed by it.
-  insert into profiles (id, role, surname, first_name, phone)
-  values (v_student, 'student', 'Waiver', 'Candidate', '+2348057777777');
-  insert into students (id, matric_no, level) values (v_student, 'CMP/2021/777', 300);
-  insert into compliance_statuses (student_id, academic_session_id, state)
-  values (v_student, v_session, 'uncleared');
-  insert into enrolments (student_id, course_id, source, enrolled_on)
-  values (v_student, v_course, 'carry_over', session_day(0));
-
-  insert into session_scores (student_id, session_instance_id, score)
-  select v_student, si.id, 1.0
-  from session_instances si
-  where si.course_id = v_course and si.status = 'closed'
-  limit 4;
-
-  insert into waivers (id, student_id, academic_session_id, request_note)
-  values (v_waiver, v_student, v_session, 'Father lost his job this term.');
-
-  -- A waiver used to be the thing that turned four recorded lectures into four
-  -- counted ones. It no longer touches attendance at all: the four counted the
-  -- moment they were recorded, and what the waiver settles is the debt.
+  -- Retired, and gone rather than merely unreachable. A table left standing
+  -- with no caller is an invitation to wire it back up to the state it was
+  -- setting, which is the state that stopped deciding anything.
   perform assert_true(
-    attendance_pct(v_student, v_course) > 0,
-    'a student awaiting a waiver has whatever attendance they attended'
-  );
-
-  perform assert_rejects(
-    format('select decide_waiver(%L, %L, true, %L)', v_waiver, v_hod, 'ok'),
-    'a waiver decision without a substantive reason is refused'
+    to_regclass('public.waivers') is null,
+    'the waivers table is gone, not left standing with no caller'
   );
 
   perform assert_true(
-    decide_waiver(v_waiver, v_hod, true, 'Hardship verified with the bursary office.') = 'granted',
-    'the HOD can grant a waiver'
+    not exists (
+      select 1 from pg_proc p
+      join pg_namespace n on n.oid = p.pronamespace
+      where n.nspname = 'public' and p.proname = 'decide_waiver'
+    ),
+    'and so is decide_waiver()'
   );
 
   perform assert_true(
-    (select cleared_via from compliance_statuses
-      where student_id = v_student and academic_session_id = v_session) = 'waiver',
-    'and records the route as a waiver rather than a payment'
+    not exists (select 1 from pg_type where typname = 'waiver_status'),
+    'and the status vocabulary it owned'
   );
 
+  -- The health report has to stop expecting them, or /api/health reports a
+  -- missing table for the life of the project and the next genuinely
+  -- half-applied migration set reads as the same old noise.
   perform assert_true(
-    decide_waiver(v_waiver, v_hod, false, 'Trying to decide the same one twice.') = 'already_decided',
-    'a decided waiver cannot be decided again'
+    (dept_flow_schema_report()->>'up_to_date')::boolean,
+    'and the schema report calls a database without waivers up to date'
   );
 
   -- ------------------------------------------------------------------------
@@ -2667,6 +2654,8 @@ declare
   v_critical uuid := gen_random_uuid();
   v_watchful uuid := gen_random_uuid();
   v_doomed   uuid := gen_random_uuid();
+  v_shutout  uuid := gen_random_uuid();
+  v_shut_note uuid;
   v_lecture  uuid;
   v_final    uuid;
   v_sent     integer;
@@ -2688,14 +2677,25 @@ begin
   insert into profiles (id, role, surname, first_name, phone)
   values (v_critical, 'student', 'Critical', 'Case', '+2348050000501'),
          (v_watchful, 'student', 'Watchful', 'Case', '+2348050000502'),
-         (v_doomed, 'student', 'Beyond', 'Saving', '+2348050000503');
+         (v_doomed, 'student', 'Beyond', 'Saving', '+2348050000503'),
+         (v_shutout, 'student', 'Shutout', 'Case', '+2348050000504');
   insert into students (id, matric_no, level)
   values (v_critical, 'CMP/2021/831', 300), (v_watchful, 'CMP/2021/832', 300),
-         (v_doomed, 'CMP/2021/833', 300);
+         (v_doomed, 'CMP/2021/833', 300), (v_shutout, 'CMP/2021/834', 300);
   insert into enrolments (student_id, course_id, source, enrolled_on)
   values (v_critical, v_course, 'core', session_day(0)),
          (v_watchful, v_course, 'core', session_day(0)),
-         (v_doomed, v_course, 'core', session_day(0));
+         (v_doomed, v_course, 'core', session_day(0)),
+         (v_shutout, v_course, 'core', session_day(0));
+
+  -- Registered, all but one. Enrolment and semester registration are different
+  -- facts, and this fixture used to carry only the first — which meant every
+  -- student in it was silently behind the gate, and the copy assertions below
+  -- were reading messages sent to students whose codes the hall would refuse.
+  insert into course_registrations (student_id, academic_session_id, semester, status, registered_at)
+  values (v_critical, v_session, 1, 'confirmed', session_day(0)::timestamptz),
+         (v_watchful, v_session, 1, 'confirmed', session_day(0)::timestamptz),
+         (v_doomed, v_session, 1, 'confirmed', session_day(0)::timestamptz);
 
   for i in 1..10 loop
     v_lecture := gen_random_uuid();
@@ -2715,7 +2715,10 @@ begin
       -- On track with almost no buffer.
       (v_watchful, v_lecture, case when i = 9 then 0 else 1.0 end, 'digital'),
       -- Beyond saving: cannot reach 75% even by attending everything left.
-      (v_doomed, v_lecture, 0, 'digital');
+      (v_doomed, v_lecture, 0, 'digital'),
+      -- Never registered, so every code they typed was refused. A zero for the
+      -- same reason a locked door produces one.
+      (v_shutout, v_lecture, 0, 'digital');
   end loop;
 
   perform compute_risk_predictions();
@@ -2805,8 +2808,58 @@ begin
   );
 
   perform assert_true(
-    (select body from notifications where id = v_final) like '%waiver%',
-    'it names the route that is actually left — a waiver or a dispute, not more attendance'
+    (select body from notifications where id = v_final) like '%dispute%',
+    'it names the route that is actually left — a dispute, not more attendance'
+  );
+
+  -- The waiver was retired, and a message naming a route the department no
+  -- longer has is worse than one naming nothing: it sends the student to an
+  -- office that will turn them away.
+  perform assert_true(
+    (select body from notifications where id = v_final) not like '%waiver%',
+    'and never sends them to a mechanism this department no longer has'
+  );
+
+  -- ------------------------------------------------------------------------
+  -- Register, do not attend
+  -- ------------------------------------------------------------------------
+  --
+  -- The forecast reads enrolments and scores and never consults registration,
+  -- which is right: the projection is arithmetic on what was recorded. The
+  -- consequence lands in the alert. A student the gate is blocking records
+  -- nothing, projects toward zero, goes Critical, and used to be told to attend
+  -- lectures the hall would refuse them at — the system spending its loudest
+  -- channels on the one instruction that cannot work.
+  select notification_id into v_shut_note
+  from risk_alerts_sent where student_id = v_shutout and course_id = v_course;
+
+  perform assert_true(
+    attendance_eligibility(v_shutout, v_course) = 'not_registered',
+    'the shut-out student is refused at the gate'
+  );
+
+  perform assert_true(
+    (select body from notifications where id = v_shut_note) like '%not registered%',
+    'so the warning names the reason rather than the symptom'
+  );
+
+  perform assert_true(
+    (select body from notifications where id = v_shut_note) not like '%Attend %of the%',
+    'and never asks them to attend their way out of a door that is shut'
+  );
+
+  perform assert_true(
+    (select link from notifications where id = v_shut_note) = '/courses/register',
+    'the link goes where the problem can actually be fixed'
+  );
+
+  -- The same tier, the same channels. What an unregistered student should be
+  -- told is a different question from how loudly, and answering the first
+  -- inside the second would hide the second.
+  perform assert_true(
+    exists (select 1 from notification_deliveries
+             where notification_id = v_shut_note and channel = 'whatsapp'),
+    'the escalation ladder is untouched — only the words change'
   );
 
   -- ------------------------------------------------------------------------
@@ -3217,7 +3270,7 @@ begin
 
   perform assert_rejects(
     format('select set_dues_period(%L, %L, %L, 500000, %L)',
-           v_hod, v_session, current_date, 'The head of department decides waivers, not the fee.'),
+           v_hod, v_session, current_date, 'The head of department does not set the fee.'),
     'only an administrator can set the dues — the role that forgives a debt does not also set it'
   );
 
@@ -4210,7 +4263,7 @@ begin
   join pg_namespace n on n.oid = p.pronamespace
   where n.nspname = 'public'
     and p.proname in (
-      'clear_student', 'decide_waiver', 'resolve_dispute', 'open_grace_period',
+      'clear_student', 'resolve_dispute', 'open_grace_period',
       'revoke_grace_period', 'deactivate_student', 'reactivate_student',
       'resolve_registration_dispute', 'run_level_rollover', 'cancel_session',
       'schedule_makeup', 'reschedule_session', 'authorize_eligibility_list',

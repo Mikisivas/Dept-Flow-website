@@ -39,7 +39,7 @@ export type HodOverview = {
   trendingBelow: number;
   compliance: { cleared: number; provisional: number; locked: number; pending: number };
   activeGrace: { expiresOn: string; scope: string; studentsAffected: number } | null;
-  pending: { disputes: number; waivers: number };
+  pending: { disputes: number };
 };
 
 /**
@@ -202,7 +202,7 @@ export async function loadHodOverview(): Promise<HodOverview> {
   const measurable = standings.filter((student) => student.sessionsHeld > 0);
   const belowThreshold = measurable.filter((student) => student.overallPct < 75).length;
 
-  const [{ data: grace }, { count: disputes }, { count: waivers }, { data: predictions }] =
+  const [{ data: grace }, { count: disputes }, { data: predictions }] =
     await Promise.all([
       db
         .from("grace_periods")
@@ -213,7 +213,6 @@ export async function loadHodOverview(): Promise<HodOverview> {
         .limit(1)
         .maybeSingle(),
       db.from("attendance_disputes").select("id", { count: "exact", head: true }).eq("status", "open"),
-      db.from("waivers").select("id", { count: "exact", head: true }).eq("status", "pending"),
       // Advisory only, and labelled as such wherever it is shown.
       db.from("risk_predictions").select("student_id, predicted_pct").lt("predicted_pct", 75),
     ]);
@@ -235,7 +234,7 @@ export async function loadHodOverview(): Promise<HodOverview> {
           studentsAffected: grace.students_affected,
         }
       : null,
-    pending: { disputes: disputes ?? 0, waivers: waivers ?? 0 },
+    pending: { disputes: disputes ?? 0 },
   };
 }
 
@@ -610,84 +609,6 @@ export async function loadGraceScreen(): Promise<GraceScreen> {
   };
 }
 
-export type WaiverRequest = {
-  id: string;
-  matricNo: string;
-  surname: string;
-  firstName: string;
-  otherNames: string | null;
-  level: number;
-  requestNote: string;
-  requestedAt: string;
-  /**
-   * Lectures this applicant has attended. It used to be "what granting would
-   * immediately confirm" — granting confirms nothing now, so what the card
-   * carries is what the student has actually done, which is still what the HOD
-   * is weighing a hardship claim against.
-   */
-  lecturesAttended: number;
-  status: "pending" | "granted" | "declined";
-};
-
-export async function loadWaivers(): Promise<WaiverRequest[]> {
-  await requireHod();
-  const db = createUserClient(await currentAccessToken());
-
-  const { data: rows } = await db
-    .from("waivers")
-    .select(
-      "id, student_id, request_note, created_at, status, students(matric_no, level, profiles(surname, first_name, other_names))",
-    )
-    .eq("status", "pending")
-    .order("created_at", { ascending: false });
-
-  if (!rows || rows.length === 0) return [];
-
-  // Lectures each applicant has attended. It used to be "marks waiting to be
-  // counted", which granting the waiver would have released; nothing is
-  // waiting any more, so what the card carries is what they have actually
-  // done — which is still the thing the HOD is weighing.
-  const { data: scores } = await db
-    .from("session_scores")
-    .select("student_id, score")
-    .in(
-      "student_id",
-      rows.map((row) => row.student_id),
-    );
-
-  const waitingByStudent = new Map<string, number>();
-  for (const score of scores ?? []) {
-    waitingByStudent.set(
-      score.student_id,
-      (waitingByStudent.get(score.student_id) ?? 0) + Number(score.score),
-    );
-  }
-
-  return rows.map((row) => {
-    const student = one(
-      row.students as unknown as {
-        matric_no: string;
-        level: number;
-        profiles: { surname: string; first_name: string; other_names: string | null } | null;
-      },
-    );
-    const person = one(student?.profiles);
-
-    return {
-      id: row.id,
-      matricNo: student?.matric_no ?? "",
-      surname: person?.surname ?? "",
-      firstName: person?.first_name ?? "",
-      otherNames: person?.other_names ?? null,
-      level: student?.level ?? 0,
-      requestNote: row.request_note ?? "",
-      requestedAt: row.created_at,
-      lecturesAttended: waitingByStudent.get(row.student_id) ?? 0,
-      status: row.status as WaiverRequest["status"],
-    };
-  });
-}
-
 export type AttendanceDispute = {
   id: string;
   matricNo: string;
@@ -794,7 +715,7 @@ export async function loadStudentRecord(matricNo: string): Promise<StudentRecord
   if (!standing) return null;
 
   // Matched on the student's id, not their matric number. Audit rows record
-  // whichever key the action was about — a waiver row carries the waiver's id —
+  // whichever key the action was about — a dispute row carries the dispute's id —
   // so the student id in the metadata is the only field common to all of them.
   const { data: rows } = await db
     .from("audit_log")

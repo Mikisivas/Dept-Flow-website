@@ -9,7 +9,7 @@ requires sharing anything with anyone.
 Open your project → **SQL Editor** → **New query**. Paste the whole of
 [`supabase/setup.sql`](../supabase/setup.sql) and run it.
 
-That is every migration concatenated in order. It creates 39 tables, the
+That is every migration concatenated in order. It creates 38 tables, the
 attendance and forecast functions, and the row-level security policies. It needs
 no database password and no service-role key.
 
@@ -33,7 +33,7 @@ something in it. It is safe to run repeatedly.
 
 To confirm it worked, paste
 [`supabase/tests/schema_test.sql`](../supabase/tests/schema_test.sql) and run
-it. It returns a grid of 425 assertions — one row each, in plain English — then
+it. It returns a grid of 430 assertions — one row each, in plain English — then
 rolls back, changing nothing. A failure aborts with the assertion that broke.
 
 Faster, and it catches more: `./scripts/schema-test.sh` runs the same suite

@@ -145,8 +145,8 @@ export function EligibilityPanel({ panel }: { panel: PermitPanel }) {
                     ) : (
                       <>
                         attending all {course.lecturesRemaining} remaining lectures still finishes
-                        below {panel.thresholdPct}%. Speak to the department office — a dispute or a
-                        waiver is the route, not more attendance.
+                        below {panel.thresholdPct}%. Speak to the department office — a dispute is
+                        the route, not more attendance.
                       </>
                     )}
                   </span>

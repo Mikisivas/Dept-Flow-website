@@ -9704,9 +9704,9 @@ begin
   end if;
 
   -- The HOD is excluded here deliberately, and it is a separation-of-duties
-  -- line rather than an oversight: §2 says the HOD approves waivers and cannot
-  -- edit the dues amount. Someone who can both forgive a debt and decide what
-  -- the debt is has no second pair of eyes on either.
+  -- line rather than an oversight: §2 withholds the dues amount from the HOD.
+  -- The fee and the decisions taken against it belong to different people, so
+  -- that neither is set by someone with a reason to want it a certain size.
   if length(btrim(coalesce(p_reason, ''))) < 10 then
     raise exception 'setting the dues must record why';
   end if;
@@ -9772,3 +9772,321 @@ grant execute on function set_dues_period(uuid, uuid, date, double precision, te
 
 comment on function set_dues_period(uuid, uuid, date, double precision, text) is
   'Sets the session''s dues amount and resumption date. One row per session, never per semester. Audited with the figures it replaced and how many students the change put back in debt.';
+
+-- ===========================================================================
+-- 20260823001400_retire_the_waiver.sql
+-- ===========================================================================
+
+-- Dept-Flow — retiring the waiver
+--
+-- The waiver was designed when dues decided whether a lecture counted.
+-- Granting one converted a student's provisional scores and let them back into
+-- counted attendance, which is why ..._waivers_and_disputes.sql describes it as
+-- "identical in effect to a payment".
+--
+-- The August 2026 revision removed that job. Payment stopped gating attendance,
+-- `clear_student()` was rebuilt to touch no score and return zero, and the
+-- waiver was left holding a compliance state that no longer decides anything.
+--
+-- What it had left was the exam permit's dues condition, and it did not do that
+-- either. Verified against a live database rather than inferred:
+--
+--     balance BEFORE waiver: 500000 kobo
+--     decide_waiver returns: granted
+--     compliance state AFTER waiver: cleared
+--     balance AFTER waiver:  500000 kobo
+--     permit dues gate would refuse? t
+--
+-- The chain is short. Granting set the compliance state and nothing else.
+-- `dues_balance_kobo()` is the dues amount minus successful PAYMENT rows, and a
+-- waiver writes no payment. `issue_exam_permit()` reads that balance and never
+-- looks at compliance state. So the HOD granted a waiver, the student's badge
+-- read cleared, and the permit still refused them for the money.
+--
+-- Two ways out: teach the balance about waivers, or remove the mechanism. This
+-- is the second, by decision. A department that needs to forgive a fee can
+-- record it on the payment side, where the balance is actually computed, and
+-- where the admin already records manual payments with a reason and an audit
+-- row. One place decides what is owed.
+--
+-- WHAT IS DELIBERATELY LEFT BEHIND
+--
+-- The audit rows. `audit_log` cannot be updated or deleted from, by trigger
+-- rather than by convention, and that is correct here: waivers were granted,
+-- and a history that quietly loses them is worse than one that records a
+-- mechanism since retired.
+--
+-- The `clearance_route` enum keeps its 'waiver' value. It is data-bearing —
+-- `compliance_statuses.cleared_via` may hold it in a project that granted one —
+-- and removing a single value would leave 'hod_clearance' and 'grace_period'
+-- beside it, both of which already have no caller. Whether that vocabulary
+-- should shrink is a decision about the whole enum, not a side effect of this
+-- change.
+
+-- ---------------------------------------------------------------------------
+-- The mechanism
+-- ---------------------------------------------------------------------------
+
+drop function if exists decide_waiver(uuid, uuid, boolean, text);
+
+-- The policies go with the table; naming them would only be a second place to
+-- keep the list correct.
+drop table if exists waivers;
+
+drop type if exists waiver_status;
+
+-- ---------------------------------------------------------------------------
+-- The health report has to stop expecting them
+-- ---------------------------------------------------------------------------
+
+-- Otherwise /api/health reports a missing function and a missing table for the
+-- life of the project, which is precisely the signal it exists to give
+-- truthfully. A health check that cries wolf is worse than none: the next
+-- genuinely half-applied migration set would be read as the same old noise.
+create or replace function dept_flow_schema_report()
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_catalog
+as $$
+declare
+  v_expected constant text[] := array[
+    -- migration → the function it introduced, in the order they must be run
+    'attendance_pct', 'clear_student', 'resolve_session_score', 'write_audit',
+    'begin_pending_verification', 'lock_after_buffer', 'full_sessions_needed',
+    'open_grace_period', 'revoke_grace_period', 'grace_period_impact',
+    'is_payment_open', 'advance_compliance_states',
+    'resolve_dispute',
+    'deactivate_student', 'reactivate_student', 'resolve_registration_dispute',
+    'run_level_rollover',
+    'cancel_session', 'schedule_makeup', 'reschedule_session', 'notify_enrolled',
+    'authorize_eligibility_list',
+    'enrol_in_core_courses', 'add_optional_course', 'drop_optional_course',
+    'student_credit_units',
+    -- the August 2026 revision, and the settings it made reachable
+    'confirm_registration', 'attendance_eligibility', 'is_registration_open',
+    'compute_risk_predictions', 'send_risk_alerts', 'lectures_needed',
+    'dues_balance_kobo', 'apply_payment', 'issue_exam_permit',
+    'send_hod_message', 'hod_message_audience',
+    'set_registration_period', 'set_dues_period', 'dues_change_impact'
+  ];
+  v_missing_functions text[];
+  v_missing_tables    text[];
+begin
+  select coalesce(array_agg(wanted), '{}')
+    into v_missing_functions
+  from unnest(v_expected) as wanted
+  where not exists (
+    select 1 from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname = wanted
+  );
+
+  select coalesce(array_agg(wanted), '{}')
+    into v_missing_tables
+  from unnest(array[
+    'profiles', 'students', 'whitelist_entries', 'academic_sessions', 'courses',
+    'enrolments', 'timetable_entries', 'venues', 'session_instances',
+    'checkpoints', 'attendance_marks', 'session_scores', 'compliance_statuses',
+    'dues_periods', 'payments', 'attendance_disputes',
+    'registration_disputes', 'grace_periods', 'eligibility_lists',
+    'eligibility_entries', 'notifications', 'audit_log', 'otp_codes',
+    'level_rollovers', 'app_config', 'risk_predictions',
+    'manual_attendance_batches',
+    -- the revision's own tables, absent from the original list
+    'registration_periods', 'course_registrations', 'hod_messages',
+    'exam_permits', 'push_subscriptions'
+  ]) as wanted
+  where to_regclass('public.' || wanted) is null;
+
+  return jsonb_build_object(
+    'up_to_date', cardinality(v_missing_functions) = 0 and cardinality(v_missing_tables) = 0,
+    'missing_functions', to_jsonb(v_missing_functions),
+    'missing_tables', to_jsonb(v_missing_tables),
+    'has_venue_directory', to_regclass('public.venue_directory') is not null,
+    'pg_cron_installed', exists (select 1 from pg_extension where extname = 'pg_cron'),
+    'active_session', (select name from academic_sessions where is_active limit 1),
+    'dues_period_set', exists (
+      select 1 from dues_periods dp
+      join academic_sessions s on s.id = dp.academic_session_id
+      where s.is_active
+    )
+  );
+end;
+$$;
+
+comment on function dept_flow_schema_report() is
+  'What /api/health reports. Names the missing pieces so a half-applied migration set is diagnosable. Covers the revision''s own tables and functions, which the original list predated.';
+
+revoke all on function dept_flow_schema_report() from public, anon, authenticated;
+grant execute on function dept_flow_schema_report() to service_role;
+
+-- ===========================================================================
+-- 20260823001500_register_do_not_attend.sql
+-- ===========================================================================
+
+-- Dept-Flow — tell an unregistered student to register, not to attend
+--
+-- `compute_risk_predictions()` reads enrolments and session scores. It has
+-- never consulted `course_registrations`, and it should not: the projection is
+-- arithmetic on what was recorded, and teaching it about the gate would make
+-- the forecast disagree with the attendance figure it is forecasting.
+--
+-- The consequence lands one step later, in the alert. A student past the
+-- registration deadline who has not confirmed is still enrolled in their core
+-- courses. Lectures are held, they count in the denominator, and the student
+-- has no accepted marks because `attendance_eligibility()` refuses every code
+-- they type. Their projection collapses toward zero, the tier goes Critical,
+-- and the message they receive is:
+--
+--     "Attend 13 of the 17 lectures left and you reach 75%."
+--
+-- Attending is the one thing they cannot do. The system spends its loudest
+-- channels telling a student to do something the system itself is blocking, and
+-- the student has no way to discover why. That is the same class of failure as
+-- promising a threshold that is out of reach: a warning that can only be acted
+-- on uselessly, which the migration before this one was written to remove.
+--
+-- So the copy is chosen by asking the SAME function the hall asks. Whatever
+-- `attendance_eligibility()` says about a submission is what the alert says
+-- about the remedy, and the two cannot drift apart into a screen that refuses a
+-- code and a message that asks for one.
+--
+-- The channel ladder is untouched. A blocked student gets exactly the channels
+-- their tier already earned — the words change, not the escalation. What tier
+-- an unregistered student should reach is a separate question from what they
+-- should be told, and folding the two together would hide the second decision
+-- inside the first.
+--
+-- This also drops the waiver from the out-of-reach message. Waivers were
+-- retired in the previous migration, and a message naming a route the
+-- department no longer has is worse than one naming nothing: it sends the
+-- student to an office that will turn them away.
+
+create or replace function send_risk_alerts()
+returns integer
+language plpgsql
+as $$
+declare
+  v_row       record;
+  v_sent      integer := 0;
+  v_note      uuid;
+  v_title     text;
+  v_body      text;
+  v_link      text;
+  v_channels  notification_channel[];
+  v_remaining integer;
+  v_reachable boolean;
+  v_blocked   boolean;
+begin
+  for v_row in
+    select
+      rp.*,
+      c.code as course_code,
+      (select tier from risk_alerts_sent prev
+        where prev.student_id = rp.student_id
+          and prev.course_id = rp.course_id
+        order by prev.sent_at desc
+        limit 1) as last_tier
+    from risk_predictions rp
+    join courses c on c.id = rp.course_id
+    join students s on s.id = rp.student_id
+    where rp.tier in ('watch', 'critical')
+      and s.status <> 'deactivated'
+  loop
+    if v_row.last_tier is not distinct from v_row.tier then
+      continue;
+    end if;
+
+    v_remaining := v_row.lectures_expected - v_row.lectures_held;
+    v_reachable := lectures_needed(v_row.student_id, v_row.course_id) <= v_remaining;
+    v_link      := '/courses/' || replace(v_row.course_code, ' ', '-');
+
+    -- Asked of the gate itself rather than re-derived from registration_periods
+    -- and course_registrations here. One rule, one place: if the hall would
+    -- refuse this student's code, this is the branch that speaks.
+    v_blocked := attendance_eligibility(v_row.student_id, v_row.course_id) = 'not_registered';
+
+    if v_row.tier = 'critical' then
+      v_channels := array['in_app', 'web_push', 'whatsapp']::notification_channel[];
+
+      if not v_reachable then
+        v_channels := v_channels || 'sms'::notification_channel;
+
+        v_title := format('%s: 75%% is no longer reachable', v_row.course_code);
+        v_body := format(
+          '%s is projected to finish at %s%%. Even attending all %s remaining lectures finishes below 75%%. Attendance alone cannot fix this now — speak to the department office about a dispute.',
+          v_row.course_code,
+          trim(to_char(v_row.predicted_pct, '990D9')),
+          v_remaining
+        );
+
+      elsif v_row.can_still_miss = 0 then
+        v_channels := v_channels || 'sms'::notification_channel;
+
+        v_title := format('%s: you must attend every remaining lecture', v_row.course_code);
+        v_body := format(
+          '%s is projected to finish at %s%%. You have %s lectures left and need every one of them to reach 75%%. Missing one more makes you ineligible for the exam.',
+          v_row.course_code,
+          trim(to_char(v_row.predicted_pct, '990D9')),
+          v_remaining
+        );
+
+      else
+        v_title := format('%s: you are on course to miss the 75%% mark', v_row.course_code);
+        v_body := format(
+          '%s is projected to finish at %s%%. Attend %s of the %s lectures left and you reach 75%%. You can miss %s.',
+          v_row.course_code,
+          trim(to_char(v_row.predicted_pct, '990D9')),
+          v_row.must_attend,
+          v_remaining,
+          v_row.can_still_miss
+        );
+      end if;
+    else
+      v_channels := array['in_app', 'web_push']::notification_channel[];
+      v_title := format('%s: no buffer left', v_row.course_code);
+      v_body := format(
+        '%s is projected to finish at %s%%, which is just above the 75%% line. You can miss %s more lectures — after that there is no room left.',
+        v_row.course_code,
+        trim(to_char(v_row.predicted_pct, '990D9')),
+        v_row.can_still_miss
+      );
+    end if;
+
+    -- Written last, over whatever the tier produced. The number the student can
+    -- see on their dashboard is still explained, because an alert that ignores
+    -- the figure beside it reads as a different system talking; but the remedy
+    -- named is the one that works, and the link goes where it can be done.
+    if v_blocked then
+      v_title := format('%s: register before you attend', v_row.course_code);
+      v_body := format(
+        'You are not registered for this semester, so %s attendance cannot be recorded — the code on the board is refused when you enter it. Confirm your registration and it starts counting from that moment. Until then every %s lecture held is recorded as an absence, which is why the projection reads %s%%.',
+        v_row.course_code,
+        v_row.course_code,
+        trim(to_char(v_row.predicted_pct, '990D9'))
+      );
+      v_link := '/courses/register';
+    end if;
+
+    v_note := queue_notification(
+      v_row.student_id,
+      'attendance_warning',
+      v_title,
+      v_body,
+      v_link,
+      v_channels
+    );
+
+    insert into risk_alerts_sent (student_id, course_id, tier, predicted_pct, notification_id)
+    values (v_row.student_id, v_row.course_id, v_row.tier, v_row.predicted_pct, v_note);
+
+    v_sent := v_sent + 1;
+  end loop;
+
+  return v_sent;
+end;
+$$;
+
+comment on function send_risk_alerts() is
+  'One alert per student per course per tier change. Never promises a threshold that cannot be reached, and never asks a student the registration gate is blocking to attend their way out of it — the remedy named is the one that works.';

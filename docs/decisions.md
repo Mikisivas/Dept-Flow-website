@@ -23,7 +23,8 @@ which sections are history and which are still in force.
 | **Paying dues** | **Superseded in its central claim.** Dues no longer decide whether a lecture counts, so there are no provisional scores to confirm. The Paystack mechanics — HMAC over the raw body, verify rather than trust, the reference's uniqueness — all stand, and instalments were added on top. |
 | **The payment window closes with the lock** · **What drives the deadline** | Still in force for dues. They no longer affect attendance. |
 | **Grace periods** | **Repointed.** Same mechanism, same audit trail, now restoring access to students shut out by the *registration* deadline rather than by dues. |
-| **Waivers and disputes** | In force. What a waiver changes is now the dues balance and the permit, not whether attendance counts. |
+| **Waivers** | **Retired.** The waiver existed to convert provisional scores, and the revision removed that job. What remained was the permit's dues condition, which it never actually satisfied: it set a compliance state while `dues_balance_kobo()` went on subtracting payments alone, so a granted waiver left the permit refusing. Forgiving a fee is now recorded on the payment side, where the balance is computed. |
+| **Disputes** | In force, and more load-bearing than before. A wrong absence used to cost one mark; it now corrupts a projection and can spend a WhatsApp message or an SMS on a student who did nothing wrong. |
 | **The exam permit** | **Extended.** It now needs dues paid in full *and* 75% per course, carries a QR to a verification endpoint, and is fronted by a live panel saying what is outstanding. |
 | **The paper register** | In force, with one column instead of two. |
 | **Shell per role** | In force, with one sentence amended in place: there is now a manifest and a service worker. Website-first was not conceded. |

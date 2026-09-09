@@ -56,12 +56,12 @@ the record from the server rather than from the paper.
 
 ## Current state
 
-Working end to end against a real Supabase project — 45 screens and 36 API
+Working end to end against a real Supabase project — 44 screens and 37 API
 routes, with no fixtures behind any of them.
 
 ```
 src/          Next.js App Router — student, lecturer, HOD and admin
-supabase/     Postgres schema, generated setup.sql, seed, and 425 assertions
+supabase/     Postgres schema, generated setup.sql, seed, and 430 assertions
 docs/         the specification — start with docs/operational-flow.md
 design/       mockups, drawn before the revision and superseded by it
 ```
@@ -75,7 +75,7 @@ wired end to end and needs only VAPID keys
 
 ```
 npm test                 24 Paystack + 32 account + 28 timetable assertions, no network
-./scripts/schema-test.sh 425 assertions against a throwaway local Postgres
+./scripts/schema-test.sh 430 assertions against a throwaway local Postgres
 ```
 
 The schema suite also verifies that the whole schema applies inside one

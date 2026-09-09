@@ -63,7 +63,7 @@ attended:
 > **MTH 205: 75% is no longer reachable**
 > MTH 205 is projected to finish at 0.0%. Even attending all 17 remaining
 > lectures finishes below 75%. Attendance alone cannot fix this now — speak to
-> the department office about a waiver or a dispute.
+> the department office about a dispute.
 
 This is the message worth pausing on. The system could have told her to attend
 everything and reach 75%, and it would have been a lie she could not detect —

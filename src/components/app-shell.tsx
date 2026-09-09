@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   ArrowUpRight,
-  BadgeCheck,
   BookOpen,
   CalendarDays,
   ClipboardList,
@@ -74,7 +73,6 @@ const NAV: Record<AppRole, NavItem[]> = {
     { href: "/hod/messages", label: "Message students", icon: Send },
     { href: "/hod/payments", label: "Payment compliance", icon: CreditCard },
     { href: "/hod/grace", label: "Exceptions", icon: ShieldAlert },
-    { href: "/hod/waivers", label: "Waivers", icon: BadgeCheck },
     { href: "/hod/disputes", label: "Disputes", icon: ClipboardList },
     { href: "/hod/eligibility", label: "Eligibility list", icon: ListChecks },
     { href: "/hod/lecturers", label: "Lecturers", icon: Users },

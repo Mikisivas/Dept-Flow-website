@@ -55,7 +55,7 @@ exam permit at the end — which needs both dues paid in full and 75% attendance
 |---|---|---|
 | **Student** | Register (register match + OTP), confirm semester registration, pay dues in full or instalments, submit attendance codes, see own attendance, forecast and permit | See other students' data, alter payment records, see a code before the lecturer issues it |
 | **Lecturer** | Open and close lectures, issue the code, create makeup/reschedule/cancel instances for own courses, submit paper batches | Grant exceptions, deactivate students, alter dues |
-| **HOD** | Grant registration exceptions, approve waivers, see individual academic risk, message students at four scopes, resolve disputes, authorize the final eligibility list | Edit dues amount or the register |
+| **HOD** | Grant registration exceptions, see individual academic risk, message students at four scopes, resolve disputes, authorize the final eligibility list | Edit dues amount or the register |
 | **Admin** | Manage the register, revoke/reclaim registrations, deactivate students, run level rollover, configure dues and the registration window, record manual payments | Grant exceptions, **see any individual student's academic risk** |
 
 The last cell is a role boundary, not a screen layout. `risk_predictions` is readable
@@ -294,7 +294,7 @@ And where the threshold is out of reach it says so, rather than asking for somet
 that will not work:
 
 > Even attending all 17 remaining lectures finishes below 75%. Attendance alone
-> cannot fix this now — speak to the department office about a waiver or a dispute.
+> cannot fix this now — speak to the department office about a dispute.
 
 A **what-if calculator** answers "what if I miss the next two?" — computed on the
 server, by the same arithmetic that decides permits, so the answer a student explores
@@ -386,7 +386,7 @@ recorded.
 - **Uniqueness at the database level**: `(student_id, checkpoint_id)`, the Paystack
   reference, the provider event id, the push endpoint. Each is the cheapest defence
   against a duplicate at the only level where it cannot be raced.
-- **Audit everywhere sensitive**, with a mandatory reason — grace, waiver,
+- **Audit everywhere sensitive**, with a mandatory reason — grace,
   deactivation, registration revoke, manual payment, level rollover, eligibility
   authorization, and every HOD message. Reaching four hundred phones is an authority
   action, and the person who did it should be recoverable a year later.

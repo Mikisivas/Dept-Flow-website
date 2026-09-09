@@ -15,7 +15,7 @@ import { Field } from "@/components/ui/field";
 import { cn } from "@/lib/utils";
 
 /**
- * Every authority action goes through this: grace periods, waivers,
+ * Every authority action goes through this: grace periods,
  * deactivation, revoking a registration, level rollover, paper batches,
  * session cancellation, eligibility authorization, config changes.
  *

@@ -203,6 +203,24 @@ export type RegistrationOption = CatalogueCourse & {
   /** Whether this is a choice at their level or a course they are repeating. */
   addsAs: "elective" | "carry_over";
   enrolledAlready: boolean;
+  /**
+   * The session they last took this course in, or null if they never have.
+   *
+   * The department keeps no grade record, so nothing in this system knows
+   * which courses a student FAILED — and neither does the admin, which is
+   * why carry-overs could never really be "auto-flagged from the academic
+   * record" the way the flow document imagines. What the system does know is
+   * what each student was enrolled in, and the student knows which of those
+   * they have to repeat. So this marks the candidates and leaves the choice
+   * where the knowledge actually is.
+   */
+  takenBefore: string | null;
+};
+
+/** A course they took before that this session does not offer at all. */
+export type UnofferedPriorCourse = {
+  code: string;
+  takenBefore: string;
 };
 
 export type StudentRegistration = {
@@ -214,6 +232,12 @@ export type StudentRegistration = {
     CatalogueCourse & { source: "core" | "elective" | "carry_over"; canDrop: boolean }
   >;
   available: RegistrationOption[];
+  /**
+   * Previously taken, and not in this session's catalogue at all. A student
+   * repeating one of these cannot register it here however long they look,
+   * and finding that out in week eight is the failure worth preventing.
+   */
+  unoffered: UnofferedPriorCourse[];
   /**
    * Registration is a deliberate, final action rather than the accumulation of
    * clicks it used to be. Until it is confirmed there is no moment at which a
@@ -271,6 +295,38 @@ export async function loadStudentRegistration(
 
   const sourceByCourse = new Map((mine ?? []).map((row) => [row.course_id, row.source]));
 
+  /**
+   * What they took in EARLIER sessions, by course code.
+   *
+   * Courses are per session, so last year's MTH 201 is a different row from
+   * this year's with the same code. The code is what carries across, and it is
+   * what a student recognises — nobody repeating a course thinks of it by its
+   * row id.
+   */
+  const [{ data: history }, { data: sessions }] = await Promise.all([
+    db
+      .from("enrolments")
+      .select("courses(code, academic_session_id)")
+      .eq("student_id", studentId),
+    db.from("academic_sessions").select("id, name, starts_on"),
+  ]);
+
+  const sessionById = new Map(
+    (sessions ?? []).map((row) => [row.id, { name: row.name, startsOn: row.starts_on }]),
+  );
+
+  // The most recent time they took it, when there is more than one. A student
+  // on a third attempt is told about the second, not the first.
+  const takenBefore = new Map<string, { name: string; startsOn: string }>();
+  for (const row of history ?? []) {
+    const course = Array.isArray(row.courses) ? row.courses[0] : row.courses;
+    if (!course || course.academic_session_id === session?.id) continue;
+    const when = sessionById.get(course.academic_session_id);
+    if (!when) continue;
+    const seen = takenBefore.get(course.code);
+    if (!seen || seen.startsOn < when.startsOn) takenBefore.set(course.code, when);
+  }
+
   const registered = catalogue
     .filter((course) => sourceByCourse.has(course.courseId) && course.semester === resolved)
     .map((course) => {
@@ -291,9 +347,24 @@ export async function loadStudentRegistration(
     })
     .map((course) => ({
       ...course,
-      addsAs: course.level < level ? "carry_over" : "elective",
+      addsAs: (course.level < level ? "carry_over" : "elective") as "carry_over" | "elective",
       enrolledAlready: false,
-    }));
+      takenBefore: takenBefore.get(course.code)?.name ?? null,
+    }))
+    // Courses they have actually sat first. The catalogue is already ordered by
+    // level then code, and this sort is stable, so the rest keeps that order —
+    // a 300-level student is otherwise shown every 100- and 200-level course in
+    // the department with nothing to say which of them is theirs.
+    .sort((a, b) => Number(b.takenBefore !== null) - Number(a.takenBefore !== null));
+
+  // Taken before, and not offered this session under any level. There is no
+  // row to add, so the screen has to say so rather than let a student conclude
+  // from an absence that they have nothing to repeat.
+  const offeredCodes = new Set(catalogue.map((course) => course.code));
+  const unoffered: UnofferedPriorCourse[] = [...takenBefore.entries()]
+    .filter(([code]) => !offeredCodes.has(code))
+    .map(([code, when]) => ({ code, takenBefore: when.name }))
+    .sort((a, b) => a.code.localeCompare(b.code));
 
   const [{ data: period }, { data: confirmation }] = await Promise.all([
     session?.id
@@ -324,6 +395,7 @@ export async function loadStudentRegistration(
     unitsUsed,
     registered,
     available,
+    unoffered,
     confirmation: {
       status: confirmation?.status === "confirmed" ? "confirmed" : "draft",
       confirmedAt: (confirmation?.registered_at as string | null) ?? null,

@@ -28,7 +28,9 @@ Reflects the updated design direction: an alert-driven, registration-gated syste
 ## 2. Semester Registration (every semester — gates attendance)
 
 1. Admin sets the registration window (e.g., 7 days from resumption).
-2. Returning students see: core courses auto-populated, carryovers auto-flagged from their academic record, electives to be explicitly selected.
+2. Returning students see: core courses auto-populated, carryovers surfaced from their own registration history, electives to be explicitly selected.
+
+   *Amended after the revision.* "Auto-flagged from their academic record" is not something this system can do: it stores no grades, so nothing in it knows which courses a student failed, and the admin does not know either. What it does know is what each student was enrolled in. So every course a student sat in an earlier session is listed first among the ones they can add, marked with the session they sat it in, and the student — who knows which they must repeat — chooses. A course they sat that this session does not offer at all is named separately, because there is no row to add and silence would read as "nothing to repeat".
 3. Registration is a deliberate, final action — status moves `draft → confirmed`, and the system stamps `registered_at` server-side at confirmation, never client-supplied time.
 4. As the deadline approaches, WhatsApp reminders go to anyone not yet confirmed.
 5. After the deadline, unregistered students cannot log attendance for any course.

@@ -40,7 +40,8 @@ export function CourseRegistration({ registration }: { registration: StudentRegi
   const [confirming, setConfirming] = useState(false);
   const [sealing, setSealing] = useState(false);
 
-  const { creditCap, unitsUsed, registered, available, semester, confirmation } = registration;
+  const { creditCap, unitsUsed, registered, available, unoffered, semester, confirmation } =
+    registration;
   const overCap = unitsUsed > creditCap;
   const confirmed = confirmation.status === "confirmed";
   const late = !confirmation.open && !confirmed;
@@ -293,6 +294,15 @@ export function CourseRegistration({ registration }: { registration: StudentRegi
                           ? `${course.level} level · carry-over`
                           : "elective"}
                       </p>
+                      {/* Named as a fact about their record, never as a verdict
+                          on it. Nothing here knows whether they passed — only
+                          that they sat it, which is the part the student can
+                          finish the sentence for. */}
+                      {course.takenBefore ? (
+                        <p className="mt-1.5 text-[13px] font-medium text-ink">
+                          You were enrolled in this in {course.takenBefore}.
+                        </p>
+                      ) : null}
                       {/* Said before they tap, not after the server refuses. */}
                       {wouldExceed ? (
                         <p className="mt-1.5 text-[13px] text-slate">
@@ -321,6 +331,23 @@ export function CourseRegistration({ registration }: { registration: StudentRegi
           </ul>
         )}
       </section>
+
+      {unoffered.length > 0 ? (
+        <section
+          aria-labelledby="unoffered-heading"
+          className="rounded-lg border border-dashed border-cell-provisional p-4"
+        >
+          <h2 id="unoffered-heading" className="text-[15px] font-semibold text-ink">
+            Taken before, not offered this semester
+          </h2>
+          <p className="mt-1.5 text-[14px] leading-relaxed text-slate">
+            <span translate="no">{unoffered.map((course) => course.code).join(", ")}</span>. If you
+            are repeating one of these, it is not in this semester&rsquo;s catalogue and there is
+            nothing here to add. Speak to the department office rather than waiting for it to
+            appear.
+          </p>
+        </section>
+      ) : null}
 
       <p className="text-[13px] leading-relaxed text-muted">
         A course you add starts counting from today. Lectures held before you joined it are not

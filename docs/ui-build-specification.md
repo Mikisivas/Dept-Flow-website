@@ -312,6 +312,8 @@ warning that arrived too late to change anything.
 **Contents:**
 - The window and its deadline, stated plainly
 - Core courses, already enrolled; electives and carry-overs to choose, against a 24-unit cap with a live running total
+- **Courses sat in an earlier session are listed first, each naming that session.** The department keeps no grades, so neither the system nor the admin can flag a carry-over; the student can. The screen states the fact it has — "You were enrolled in this in 2025/2026" — and never the verdict it does not, so it stops short of telling a student they failed something
+- **Sat before and not offered this semester** is called out on its own. There is no row to add, and a student who reads an absence as "nothing to repeat" finds out in week eight
 - **Confirm**, with the cost of being late stated BEFORE the click, not after: "Lectures held since the deadline will be marked absent."
 **States:** window not open · open and unconfirmed · confirmed · **past the deadline and unconfirmed** (the state that blocks attendance, with what to do about it) · confirmed late (showing what was backfilled)
 

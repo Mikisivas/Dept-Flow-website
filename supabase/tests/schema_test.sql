@@ -3183,6 +3183,127 @@ end $$;
 
 
 -- ---------------------------------------------------------------------------
+-- The admin setting the dues (§8)
+--
+-- One row per SESSION, never per semester — dues are charged for the year. The
+-- assertions that matter are about what a changed figure does to people who
+-- have already paid, because every reader computes from it live and a raise is
+-- otherwise silent until the permit queue.
+--
+-- This block restores the seeded figure before it ends. The suite is one
+-- transaction, and the permit assertions further down are written against the
+-- seeded dues amount.
+-- ---------------------------------------------------------------------------
+
+do $$
+declare
+  v_admin    uuid := '33333333-3333-3333-3333-333333333303';
+  v_hod      uuid := '33333333-3333-3333-3333-333333333302';
+  v_session  uuid := '11111111-1111-1111-1111-111111111111';
+  v_payer    uuid := gen_random_uuid();
+  v_amount   double precision;
+  v_resumed  date;
+  v_id       uuid;
+  v_impact   record;
+  v_meta     jsonb;
+begin
+  select dues_amount_kobo, resumption_date into v_amount, v_resumed
+  from dues_periods where academic_session_id = v_session;
+
+  perform assert_true(
+    (select count(*) from dues_periods where academic_session_id = v_session) = 1,
+    'a session has exactly one dues period — the amount is charged for the year, not per semester'
+  );
+
+  perform assert_rejects(
+    format('select set_dues_period(%L, %L, %L, 500000, %L)',
+           v_hod, v_session, current_date, 'The head of department decides waivers, not the fee.'),
+    'only an administrator can set the dues — the role that forgives a debt does not also set it'
+  );
+
+  perform assert_rejects(
+    format('select set_dues_period(%L, %L, %L, 500000, %L)',
+           v_admin, v_session, current_date, 'raised'),
+    'a dues change must say why'
+  );
+
+  perform assert_rejects(
+    format('select set_dues_period(%L, %L, %L, 0, %L)',
+           v_admin, v_session, current_date, 'A fee of nothing at all.'),
+    'the dues amount must be more than zero'
+  );
+
+  perform assert_rejects(
+    format('select set_dues_period(%L, %L, %L, 1000.5, %L)',
+           v_admin, v_session, current_date, 'Half a kobo, which does not exist.'),
+    'the dues amount must be a whole number of kobo'
+  );
+
+  -- Someone who has paid the fee in full, to be moved across the line.
+  insert into profiles (id, role, surname, first_name, phone)
+  values (v_payer, 'student', 'Paidup', 'Chidi', '+2348050000801');
+  insert into students (id, matric_no, level) values (v_payer, 'STA/2021/864', 200);
+  insert into payments (student_id, academic_session_id, paystack_reference, channel,
+                        status, amount_kobo, verified_at)
+  values (v_payer, v_session, 'ref-dues-change', 'card', 'success', v_amount, now());
+
+  perform assert_true(
+    dues_balance_kobo(v_payer, v_session) = 0,
+    'the fixture student owes nothing at the current figure'
+  );
+
+  select * into v_impact from dues_change_impact(v_session, v_amount + 200000);
+  perform assert_true(
+    v_impact.newly_owing >= 1,
+    'the preview counts the student a raise would put back into debt, before the raise happens'
+  );
+
+  perform assert_true(
+    (select newly_owing from dues_change_impact(v_session, v_amount)) = 0,
+    'and setting the same figure again moves nobody'
+  );
+
+  -- The raise itself.
+  v_id := set_dues_period(v_admin, v_session, v_resumed, v_amount + 200000,
+                          'Senate approved an increase for this session.');
+
+  perform assert_true(
+    dues_balance_kobo(v_payer, v_session) = 200000,
+    'raising the figure puts a fully-paid student back in debt immediately — every reader computes from it live'
+  );
+
+  select metadata into v_meta from audit_log
+   where action = 'dues_period.set' and target_id = v_id::text
+   order by id desc limit 1;
+
+  perform assert_true(
+    (v_meta->>'previous_dues_amount_kobo')::double precision = v_amount,
+    'the audit row keeps the figure it replaced'
+  );
+
+  perform assert_true(
+    (v_meta->>'newly_owing')::integer >= 1,
+    'and records how many students the change put back in debt, which is asked months later'
+  );
+
+  perform assert_true(
+    (select count(*) from dues_periods where academic_session_id = v_session) = 1,
+    'setting it twice moves the one row rather than opening a second'
+  );
+
+  -- Put the seeded figure back: the permit assertions below are written
+  -- against it, and this suite is a single transaction.
+  perform set_dues_period(v_admin, v_session, v_resumed, v_amount,
+                          'Restoring the seeded figure for the rest of the suite.');
+
+  perform assert_true(
+    dues_balance_kobo(v_payer, v_session) = 0,
+    'and lowering it back clears them again, with no recompute anywhere'
+  );
+end $$;
+
+
+-- ---------------------------------------------------------------------------
 -- The HOD talking to students (§7.3)
 --
 -- Four audiences from one function, drawn from the registration data and the

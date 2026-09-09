@@ -3,6 +3,7 @@ import { AppShell } from "@/components/app-shell";
 import { PageHeader } from "@/components/page-header";
 import { loadSystemConfig } from "@/lib/data/admin";
 import { formatDate, naira } from "@/lib/format";
+import { DuesControl } from "./dues-control";
 import { RegistrationWindowControl } from "./registration-window-control";
 
 export const metadata: Metadata = { title: "Configuration" };
@@ -15,11 +16,18 @@ export const dynamic = "force-dynamic";
  *
  * Most of them are read-only on purpose: a threshold or a token lifetime is a
  * decision about the whole department, and it is changed deliberately in the
- * database, not between two clicks on a settings page. The registration window
- * is the exception, and has to be, because it is the one value that genuinely
- * changes every semester and whose absence is silent — an unconfigured window
- * reads as open, so a department that never set one loses the gate without ever
- * seeing an error.
+ * database, not between two clicks on a settings page.
+ *
+ * Two are editable, and they are the two that genuinely change every session.
+ * The registration window is per SEMESTER; the dues are per SESSION, charged
+ * once for the year. Saying which is which on the screen matters, because they
+ * sit a few inches apart and the wrong assumption produces a second dues row
+ * that nothing would ever read.
+ *
+ * Both are editable for the same reason: their absence is silent. An
+ * unconfigured window reads as open, so the gate never engages and nothing
+ * errors. A missing dues period leaves no day 0 to count from. Neither
+ * announces itself, and until now neither could be fixed without SQL access.
  *
  * The geo-fence and the location-retention window used to live at the bottom
  * of this page. Both are gone with location enforcement, and the section that
@@ -77,6 +85,11 @@ export default async function ConfigPage() {
             detail="Default length the HOD is offered when opening a grace period."
           />
         </dl>
+
+        <DuesControl
+          amountKobo={config.duesAmountKobo}
+          resumptionDate={config.resumptionDate}
+        />
       </section>
 
       <section aria-labelledby="rules-heading" className="mt-8">

@@ -169,7 +169,7 @@ production rather than pretending), deployment. Web Push **is** wired end to
 end and needs only VAPID keys — `npx web-push generate-vapid-keys`.
 
 **Checks:** `npm test` (24 Paystack + 32 account + 28 timetable assertions, no
-network) and `./scripts/schema-test.sh` (412 assertions against a local
+network) and `./scripts/schema-test.sh` (425 assertions against a local
 Postgres, which also verifies the whole schema applies inside ONE transaction —
 the Supabase SQL Editor runs it that way, so a migration that only works
 outside one is a migration that cannot be deployed).

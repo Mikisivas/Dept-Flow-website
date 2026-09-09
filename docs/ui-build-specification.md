@@ -545,8 +545,8 @@ responsible for.
 ### 7.6 System configuration
 **Route:** `/admin/config` · **Role:** admin
 **Contents:**
-- Dues amount
-- Resumption date (starts the 30-day window)
+- **Dues amount** — **settable here**, and charged **once per session, never per semester**. That cardinality is not a detail: `dues_balance_kobo()` looks the figure up by session alone, so a per-semester dues row would be silently ignored. Changing it takes effect everywhere the instant it saves, because every balance is computed from it rather than stored — which is why the control previews how many students owe nothing today and would owe at the new figure. Each of those loses an exam permit they could print that morning. The count is recorded in the audit row as well as shown, since "how many did that raise affect?" is asked months later.
+- **Resumption date** (starts the 30-day window) — set alongside the amount, as one dues period
 - **Semester registration window** — opens_on and deadline, per semester, **settable here**. The control that decides who can record attendance, so it belongs to the operations role and not the academic one. It is the one editable value on this screen, because it is the one that changes every semester and because its absence is silent: an unconfigured window reads as open, so a department that never set one loses the gate without ever seeing an error. Moving it is confirmed, takes a reason, and records the dates it replaced — a student will eventually argue they registered in time, and only the previous dates can settle it. Setting a window changes nobody's registration by itself.
 - Grace window length (default 30 days)
 - Pending-verification buffer length (6–12h)

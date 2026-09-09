@@ -6,6 +6,7 @@ import { createUserClient } from "@/lib/supabase/client";
 import { lagosToday } from "@/lib/format";
 import type { SessionClaims } from "@/lib/auth/session";
 import type { LecturerClassStatus, RosterEntry, SessionControl } from "@/lib/types";
+import { allOk, ok } from "@/lib/supabase/result";
 
 export type { LecturerClassStatus, RosterEntry, SessionControl };
 
@@ -93,7 +94,7 @@ async function venueNames(
   const unique = [...new Set(ids.filter(Boolean) as string[])];
   if (unique.length === 0) return new Map();
 
-  const { data } = await db.from("venue_directory").select("id, name").in("id", unique);
+  const { data } = ok(await db.from("venue_directory").select("id, name").in("id", unique), "venue names");
   return new Map((data ?? []).map((row) => [row.id as string, row.name as string]));
 }
 
@@ -123,7 +124,7 @@ export async function loadLecturerDashboard(): Promise<LecturerDashboard> {
     };
   }
 
-  const [{ data: timetable }, { data: enrolments }, { data: instances }] = await Promise.all([
+  const [{ data: timetable }, { data: enrolments }, { data: instances }] = allOk(await Promise.all([
     db
       .from("timetable_entries")
       .select("id, course_id, start_time, end_time, venue_id")
@@ -139,7 +140,7 @@ export async function loadLecturerDashboard(): Promise<LecturerDashboard> {
       )
       .in("course_id", courseIds)
       .or(`held_on.eq.${date},status.eq.open`),
-  ]);
+  ]), "timetable, enrolments, instances");
 
   const enrolledByCourse = new Map<string, number>();
   for (const row of enrolments ?? []) {
@@ -212,21 +213,21 @@ async function loadRecent(
   db: ReturnType<typeof createUserClient>,
   courseById: Map<string, { id: string; code: string; title: string }>,
 ): Promise<LecturerDashboard["recent"]> {
-  const { data: closed } = await db
+  const { data: closed } = ok(await db
     .from("session_instances")
     .select("id, course_id, held_on")
     .in("course_id", [...courseById.keys()])
     .eq("status", "closed")
     .order("held_on", { ascending: false })
-    .limit(5);
+    .limit(5), "closed");
 
   const ids = (closed ?? []).map((row) => row.id);
   if (ids.length === 0) return [];
 
-  const { data: scores } = await db
+  const { data: scores } = ok(await db
     .from("session_scores")
     .select("session_instance_id, score, source")
-    .in("session_instance_id", ids);
+    .in("session_instance_id", ids), "scores");
 
   return (closed ?? []).map((instance) => {
     const rows = (scores ?? []).filter((s) => s.session_instance_id === instance.id);
@@ -260,31 +261,31 @@ export async function loadSessionRoster(id: string): Promise<SessionRoster | nul
   await requireLecturer();
   const db = createUserClient(await currentAccessToken());
 
-  const { data: instance } = await db
+  const { data: instance } = ok(await db
     .from("session_instances")
     .select("id, course_id, held_on, courses(code)")
     .eq("id", id)
-    .maybeSingle();
+    .maybeSingle(), "instance");
 
   if (!instance) return null;
 
-  const [{ data: enrolments }, { data: checkpoints }] = await Promise.all([
+  const [{ data: enrolments }, { data: checkpoints }] = allOk(await Promise.all([
     db
       .from("enrolments")
       .select("student_id, students(matric_no, profiles!students_id_fkey(surname, first_name, other_names))")
       .eq("course_id", instance.course_id),
     db.from("checkpoints").select("id").eq("session_instance_id", id),
-  ]);
+  ]), "enrolments, checkpoints");
 
   const checkpointIds = (checkpoints ?? []).map((cp) => cp.id);
 
-  const { data: marks } = checkpointIds.length
+  const { data: marks } = ok(checkpointIds.length
     ? await db
         .from("attendance_marks")
         .select("student_id, checkpoint_id, accepted")
         .in("checkpoint_id", checkpointIds)
         .eq("accepted", true)
-    : { data: [] };
+    : { data: [] }, "marks");
 
   const roster: RosterEntry[] = (enrolments ?? [])
     .map((row) => {
@@ -319,11 +320,11 @@ export async function loadSessionControl(id: string): Promise<SessionControl | n
   await requireLecturer();
   const db = createUserClient(await currentAccessToken());
 
-  const { data: instance } = await db
+  const { data: instance } = ok(await db
     .from("session_instances")
     .select("id, course_id, status, opened_at, held_on, venue_id, courses(code, title)")
     .eq("id", id)
-    .maybeSingle();
+    .maybeSingle(), "instance");
 
   // Null rather than an error: the policies return nothing for a lecture that
   // belongs to another lecturer, which is exactly the same shape as a lecture
@@ -332,22 +333,22 @@ export async function loadSessionControl(id: string): Promise<SessionControl | n
 
   const course = one(instance.courses as unknown as { code: string; title: string });
 
-  const [{ count: enrolled }, { data: checkpoints }, venueName] = await Promise.all([
+  const [{ count: enrolled }, { data: checkpoints }, venueName] = allOk(await Promise.all([
     db
       .from("enrolments")
       .select("id", { count: "exact", head: true })
       .eq("course_id", instance.course_id),
     db.from("checkpoints").select("id, token, expires_at").eq("session_instance_id", id),
     venueNames(db, [instance.venue_id]),
-  ]);
+  ]), "enrolled, checkpoints");
 
   const checkpointIds = (checkpoints ?? []).map((cp) => cp.id);
-  const { data: marks } = checkpointIds.length
+  const { data: marks } = ok(checkpointIds.length
     ? await db
         .from("attendance_marks")
         .select("checkpoint_id, accepted, reject_reason")
         .in("checkpoint_id", checkpointIds)
-    : { data: [] };
+    : { data: [] }, "marks");
 
   // One code per lecture, so there is at most one row. A lapsed code is
   // reported as no live code rather than as an expired one: the lecturer's
@@ -419,10 +420,10 @@ export async function loadLecturerSchedule(): Promise<ScheduledSession[]> {
   const db = createUserClient(await currentAccessToken());
   const { date } = lagosToday();
 
-  const { data: courses } = await db
+  const { data: courses } = ok(await db
     .from("courses")
     .select("id, code")
-    .eq("lecturer_id", session.profileId);
+    .eq("lecturer_id", session.profileId), "courses");
 
   const courseIds = (courses ?? []).map((course) => course.id);
   if (courseIds.length === 0) return [];
@@ -433,7 +434,7 @@ export async function loadLecturerSchedule(): Promise<ScheduledSession[]> {
   horizon.setUTCDate(horizon.getUTCDate() + SCHEDULE_HORIZON_DAYS);
   const until = horizon.toISOString().slice(0, 10);
 
-  const [{ data: timetable }, { data: instances }] = await Promise.all([
+  const [{ data: timetable }, { data: instances }] = allOk(await Promise.all([
     db
       .from("timetable_entries")
       .select("id, course_id, day_of_week, start_time, end_time, venue_id")
@@ -446,7 +447,7 @@ export async function loadLecturerSchedule(): Promise<ScheduledSession[]> {
       .in("course_id", courseIds)
       .gte("held_on", date)
       .lte("held_on", until),
-  ]);
+  ]), "timetable, instances");
 
   const venues = await venueNames(db, [
     ...(timetable ?? []).map((entry) => entry.venue_id),
@@ -521,7 +522,7 @@ export type LecturerVenue = { id: string; name: string };
 export async function loadVenueOptions(): Promise<LecturerVenue[]> {
   await requireLecturer();
   const db = createUserClient(await currentAccessToken());
-  const { data } = await db.from("venue_directory").select("id, name").order("name");
+  const { data } = ok(await db.from("venue_directory").select("id, name").order("name"), "the venue list");
   return (data ?? []).map((venue) => ({ id: venue.id, name: venue.name }));
 }
 
@@ -543,16 +544,16 @@ export async function loadLecturerCourses(): Promise<LecturerCourse[]> {
   const session = await requireLecturer();
   const db = createUserClient(await currentAccessToken());
 
-  const { data: courses } = await db
+  const { data: courses } = ok(await db
     .from("courses")
     .select("id, code, title")
     .eq("lecturer_id", session.profileId)
-    .order("code");
+    .order("code"), "courses");
 
   const courseIds = (courses ?? []).map((course) => course.id);
   if (courseIds.length === 0) return [];
 
-  const [{ data: enrolments }, { data: instances }, { data: scores }] = await Promise.all([
+  const [{ data: enrolments }, { data: instances }, { data: scores }] = allOk(await Promise.all([
     db
       .from("enrolments")
       .select("student_id, course_id, enrolled_on")
@@ -564,7 +565,7 @@ export async function loadLecturerCourses(): Promise<LecturerCourse[]> {
       .in("course_id", courseIds)
       .eq("status", "closed"),
     db.from("session_scores").select("student_id, session_instance_id, score"),
-  ]);
+  ]), "enrolments, instances, scores");
 
   const scoreByKey = new Map(
     (scores ?? []).map((row) => [`${row.student_id}|${row.session_instance_id}`, row]),

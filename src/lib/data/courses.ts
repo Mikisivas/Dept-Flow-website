@@ -2,6 +2,7 @@ import "server-only";
 
 import { createServiceClient, createUserClient } from "@/lib/supabase/client";
 import { currentAccessToken } from "@/lib/auth/current-user";
+import { allOk, ok } from "@/lib/supabase/result";
 
 /**
  * The course catalogue, and a student's registration against it.
@@ -81,11 +82,11 @@ function parseRow(line: string, index: number): { row?: Omit<CatalogueCourse, "c
 export async function uploadCourses(csv: string): Promise<CourseUploadResult> {
   const db = createServiceClient();
 
-  const { data: session } = await db
+  const { data: session } = ok(await db
     .from("academic_sessions")
     .select("id")
     .eq("is_active", true)
-    .single();
+    .single(), "session");
 
   if (!session) throw new Error("There is no active academic session.");
 
@@ -107,10 +108,10 @@ export async function uploadCourses(csv: string): Promise<CourseUploadResult> {
 
   if (rows.length === 0) return { created: 0, updated: 0, enrolled: 0, rejected };
 
-  const { data: before } = await db
+  const { data: before } = ok(await db
     .from("courses")
     .select("code")
-    .eq("academic_session_id", session.id);
+    .eq("academic_session_id", session.id), "before");
 
   const existing = new Set((before ?? []).map((row) => row.code));
 
@@ -135,13 +136,13 @@ export async function uploadCourses(csv: string): Promise<CourseUploadResult> {
   let enrolled = 0;
 
   if (levels.length > 0) {
-    const { data: students } = await db.from("students").select("id").in("level", levels);
+    const { data: students } = ok(await db.from("students").select("id").in("level", levels), "students");
 
     for (const student of students ?? []) {
-      const { data: added } = await db.rpc("enrol_in_core_courses", {
+      const { data: added } = ok(await db.rpc("enrol_in_core_courses", {
         p_student_id: student.id,
         p_academic_session_id: session.id,
-      });
+      }), "added");
       enrolled += typeof added === "number" ? added : 0;
     }
   }
@@ -158,25 +159,25 @@ export async function uploadCourses(csv: string): Promise<CourseUploadResult> {
 export async function loadCatalogue(): Promise<CatalogueCourse[]> {
   const db = createUserClient(await currentAccessToken());
 
-  const { data: session } = await db
+  const { data: session } = ok(await db
     .from("academic_sessions")
     .select("id")
     .eq("is_active", true)
-    .single();
+    .single(), "session");
 
   if (!session) return [];
 
-  const { data: courses } = await db
+  const { data: courses } = ok(await db
     .from("courses")
     .select("id, code, title, level, kind, credit_units, semester, profiles:lecturer_id(surname, first_name)")
     .eq("academic_session_id", session.id)
     .order("level")
-    .order("code");
+    .order("code"), "courses");
 
   const ids = (courses ?? []).map((course) => course.id);
-  const { data: enrolments } = ids.length
+  const { data: enrolments } = ok(ids.length
     ? await db.from("enrolments").select("course_id").in("course_id", ids).is("dropped_at", null)
-    : { data: [] };
+    : { data: [] }, "enrolments");
 
   const countByCourse = new Map<string, number>();
   for (const row of enrolments ?? []) {
@@ -268,7 +269,7 @@ export async function loadStudentRegistration(
 ): Promise<StudentRegistration> {
   const db = createUserClient(await currentAccessToken());
 
-  const [{ data: student }, { data: config }, { data: session }] = await Promise.all([
+  const [{ data: student }, { data: config }, { data: session }] = allOk(await Promise.all([
     db.from("students").select("level").eq("id", studentId).single(),
     db.from("app_config").select("max_credit_units_per_semester").eq("id", 1).single(),
     db
@@ -276,7 +277,7 @@ export async function loadStudentRegistration(
       .select("id, starts_on, ends_on")
       .eq("is_active", true)
       .single(),
-  ]);
+  ]), "student, config, session");
 
   // Defaulting to 1 would show a student their first-semester courses in
   // March. The schema has no "current semester" field to read, so it is
@@ -287,11 +288,11 @@ export async function loadStudentRegistration(
   const creditCap = config?.max_credit_units_per_semester ?? 24;
   const catalogue = await loadCatalogue();
 
-  const { data: mine } = await db
+  const { data: mine } = ok(await db
     .from("enrolments")
     .select("course_id, source")
     .eq("student_id", studentId)
-    .is("dropped_at", null);
+    .is("dropped_at", null), "mine");
 
   const sourceByCourse = new Map((mine ?? []).map((row) => [row.course_id, row.source]));
 
@@ -303,13 +304,13 @@ export async function loadStudentRegistration(
    * what a student recognises — nobody repeating a course thinks of it by its
    * row id.
    */
-  const [{ data: history }, { data: sessions }] = await Promise.all([
+  const [{ data: history }, { data: sessions }] = allOk(await Promise.all([
     db
       .from("enrolments")
       .select("courses(code, academic_session_id)")
       .eq("student_id", studentId),
     db.from("academic_sessions").select("id, name, starts_on"),
-  ]);
+  ]), "history, sessions");
 
   const sessionById = new Map(
     (sessions ?? []).map((row) => [row.id, { name: row.name, startsOn: row.starts_on }]),
@@ -366,7 +367,7 @@ export async function loadStudentRegistration(
     .map(([code, when]) => ({ code, takenBefore: when.name }))
     .sort((a, b) => a.code.localeCompare(b.code));
 
-  const [{ data: period }, { data: confirmation }] = await Promise.all([
+  const [{ data: period }, { data: confirmation }] = allOk(await Promise.all([
     session?.id
       ? db
           .from("registration_periods")
@@ -384,7 +385,7 @@ export async function loadStudentRegistration(
           .eq("semester", resolved)
           .maybeSingle()
       : Promise.resolve({ data: null }),
-  ]);
+  ]), "period, confirmation");
 
   const deadline = (period?.closes_on as string | undefined) ?? null;
 

@@ -2,6 +2,7 @@ import "server-only";
 
 import { createServiceClient } from "@/lib/supabase/client";
 import { sendSms, sendWebPush, sendWhatsApp, type SendResult } from "@/lib/messaging";
+import { ok } from "@/lib/supabase/result";
 
 /**
  * Draining the delivery queue.
@@ -45,12 +46,12 @@ function one<T>(value: T | T[] | null | undefined): T | null {
 export async function dispatchQueuedNotifications(limit = BATCH): Promise<DispatchSummary> {
   const db = createServiceClient();
 
-  const { data: queued } = await db
+  const { data: queued } = ok(await db
     .from("notification_deliveries")
     .select("id, channel, destination, notifications(recipient_id, title, body, link, kind)")
     .eq("status", "queued")
     .order("created_at", { ascending: true })
-    .limit(limit);
+    .limit(limit), "queued");
 
   const rows = (queued ?? []) as unknown as QueuedDelivery[];
   const summary: DispatchSummary = { attempted: 0, sent: 0, failed: 0, fellBack: 0 };
@@ -63,14 +64,20 @@ export async function dispatchQueuedNotifications(limit = BATCH): Promise<Dispat
     const result = await deliver(row, notification);
 
     if (result.status === "sent") {
-      await db
-        .from("notification_deliveries")
-        .update({
-          status: "sent",
-          attempted_at: new Date().toISOString(),
-          provider_ref: result.providerRef,
-        })
-        .eq("id", row.id);
+      // Checked, because this row is the only record that it went. Discarded, a
+      // refusal leaves the delivery queued, the next tick sends it again, and
+      // the student's phone repeats the same warning until somebody notices.
+      ok(
+        await db
+          .from("notification_deliveries")
+          .update({
+            status: "sent",
+            attempted_at: new Date().toISOString(),
+            provider_ref: result.providerRef,
+          })
+          .eq("id", row.id),
+        "marking the delivery sent",
+      );
       summary.sent += 1;
       continue;
     }
@@ -78,10 +85,10 @@ export async function dispatchQueuedNotifications(limit = BATCH): Promise<Dispat
     // Through the function, never as a plain update: the fallback fires from
     // here, and a sender that wrote `status = 'failed'` itself would silently
     // skip it.
-    const { data: outcome } = await db.rpc("record_delivery_failure", {
+    const { data: outcome } = ok(await db.rpc("record_delivery_failure", {
       p_delivery_id: row.id,
       p_error: result.error,
-    });
+    }), "outcome");
 
     summary.failed += 1;
     if (outcome === "fell_back_to_sms") summary.fellBack += 1;
@@ -113,10 +120,10 @@ export async function dispatchQueuedNotifications(limit = BATCH): Promise<Dispat
         // on the device they are holding is the whole value of the channel.
         // One row's destination could not express that, which is why push is
         // the one channel whose address is not on the delivery row.
-        const { data: subscriptions } = await db
+        const { data: subscriptions } = ok(await db
           .from("push_subscriptions")
           .select("id, subscription")
-          .eq("profile_id", notification.recipient_id);
+          .eq("profile_id", notification.recipient_id), "subscriptions");
 
         if (!subscriptions?.length) {
           return { status: "failed", error: "No push subscription on any device." };

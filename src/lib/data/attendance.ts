@@ -2,6 +2,7 @@ import "server-only";
 
 import { createServiceClient } from "@/lib/supabase/client";
 import type { CheckpointOutcome, LiveCheckpoint, SubmitRejection } from "@/lib/types";
+import { ok } from "@/lib/supabase/result";
 
 /**
  * The attendance path, server side.
@@ -47,24 +48,24 @@ function one<T>(value: T | T[] | null | undefined): T | null {
 export async function loadLiveCheckpoint(studentId: string): Promise<LiveCheckpoint | null> {
   const db = createServiceClient();
 
-  const { data: enrolments } = await db
+  const { data: enrolments } = ok(await db
     .from("enrolments")
     .select("course_id")
     .eq("student_id", studentId)
-    .is("dropped_at", null);
+    .is("dropped_at", null), "enrolments");
 
   const courseIds = (enrolments ?? []).map((row) => row.course_id);
   if (courseIds.length === 0) return null;
 
-  const { data: open } = await db
+  const { data: open } = ok(await db
     .from("session_instances")
     .select("id, course_id, courses(code, title, profiles:lecturer_id(surname, first_name)), venues(name)")
     .in("course_id", courseIds)
-    .eq("status", "open");
+    .eq("status", "open"), "open");
 
   if (!open || open.length === 0) return null;
 
-  const { data: checkpoints } = await db
+  const { data: checkpoints } = ok(await db
     .from("checkpoints")
     .select("id, session_instance_id, expires_at")
     .in(
@@ -73,7 +74,7 @@ export async function loadLiveCheckpoint(studentId: string): Promise<LiveCheckpo
     )
     .gt("expires_at", new Date().toISOString())
     .order("expires_at", { ascending: false })
-    .limit(1);
+    .limit(1), "checkpoints");
 
   const checkpoint = checkpoints?.[0];
   if (!checkpoint) return null;
@@ -127,11 +128,11 @@ export async function submitCheckpointMark(input: {
 }): Promise<SubmitResult> {
   const db = createServiceClient();
 
-  const { data: checkpoint } = await db
+  const { data: checkpoint } = ok(await db
     .from("checkpoints")
     .select("id, token, expires_at, session_instance_id, session_instances(id, course_id, status)")
     .eq("id", input.checkpointId)
-    .maybeSingle();
+    .maybeSingle(), "checkpoint");
 
   if (!checkpoint) return { outcome: "rejected", reason: "invalid_or_expired_token" };
 
@@ -149,22 +150,22 @@ export async function submitCheckpointMark(input: {
   // exception, decided in one place in the database rather than reassembled
   // here. `attendance_eligibility` returns the reason, and its values are the
   // same vocabulary the screen has copy for.
-  const { data: eligibility } = await db.rpc("attendance_eligibility", {
+  const { data: eligibility } = ok(await db.rpc("attendance_eligibility", {
     p_student_id: input.studentId,
     p_course_id: instance.course_id,
-  });
+  }), "eligibility");
 
   const gate = typeof eligibility === "string" ? eligibility : "not_registered";
 
   // An accepted mark is final. A rejected one is not — a student who mistyped
   // must be able to try again inside the window, which is why the write below
   // updates rather than inserts a second row.
-  const { data: existing } = await db
+  const { data: existing } = ok(await db
     .from("attendance_marks")
     .select("id, accepted")
     .eq("student_id", input.studentId)
     .eq("checkpoint_id", checkpoint.id)
-    .maybeSingle();
+    .maybeSingle(), "existing");
 
   if (existing?.accepted) return { outcome: "rejected", reason: "already_submitted" };
 

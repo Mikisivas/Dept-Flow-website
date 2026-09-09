@@ -3,6 +3,7 @@ import { createServiceClient, createUserClient } from "@/lib/supabase/client";
 import { currentAccessToken, currentUser } from "@/lib/auth/current-user";
 import { paystackReachability } from "@/lib/paystack";
 import { channelIsConfigured } from "@/lib/messaging";
+import { allOk, ok } from "@/lib/supabase/result";
 
 /**
  * Reports what the signed-in user can actually reach, one table at a time.
@@ -136,7 +137,7 @@ export async function GET() {
  */
 async function reconciliationHealth() {
   try {
-    const { data } = await createServiceClient().rpc("reconciliation_health");
+    const { data } = ok(await createServiceClient().rpc("reconciliation_health"), "reconciliation health");
     const row = (Array.isArray(data) ? data[0] : data) as Record<string, unknown> | null;
 
     const overdue = Number(row?.overdue ?? 0);
@@ -171,7 +172,7 @@ async function queueHealth() {
   try {
     const db = createServiceClient();
 
-    const [{ count: queued }, { data: oldest }, { count: failed }] = await Promise.all([
+    const [{ count: queued }, { data: oldest }, { count: failed }] = allOk(await Promise.all([
       db
         .from("notification_deliveries")
         .select("id", { count: "exact", head: true })
@@ -187,7 +188,7 @@ async function queueHealth() {
         .from("notification_deliveries")
         .select("id", { count: "exact", head: true })
         .eq("status", "failed"),
-    ]);
+    ]), "queued, oldest, failed");
 
     const oldestAge = oldest?.created_at
       ? Math.round((Date.now() - Date.parse(oldest.created_at)) / 60_000)

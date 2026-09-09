@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { currentUser } from "@/lib/auth/current-user";
 import { createServiceClient } from "@/lib/supabase/client";
+import { ok } from "@/lib/supabase/result";
 
 /**
  * The admin setting the session's dues.
@@ -52,11 +53,11 @@ export async function POST(request: Request) {
 
   const db = createServiceClient();
 
-  const { data: active } = await db
+  const { data: active } = ok(await db
     .from("academic_sessions")
     .select("id")
     .eq("is_active", true)
-    .limit(1);
+    .limit(1), "active");
 
   const current = active?.[0];
   if (!current) {
@@ -67,10 +68,10 @@ export async function POST(request: Request) {
   }
 
   if (body.action === "impact") {
-    const { data } = await db.rpc("dues_change_impact", {
+    const { data } = ok(await db.rpc("dues_change_impact", {
       p_academic_session_id: current.id,
       p_amount_kobo: amountKobo,
-    });
+    }), "the dues change impact");
     const row = Array.isArray(data) ? data[0] : data;
     return NextResponse.json({
       students: Number(row?.students ?? 0),

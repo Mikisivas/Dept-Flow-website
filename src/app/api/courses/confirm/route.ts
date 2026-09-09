@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { currentUser } from "@/lib/auth/current-user";
 import { confirmRegistration } from "@/lib/data/courses";
 import { createServiceClient } from "@/lib/supabase/client";
+import { ok } from "@/lib/supabase/result";
 
 /**
  * A student ending their registration for a semester.
@@ -35,11 +36,11 @@ export async function POST(request: Request) {
   }
 
   const db = createServiceClient();
-  const { data: academicSession } = await db
+  const { data: academicSession } = ok(await db
     .from("academic_sessions")
     .select("id")
     .eq("is_active", true)
-    .maybeSingle();
+    .maybeSingle(), "academicSession");
 
   if (!academicSession) {
     return NextResponse.json(

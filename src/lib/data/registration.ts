@@ -5,6 +5,7 @@ import { sendOtp } from "@/lib/messaging";
 import { createServiceClient } from "@/lib/supabase/client";
 import { hashPassword, verifyPassword } from "@/lib/auth/passwords";
 import { normaliseMatric } from "@/lib/format";
+import { ok } from "@/lib/supabase/result";
 
 /**
  * Claiming an account against the register.
@@ -46,11 +47,11 @@ export async function checkRegisterMatch(input: {
   const db = createServiceClient();
   const matric = normaliseMatric(input.matricNo);
 
-  const { data: entry } = await db
+  const { data: entry } = ok(await db
     .from("whitelist_entries")
     .select("matric_no, surname, level, claimed")
     .eq("matric_no", matric)
-    .maybeSingle();
+    .maybeSingle(), "entry");
 
   // Surname is compared case-insensitively and trimmed. It is a name a student
   // typed on a phone, not a password.
@@ -105,7 +106,7 @@ export async function sendRegistrationOtp(input: {
   // One phone, one account. Two students sharing a number would each be able
   // to reset the other's password. Checked against BOTH columns: a number
   // already serving as somebody's WhatsApp number is just as taken.
-  const { data: taken } = await db
+  const { data: taken } = ok(await db
     .from("profiles")
     .select("id")
     .or(
@@ -113,16 +114,16 @@ export async function sendRegistrationOtp(input: {
         .concat(whatsapp ? [`phone.eq.${whatsapp}`, `whatsapp_phone.eq.${whatsapp}`] : [])
         .join(","),
     )
-    .maybeSingle();
+    .maybeSingle(), "taken");
 
   if (taken) return { outcome: "phone_taken" };
 
   const since = new Date(Date.now() - 60 * 60_000).toISOString();
-  const { count } = await db
+  const { count } = ok(await db
     .from("otp_codes")
     .select("id", { count: "exact", head: true })
     .eq("phone", input.phone)
-    .gte("created_at", since);
+    .gte("created_at", since), "count");
 
   if ((count ?? 0) >= OTP_SEND_LIMIT) return { outcome: "rate_limited" };
 
@@ -164,7 +165,7 @@ export async function verifyRegistrationOtp(input: {
 }): Promise<VerifyOtpResult> {
   const db = createServiceClient();
 
-  const { data: row } = await db
+  const { data: row } = ok(await db
     .from("otp_codes")
     .select("id, code_hash, expires_at, attempts, max_attempts, consumed_at")
     .eq("phone", input.phone)
@@ -172,7 +173,7 @@ export async function verifyRegistrationOtp(input: {
     .is("consumed_at", null)
     .order("created_at", { ascending: false })
     .limit(1)
-    .maybeSingle();
+    .maybeSingle(), "row");
 
   if (!row) return { ok: false, reason: "Ask for a new code." };
   if (row.attempts >= row.max_attempts) {
@@ -182,19 +183,27 @@ export async function verifyRegistrationOtp(input: {
     return { ok: false, reason: "That code has expired. Ask for a new one." };
   }
 
-  const ok = await verifyPassword(input.code, row.code_hash);
+  const matches = await verifyPassword(input.code, row.code_hash);
 
-  if (!ok) {
-    await db
-      .from("otp_codes")
-      .update({ attempts: row.attempts + 1 })
-      .eq("id", row.id);
+  if (!matches) {
+    // Checked: this counter is the whole attempt limit on a six-digit code.
+    ok(
+      await db
+        .from("otp_codes")
+        .update({ attempts: row.attempts + 1 })
+        .eq("id", row.id),
+      "the failed-attempt count",
+    );
     return { ok: false, reason: "That code isn't right." };
   }
 
   // Consuming it is what later proves this phone was reached. The account
-  // creation step looks for exactly this row.
-  await db.from("otp_codes").update({ consumed_at: new Date().toISOString() }).eq("id", row.id);
+  // creation step looks for exactly this row — so a consume that quietly did
+  // not happen is a verification that cannot be produced afterwards.
+  ok(
+    await db.from("otp_codes").update({ consumed_at: new Date().toISOString() }).eq("id", row.id),
+    "consuming the code",
+  );
 
   return { ok: true };
 }
@@ -240,7 +249,7 @@ export async function createStudentAccount(input: {
   if (match.outcome !== "matched") return { outcome: match.outcome };
 
   const since = new Date(Date.now() - CLAIM_WINDOW_MINUTES * 60_000).toISOString();
-  const { data: verified } = await db
+  const { data: verified } = ok(await db
     .from("otp_codes")
     .select("id")
     .eq("purpose", "registration")
@@ -249,7 +258,7 @@ export async function createStudentAccount(input: {
     .not("consumed_at", "is", null)
     .gte("consumed_at", since)
     .limit(1)
-    .maybeSingle();
+    .maybeSingle(), "verified");
 
   if (!verified) return { outcome: "not_verified" };
 
@@ -257,7 +266,7 @@ export async function createStudentAccount(input: {
     input.whatsappPhone && input.whatsappPhone !== input.phone ? input.whatsappPhone : null;
 
   if (whatsapp) {
-    const { data: whatsappVerified } = await db
+    const { data: whatsappVerified } = ok(await db
       .from("otp_codes")
       .select("id")
       .eq("purpose", "registration")
@@ -267,16 +276,16 @@ export async function createStudentAccount(input: {
       .not("consumed_at", "is", null)
       .gte("consumed_at", since)
       .limit(1)
-      .maybeSingle();
+      .maybeSingle(), "whatsappVerified");
 
     if (!whatsappVerified) return { outcome: "not_verified" };
   }
 
-  const { data: entry } = await db
+  const { data: entry } = ok(await db
     .from("whitelist_entries")
     .select("id, academic_session_id")
     .eq("matric_no", matric)
-    .single();
+    .single(), "entry");
 
   const { data: profile, error: profileError } = await db
     .from("profiles")
@@ -316,16 +325,22 @@ export async function createStudentAccount(input: {
   // Claimed last, and conditionally: two people racing the same matric number
   // means the second update matches no rows, and that student is rolled back
   // rather than silently sharing the register entry.
-  const { data: claimed } = await db
+  const { data: claimed, error: claimError } = await db
     .from("whitelist_entries")
     .update({ claimed: true, claimed_by: profile.id, claimed_at: new Date().toISOString() })
     .eq("matric_no", matric)
     .eq("claimed", false)
     .select("id");
 
-  if (!claimed || claimed.length === 0) {
+  // Not wrapped in ok(): the rollback below has to run either way, and a throw
+  // would skip it and leave a profile and a student row behind with no register
+  // entry claimed. The two failures are undone the same way and reported
+  // differently — losing the race is a normal outcome, and a refused update is
+  // not.
+  if (claimError || !claimed || claimed.length === 0) {
     await db.from("students").delete().eq("id", profile.id);
     await db.from("profiles").delete().eq("id", profile.id);
+    if (claimError) throw new Error(`Could not claim the register entry: ${claimError.message}`);
     return { outcome: "already_claimed" };
   }
 
@@ -333,11 +348,17 @@ export async function createStudentAccount(input: {
   // counts from the day they clear — that is the entire mechanism, and it
   // starts here rather than at their first lecture.
   if (entry?.academic_session_id) {
-    await db.from("compliance_statuses").insert({
-      student_id: profile.id,
-      academic_session_id: entry.academic_session_id,
-      state: "uncleared",
-    });
+    // Checked, because every compliance reader keys off this row. Without it a
+    // brand-new account has no state at all, which is not the same thing as
+    // uncleared and is not a thing any screen knows how to draw.
+    ok(
+      await db.from("compliance_statuses").insert({
+        student_id: profile.id,
+        academic_session_id: entry.academic_session_id,
+        state: "uncleared",
+      }),
+      "the opening compliance row",
+    );
 
     // Core courses for their level, immediately. Without this a new account
     // is enrolled in nothing, so no lecture can ever count for or against

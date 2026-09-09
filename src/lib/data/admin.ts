@@ -10,6 +10,7 @@ import {
   slotKey,
   type TimetableUploadRow,
 } from "@/lib/timetable-csv";
+import { allOk, ok } from "@/lib/supabase/result";
 
 export { weekdayName };
 export type { TimetableUploadRow };
@@ -53,7 +54,7 @@ function one<T>(value: T | T[] | null | undefined): T | null {
 type Person = { surname: string; first_name: string; other_names: string | null };
 
 async function activeSessionId(db: Db): Promise<string | null> {
-  const { data } = await db.from("academic_sessions").select("id").eq("is_active", true).limit(1);
+  const { data } = ok(await db.from("academic_sessions").select("id").eq("is_active", true).limit(1), "the active session");
   return data?.[0]?.id ?? null;
 }
 
@@ -85,7 +86,7 @@ export async function loadAdminOverview(): Promise<AdminOverview> {
   const sessionId = await activeSessionId(db);
 
   const [{ data: students }, { data: compliance }, { data: payments }, { data: marks }, { data: whitelist }, { data: regDisputes }, { data: duesPeriod }, { data: config }] =
-    await Promise.all([
+    allOk(await Promise.all([
       db.from("students").select("id, level").eq("status", "active"),
       db.from("compliance_statuses").select("student_id, state"),
       db.from("payments").select("status, initialized_at, verified_at"),
@@ -94,7 +95,7 @@ export async function loadAdminOverview(): Promise<AdminOverview> {
       db.from("registration_disputes").select("status").eq("status", "open"),
       db.from("dues_periods").select("resumption_date").eq("academic_session_id", sessionId ?? "").limit(1),
       db.from("app_config").select("provisional_window_days").eq("id", 1).limit(1),
-    ]);
+    ]), "students, compliance, payments, marks, whitelist, regDisputes, duesPeriod, config");
 
   const stateByStudent = new Map((compliance ?? []).map((row) => [row.student_id, row.state]));
 
@@ -186,7 +187,7 @@ export type AdminStudent = {
 export async function loadAdminStudents(): Promise<AdminStudent[]> {
   const db = await adminDb();
 
-  const [{ data: students }, { data: compliance }] = await Promise.all([
+  const [{ data: students }, { data: compliance }] = allOk(await Promise.all([
     db
       .from("students")
       .select(
@@ -194,7 +195,7 @@ export async function loadAdminStudents(): Promise<AdminStudent[]> {
       )
       .order("matric_no"),
     db.from("compliance_statuses").select("student_id, state"),
-  ]);
+  ]), "students, compliance");
 
   const stateByStudent = new Map((compliance ?? []).map((row) => [row.student_id, row.state]));
 
@@ -235,13 +236,13 @@ export type PaymentRow = {
 export async function loadPayments(): Promise<PaymentRow[]> {
   const db = await adminDb();
 
-  const { data: payments } = await db
+  const { data: payments } = ok(await db
     .from("payments")
     .select(
       "id, paystack_reference, channel, status, amount_kobo, initialized_at, verified_at, last_checked_at, students(matric_no, profiles!students_id_fkey(surname))",
     )
     .order("initialized_at", { ascending: false })
-    .limit(200);
+    .limit(200), "payments");
 
   return (payments ?? []).map((row) => {
     const student = one(
@@ -280,11 +281,11 @@ export async function loadWhitelist(): Promise<WhitelistRow[]> {
   const db = await adminDb();
   const sessionId = await activeSessionId(db);
 
-  const { data } = await db
+  const { data } = ok(await db
     .from("whitelist_entries")
     .select("id, matric_no, surname, level, claimed, claimed_at")
     .eq("academic_session_id", sessionId ?? "")
-    .order("matric_no");
+    .order("matric_no"), "the register");
 
   return (data ?? []).map((row) => ({
     id: row.id,
@@ -327,7 +328,7 @@ export function maskPhone(phone: string | null): string {
 export async function loadRegistrationDisputes(): Promise<RegistrationDispute[]> {
   const db = await adminDb();
 
-  const [{ data: open }, { data: all }] = await Promise.all([
+  const [{ data: open }, { data: all }] = allOk(await Promise.all([
     db
       .from("registration_disputes")
       .select("id, matric_no, reported_at, reporter_phone, status")
@@ -336,7 +337,7 @@ export async function loadRegistrationDisputes(): Promise<RegistrationDispute[]>
     // Across every report, not only the open ones: a number that already had
     // one claim revoked is exactly the number worth noticing on its second.
     db.from("registration_disputes").select("matric_no, reporter_phone"),
-  ]);
+  ]), "open, all");
 
   const numbersByPhone = new Map<string, Set<string>>();
   for (const row of all ?? []) {
@@ -385,15 +386,15 @@ export async function loadAuditLog(filter: AuditFilter = {}): Promise<AuditEntry
   if (filter.action) query = query.eq("action", filter.action);
   if (filter.actorRole) query = query.eq("actor_role", filter.actorRole);
 
-  const { data: rows } = await query;
+  const { data: rows } = ok(await query, "rows");
 
   // Names in a second pass rather than a join: the actor is nullable — the
   // nightly compliance transition has no person behind it — and an inner join
   // would silently drop exactly those rows.
   const actorIds = [...new Set((rows ?? []).map((row) => row.actor_id).filter(Boolean))];
-  const { data: people } = actorIds.length
+  const { data: people } = ok(actorIds.length
     ? await db.from("profiles").select("id, surname, first_name").in("id", actorIds)
-    : { data: [] };
+    : { data: [] }, "people");
 
   const nameById = new Map(
     (people ?? []).map((person) => [person.id, `${person.first_name} ${person.surname}`]),
@@ -437,7 +438,7 @@ export async function loadSystemConfig(): Promise<SystemConfig> {
   const db = await adminDb();
   const sessionId = await activeSessionId(db);
 
-  const [{ data: config }, { data: dues }, { data: venues }] = await Promise.all([
+  const [{ data: config }, { data: dues }, { data: venues }] = allOk(await Promise.all([
     db.from("app_config").select("*").eq("id", 1).limit(1),
     db
       .from("dues_periods")
@@ -445,13 +446,13 @@ export async function loadSystemConfig(): Promise<SystemConfig> {
       .eq("academic_session_id", sessionId ?? "")
       .limit(1),
     db.from("venues").select("id, name").order("name"),
-  ]);
+  ]), "config, dues, venues");
 
-  const { data: windows } = await db
+  const { data: windows } = ok(await db
     .from("registration_periods")
     .select("semester, opens_on, closes_on")
     .eq("academic_session_id", sessionId ?? "")
-    .order("semester");
+    .order("semester"), "windows");
 
   const row = config?.[0];
 
@@ -490,24 +491,24 @@ export type RolloverPreview = {
 export async function loadRolloverPreview(): Promise<RolloverPreview | null> {
   const db = await adminDb();
 
-  const { data: sessions } = await db
+  const { data: sessions } = ok(await db
     .from("academic_sessions")
     .select("id, name, is_active, starts_on")
-    .order("starts_on");
+    .order("starts_on"), "sessions");
 
   const active = (sessions ?? []).find((row) => row.is_active);
   if (!active) return null;
 
   const next = (sessions ?? []).find((row) => row.starts_on > active.starts_on);
 
-  const [{ data: students }, { data: rollovers }] = await Promise.all([
+  const [{ data: students }, { data: rollovers }] = allOk(await Promise.all([
     db.from("students").select("level").eq("status", "active"),
     db
       .from("level_rollovers")
       .select("run_at, students_promoted, students_graduating, to_academic_session_id")
       .eq("from_academic_session_id", active.id)
       .limit(1),
-  ]);
+  ]), "students, rollovers");
 
   const counts = new Map<number, number>();
   for (const student of students ?? []) {
@@ -565,25 +566,25 @@ export async function loadTimetable(): Promise<TimetableRow[]> {
   const db = await adminDb();
   const sessionId = await activeSessionId(db);
 
-  const { data: entries } = await db
+  const { data: entries } = ok(await db
     .from("timetable_entries")
     .select("id, course_id, day_of_week, start_time, end_time, venue_id")
-    .eq("academic_session_id", sessionId ?? "");
+    .eq("academic_session_id", sessionId ?? ""), "entries");
 
   if (!entries?.length) return [];
 
-  const [{ data: courses }, { data: venues }] = await Promise.all([
+  const [{ data: courses }, { data: venues }] = allOk(await Promise.all([
     db
       .from("courses")
       .select("id, code, title, level, lecturer_id")
       .in("id", [...new Set(entries.map((entry) => entry.course_id))]),
     db.from("venues").select("id, name"),
-  ]);
+  ]), "courses, venues");
 
   const lecturerIds = [...new Set((courses ?? []).map((c) => c.lecturer_id).filter(Boolean))];
-  const { data: people } = lecturerIds.length
+  const { data: people } = ok(lecturerIds.length
     ? await db.from("profiles").select("id, surname, first_name").in("id", lecturerIds)
-    : { data: [] };
+    : { data: [] }, "people");
 
   const courseById = new Map((courses ?? []).map((course) => [course.id, course]));
   const venueById = new Map((venues ?? []).map((venue) => [venue.id, venue.name]));
@@ -709,10 +710,10 @@ export async function previewRegisterUpload(csv: string): Promise<RegisterPrevie
   const sessionId = await activeSessionId(db);
   const { rows, rejected } = parseRegister(csv);
 
-  const { data: existing } = await db
+  const { data: existing } = ok(await db
     .from("whitelist_entries")
     .select("matric_no, surname, level, claimed")
-    .eq("academic_session_id", sessionId ?? "");
+    .eq("academic_session_id", sessionId ?? ""), "existing");
 
   const byMatric = new Map((existing ?? []).map((row) => [row.matric_no, row]));
   const uploaded = new Set(rows.map((row) => row.matricNo));
@@ -772,11 +773,11 @@ export async function commitRegisterUpload(csv: string): Promise<RegisterUploadR
   const session = await requireAdmin();
   const db = createServiceClient();
 
-  const { data: active } = await db
+  const { data: active } = ok(await db
     .from("academic_sessions")
     .select("id")
     .eq("is_active", true)
-    .maybeSingle();
+    .maybeSingle(), "active");
 
   if (!active) throw new Error("There is no active academic session.");
 
@@ -797,7 +798,10 @@ export async function commitRegisterUpload(csv: string): Promise<RegisterUploadR
     if (error) throw new Error(`Could not save the register: ${error.message}`);
   }
 
-  await db.rpc("write_audit", {
+  // The audit row is part of the action, not a note about it: an upload
+  // that rewrote the register with nothing recording who did it is the
+  // one an authority action may never become.
+  ok(await db.rpc("write_audit", {
     p_actor_id: session.profileId,
     p_actor_role: "admin",
     p_action: "register.upload",
@@ -811,7 +815,7 @@ export async function commitRegisterUpload(csv: string): Promise<RegisterUploadR
       rejected: preview.rejected.length,
       absent_from_upload: preview.missing,
     },
-  });
+  }), "the audit row");
 
   return {
     created: preview.created.length,
@@ -845,14 +849,14 @@ export async function previewTimetableUpload(csv: string): Promise<TimetablePrev
 
   const { rows, rejected } = parseTimetableCsv(csv);
 
-  const [{ data: courses }, { data: venues }, { data: existing }] = await Promise.all([
+  const [{ data: courses }, { data: venues }, { data: existing }] = allOk(await Promise.all([
     db.from("courses").select("id, code").eq("academic_session_id", sessionId ?? ""),
     db.from("venues").select("id, name"),
     db
       .from("timetable_entries")
       .select("id, course_id, day_of_week, start_time, end_time, venue_id")
       .eq("academic_session_id", sessionId ?? ""),
-  ]);
+  ]), "courses, venues, existing");
 
   const courseByCode = new Map((courses ?? []).map((course) => [course.code, course.id]));
   const codeById = new Map((courses ?? []).map((course) => [course.id, course.code]));
@@ -926,13 +930,13 @@ export async function previewTimetableUpload(csv: string): Promise<TimetablePrev
   const absent = [...current.entries()].filter(([key]) => !uploaded.has(key));
 
   if (absent.length > 0) {
-    const { data: held } = await db
+    const { data: held } = ok(await db
       .from("session_instances")
       .select("timetable_entry_id")
       .in(
         "timetable_entry_id",
         absent.map(([, entry]) => entry.id),
-      );
+      ), "held");
 
     const heldCount = new Map<string, number>();
     for (const instance of held ?? []) {
@@ -970,28 +974,28 @@ export async function commitTimetableUpload(csv: string): Promise<TimetableUploa
   const preview = await previewTimetableUpload(csv);
 
   const db = createServiceClient();
-  const { data: active } = await db
+  const { data: active } = ok(await db
     .from("academic_sessions")
     .select("id")
     .eq("is_active", true)
-    .maybeSingle();
+    .maybeSingle(), "active");
 
   if (!active) throw new Error("There is no active academic session.");
 
-  const [{ data: courses }, { data: venues }] = await Promise.all([
+  const [{ data: courses }, { data: venues }] = allOk(await Promise.all([
     db.from("courses").select("id, code").eq("academic_session_id", active.id),
     db.from("venues").select("id, name"),
-  ]);
+  ]), "courses, venues");
 
   const courseByCode = new Map((courses ?? []).map((course) => [course.code, course.id]));
   const venueByName = new Map(
     (venues ?? []).map((venue) => [String(venue.name).toLowerCase(), venue.id as string]),
   );
 
-  const { data: existing } = await db
+  const { data: existing } = ok(await db
     .from("timetable_entries")
     .select("id, course_id, day_of_week, start_time")
-    .eq("academic_session_id", active.id);
+    .eq("academic_session_id", active.id), "existing");
 
   const codeById = new Map((courses ?? []).map((course) => [course.id, course.code]));
   const idBySlot = new Map(
@@ -1040,7 +1044,10 @@ export async function commitTimetableUpload(csv: string): Promise<TimetableUploa
     if (error) throw new Error(`Could not remove the dropped slots: ${error.message}`);
   }
 
-  await db.rpc("write_audit", {
+  // The audit row is part of the action, not a note about it: an upload that
+  // moved every class in the department with nothing recording who did it is
+  // the one an authority action may never become.
+  ok(await db.rpc("write_audit", {
     p_actor_id: session.profileId,
     p_actor_role: "admin",
     p_action: "timetable.upload",
@@ -1054,7 +1061,7 @@ export async function commitTimetableUpload(csv: string): Promise<TimetableUploa
       kept_with_history: preview.protectedSlots.length,
       rejected: preview.rejected.length,
     },
-  });
+  }), "the audit row");
 
   return {
     created: preview.created.length,

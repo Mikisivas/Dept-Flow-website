@@ -14,6 +14,7 @@ import type {
   SessionCell,
 } from "@/lib/types";
 import type { DuesPeriod, StudentProfile, TodayClass } from "@/lib/data/fixtures";
+import { allOk, ok } from "@/lib/supabase/result";
 
 /**
  * The student dashboard, read from Supabase as the signed-in student.
@@ -81,21 +82,21 @@ async function loadToday(
 
   const { dayOfWeek } = lagosToday();
 
-  const { data: entries } = await db
+  const { data: entries } = ok(await db
     .from("timetable_entries")
     .select("course_id, start_time, end_time, venue_id")
     .in(
       "course_id",
       courses.map((course) => course.courseId),
     )
-    .eq("day_of_week", dayOfWeek);
+    .eq("day_of_week", dayOfWeek), "entries");
 
   if (!entries || entries.length === 0) return [];
 
-  const { data: venues } = await db
+  const { data: venues } = ok(await db
     .from("venue_directory")
     .select("id, name")
-    .in("id", [...new Set(entries.map((entry) => entry.venue_id))]);
+    .in("id", [...new Set(entries.map((entry) => entry.venue_id))]), "venues");
 
   const venueName = new Map((venues ?? []).map((row) => [row.id as string, row.name as string]));
   const live = await loadLiveCheckpoint(studentId);
@@ -259,13 +260,13 @@ export async function loadStudentDashboard(): Promise<StudentDashboard> {
   // The grace period the HOD actually opened, not the static column on
   // dues_periods. Without this the HOD unlocks a level and the students it
   // covers see nothing on the screen that told them they were locked.
-  const { data: grace } = await db
+  const { data: grace } = ok(await db
     .from("grace_periods")
     .select("expires_on, scope, level")
     .eq("academic_session_id", activeSession.id)
     .is("revoked_at", null)
     .gte("expires_on", new Date().toISOString().slice(0, 10))
-    .order("expires_on", { ascending: false });
+    .order("expires_on", { ascending: false }), "grace");
 
   const covering = (grace ?? []).find(
     (row) => row.scope === "department" || row.level === student.level,
@@ -277,13 +278,13 @@ export async function loadStudentDashboard(): Promise<StudentDashboard> {
   // nudge about whichever course had the lowest number, which meant a student
   // in trouble on two courses heard about one of them — and the whole claim
   // this system makes is that it tells you what to do, per course.
-  const { data: forecasts } = await db
+  const { data: forecasts } = ok(await db
     .from("risk_predictions")
     .select(
       "course_id, predicted_pct, tier, trend, lectures_held, lectures_expected, must_attend, can_still_miss, pattern, courses(code)",
     )
     .eq("student_id", session.profileId)
-    .order("predicted_pct");
+    .order("predicted_pct"), "forecasts");
 
   const resumption = dues?.resumption_date ?? new Date().toISOString();
 
@@ -291,14 +292,14 @@ export async function loadStudentDashboard(): Promise<StudentDashboard> {
   // is what apply_payment() uses to decide whether a payment clears a student,
   // and a screen that added up the payments itself would eventually disagree
   // with the decision that was actually made.
-  const { data: paid } = await db.rpc("dues_paid_kobo", {
+  const { data: paid } = ok(await db.rpc("dues_paid_kobo", {
     p_student_id: session.profileId,
     p_academic_session_id: activeSession.id,
-  });
-  const { data: balance } = await db.rpc("dues_balance_kobo", {
+  }), "paid");
+  const { data: balance } = ok(await db.rpc("dues_balance_kobo", {
     p_student_id: session.profileId,
     p_academic_session_id: activeSession.id,
-  });
+  }), "balance");
 
   return {
     student: {
@@ -379,11 +380,11 @@ export async function loadCourseDetail(code: string): Promise<CourseDetail | nul
   const db = createUserClient(await currentAccessToken());
   const wanted = decodeURIComponent(code).toUpperCase();
 
-  const { data: enrolments } = await db
+  const { data: enrolments } = ok(await db
     .from("enrolments")
     .select("course_id, enrolled_on, courses(id, code, title, lecturer_id)")
     .eq("student_id", session.profileId)
-    .is("dropped_at", null);
+    .is("dropped_at", null), "enrolments");
 
   const enrolment = (enrolments ?? []).find((row) => {
     const course = one(row.courses as unknown as { code: string });
@@ -404,7 +405,7 @@ export async function loadCourseDetail(code: string): Promise<CourseDetail | nul
   );
   if (!course) return null;
 
-  const [{ data: instances }, { data: scores }, { data: entry }] = await Promise.all([
+  const [{ data: instances }, { data: scores }, { data: entry }] = allOk(await Promise.all([
     db
       .from("session_instances")
       .select("id, held_on")
@@ -421,7 +422,7 @@ export async function loadCourseDetail(code: string): Promise<CourseDetail | nul
       .select("day_of_week, start_time, end_time, venue_id")
       .eq("course_id", course.id)
       .maybeSingle(),
-  ]);
+  ]), "instances, scores, entry");
 
   const scoreByInstance = new Map((scores ?? []).map((row) => [row.session_instance_id, row]));
 
@@ -439,7 +440,7 @@ export async function loadCourseDetail(code: string): Promise<CourseDetail | nul
     };
   });
 
-  const [{ data: lecturer }, { data: venue }, { data: risk }] = await Promise.all([
+  const [{ data: lecturer }, { data: venue }, { data: risk }] = allOk(await Promise.all([
     course.lecturer_id
       ? db.from("profiles").select("surname, first_name").eq("id", course.lecturer_id).maybeSingle()
       : Promise.resolve({ data: null }),
@@ -452,7 +453,7 @@ export async function loadCourseDetail(code: string): Promise<CourseDetail | nul
       .eq("student_id", session.profileId)
       .eq("course_id", course.id)
       .maybeSingle(),
-  ]);
+  ]), "lecturer, venue, risk");
 
   return {
     course: {
@@ -494,11 +495,11 @@ export async function loadNotifications(): Promise<NotificationItem[]> {
 
   // No `where recipient_id = ...` clause: the policy is what scopes this, and
   // relying on it here is what proves it works.
-  const { data } = await db
+  const { data } = ok(await db
     .from("notifications")
     .select("id, kind, title, body, link, read_at, created_at")
     .order("created_at", { ascending: false })
-    .limit(100);
+    .limit(100), "the student's notifications");
 
   return (data ?? []).map((row) => ({
     id: row.id,
@@ -525,11 +526,11 @@ export async function markNotificationsRead(): Promise<number> {
 
   const db = createUserClient(await currentAccessToken());
 
-  const { data } = await db
+  const { data } = ok(await db
     .from("notifications")
     .update({ read_at: new Date().toISOString() })
     .is("read_at", null)
-    .select("id");
+    .select("id"), "marking notifications read");
 
   return data?.length ?? 0;
 }
@@ -619,15 +620,15 @@ export async function loadExamPermit(): Promise<PermitStatus> {
 
   const db = createUserClient(await currentAccessToken());
 
-  const { data: activeSession } = await db
+  const { data: activeSession } = ok(await db
     .from("academic_sessions")
     .select("id, name")
     .eq("is_active", true)
-    .maybeSingle();
+    .maybeSingle(), "activeSession");
 
   if (!activeSession) throw new DashboardUnavailable("academic_sessions");
 
-  const [{ data: student }, { data: profile }, { data: enrolments }] = await Promise.all([
+  const [{ data: student }, { data: profile }, { data: enrolments }] = allOk(await Promise.all([
     db.from("students").select("matric_no, level").eq("id", session.profileId).maybeSingle(),
     db
       .from("profiles")
@@ -639,7 +640,7 @@ export async function loadExamPermit(): Promise<PermitStatus> {
       .select("course_id, courses(code, title)")
       .eq("student_id", session.profileId)
       .is("dropped_at", null),
-  ]);
+  ]), "student, profile, enrolments");
 
   const courseInfo = new Map(
     (enrolments ?? []).map((row) => {
@@ -648,10 +649,10 @@ export async function loadExamPermit(): Promise<PermitStatus> {
     }),
   );
 
-  const { data: entries } = await db
+  const { data: entries } = ok(await db
     .from("eligibility_entries")
     .select("attendance_pct, eligible, eligibility_lists(course_id, status, academic_session_id)")
-    .eq("student_id", session.profileId);
+    .eq("student_id", session.profileId), "entries");
 
   const decided = (entries ?? [])
     .map((entry) => {
@@ -704,12 +705,12 @@ export async function loadExamPermit(): Promise<PermitStatus> {
 
   // Issuing needs to write, so it goes through the API rather than here. The
   // page asks for the permit; the route allocates the reference.
-  const { data: existing } = await db
+  const { data: existing } = ok(await db
     .from("exam_permits")
     .select("reference, issued_at")
     .eq("student_id", session.profileId)
     .eq("academic_session_id", activeSession.id)
-    .maybeSingle();
+    .maybeSingle(), "existing");
 
   // Eligible, but nobody has asked for the document yet. Allocating the
   // reference is a write, so it goes through the API rather than a page load —
@@ -759,7 +760,7 @@ async function loadPermitPanel(
   academicSessionId: string,
 ): Promise<PermitPanel> {
   const [{ data: rows }, { data: config }, { data: dues }, { data: paid }, { data: balance }] =
-    await Promise.all([
+    allOk(await Promise.all([
       db.rpc("permit_eligibility", {
         p_student_id: studentId,
         p_academic_session_id: academicSessionId,
@@ -778,7 +779,7 @@ async function loadPermitPanel(
         p_student_id: studentId,
         p_academic_session_id: academicSessionId,
       }),
-    ]);
+    ]), "rows, config, dues, paid, balance");
 
   return {
     courses: ((rows ?? []) as Record<string, unknown>[]).map((row) => ({
@@ -845,12 +846,12 @@ export async function loadStudentReports(): Promise<StudentReports> {
   const db = createUserClient(await currentAccessToken());
 
   const [{ data: weekly }, { data: monthly }, { data: semester }, { data: config }] =
-    await Promise.all([
+    allOk(await Promise.all([
       db.rpc("student_period_report", { p_student_id: session.profileId, p_days: 7 }),
       db.rpc("student_period_report", { p_student_id: session.profileId, p_days: 30 }),
       db.rpc("student_semester_report", { p_student_id: session.profileId }),
       db.from("app_config").select("attendance_threshold_pct").eq("id", 1).maybeSingle(),
-    ]);
+    ]), "weekly, monthly, semester, config");
 
   return {
     weekly: periodOf(weekly),

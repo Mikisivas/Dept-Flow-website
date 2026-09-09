@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { currentUser } from "@/lib/auth/current-user";
 import { createServiceClient } from "@/lib/supabase/client";
+import { ok } from "@/lib/supabase/result";
 
 /**
  * Allocating a student's permit reference.
@@ -29,11 +30,11 @@ export async function POST() {
 
   const db = createServiceClient();
 
-  const { data: active } = await db
+  const { data: active } = ok(await db
     .from("academic_sessions")
     .select("id")
     .eq("is_active", true)
-    .maybeSingle();
+    .maybeSingle(), "active");
 
   if (!active) {
     return NextResponse.json({ error: "There is no active session." }, { status: 409 });
@@ -51,10 +52,10 @@ export async function POST() {
     // amount is read back rather than parsed out of the error text, so a
     // reworded exception cannot turn into a wrong number on a screen.
     if (/dues outstanding/i.test(error.message)) {
-      const { data: owed } = await db.rpc("dues_balance_kobo", {
+      const { data: owed } = ok(await db.rpc("dues_balance_kobo", {
         p_student_id: session.profileId,
         p_academic_session_id: active.id,
-      });
+      }), "owed");
 
       return NextResponse.json(
         {

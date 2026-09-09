@@ -7,6 +7,7 @@ import { attendancePct } from "@/lib/format";
 import type { SessionClaims } from "@/lib/auth/session";
 import { programmeLevelLabel } from "@/lib/types";
 import type { SessionCell } from "@/lib/types";
+import { allOk, ok } from "@/lib/supabase/result";
 
 /**
  * What the HOD sees, read as the HOD.
@@ -95,7 +96,7 @@ function one<T>(value: T | T[] | null | undefined): T | null {
  */
 export async function loadStandings(db: Db, courseId?: string): Promise<StudentStanding[]> {
   const [{ data: students }, { data: enrolments }, { data: instances }, { data: scores }] =
-    await Promise.all([
+    allOk(await Promise.all([
       db.from("students").select("id, matric_no, level, profiles!students_id_fkey(surname, first_name, other_names)"),
       db
         .from("enrolments")
@@ -107,11 +108,11 @@ export async function loadStandings(db: Db, courseId?: string): Promise<StudentS
         .eq("status", "closed")
         .order("held_on"),
       db.from("session_scores").select("student_id, session_instance_id, score"),
-    ]);
+    ]), "students, enrolments, instances, scores");
 
-  const { data: compliance } = await db
+  const { data: compliance } = ok(await db
     .from("compliance_statuses")
-    .select("student_id, state");
+    .select("student_id, state"), "compliance");
 
   const stateByStudent = new Map((compliance ?? []).map((row) => [row.student_id, row.state]));
 
@@ -218,7 +219,7 @@ export async function loadHodOverview(): Promise<HodOverview> {
   const belowThreshold = measurable.filter((student) => student.overallPct < 75).length;
 
   const [{ data: grace }, { count: disputes }, { data: predictions }] =
-    await Promise.all([
+    allOk(await Promise.all([
       db
         .from("grace_periods")
         .select("expires_on, scope, level, students_affected")
@@ -230,7 +231,7 @@ export async function loadHodOverview(): Promise<HodOverview> {
       db.from("attendance_disputes").select("id", { count: "exact", head: true }).eq("status", "open"),
       // Advisory only, and labelled as such wherever it is shown.
       db.from("risk_predictions").select("student_id, predicted_pct").lt("predicted_pct", 75),
-    ]);
+    ]), "grace, disputes, predictions");
 
   const atRisk = new Set((predictions ?? []).map((row) => row.student_id));
   const trendingBelow = standings.filter(
@@ -290,7 +291,7 @@ export async function loadAtRiskStudents(): Promise<AtRiskStudent[]> {
   await requireHod();
   const db = createUserClient(await currentAccessToken());
 
-  const [{ data: predictions }, standings] = await Promise.all([
+  const [{ data: predictions }, standings] = allOk(await Promise.all([
     db
       .from("risk_predictions")
       .select(
@@ -303,7 +304,7 @@ export async function loadAtRiskStudents(): Promise<AtRiskStudent[]> {
       .order("tier", { ascending: false })
       .order("predicted_pct"),
     loadStandings(createUserClient(await currentAccessToken())),
-  ]);
+  ]), "predictions");
 
   const byId = new Map(standings.map((student) => [student.studentId, student]));
 
@@ -374,17 +375,17 @@ export async function loadEligibilityList(courseId?: string): Promise<Eligibilit
   await requireHod();
   const db = createUserClient(await currentAccessToken());
 
-  const { data: session } = await db
+  const { data: session } = ok(await db
     .from("academic_sessions")
     .select("id")
     .eq("is_active", true)
-    .single();
+    .single(), "session");
 
-  const { data: catalogue } = await db
+  const { data: catalogue } = ok(await db
     .from("courses")
     .select("id, code, title")
     .eq("academic_session_id", session?.id ?? "")
-    .order("code");
+    .order("code"), "catalogue");
 
   const courses = (catalogue ?? []).map((row) => ({
     courseId: row.id,
@@ -404,11 +405,11 @@ export async function loadEligibilityList(courseId?: string): Promise<Eligibilit
     };
   }
 
-  const { data: list } = await db
+  const { data: list } = ok(await db
     .from("eligibility_lists")
     .select("id, threshold_pct, status, authorized_at, authorized_by")
     .eq("course_id", chosen.courseId)
-    .maybeSingle();
+    .maybeSingle(), "list");
 
   const thresholdPct = Number(list?.threshold_pct ?? 75);
 
@@ -416,7 +417,7 @@ export async function loadEligibilityList(courseId?: string): Promise<Eligibilit
   // were recomputed, a grace period opened next week would silently rewrite the
   // list an exam board already sat with — and freezing would be decoration.
   if (list?.status === "authorized") {
-    const [{ data: entries }, { data: authoriser }] = await Promise.all([
+    const [{ data: entries }, { data: authoriser }] = allOk(await Promise.all([
       db
         .from("eligibility_entries")
         .select("student_id, attendance_pct, score_total, sessions_held, eligible")
@@ -424,15 +425,15 @@ export async function loadEligibilityList(courseId?: string): Promise<Eligibilit
       list.authorized_by
         ? db.from("profiles").select("surname, first_name").eq("id", list.authorized_by).maybeSingle()
         : Promise.resolve({ data: null }),
-    ]);
+    ]), "entries, authoriser");
 
     const ids = (entries ?? []).map((row) => row.student_id);
-    const { data: people } = ids.length
+    const { data: people } = ok(ids.length
       ? await db
           .from("students")
           .select("id, matric_no, profiles!students_id_fkey(surname, first_name, other_names)")
           .in("id", ids)
-      : { data: [] };
+      : { data: [] }, "people");
 
     const byId = new Map((people ?? []).map((row) => [row.id, row]));
 
@@ -534,14 +535,14 @@ export async function loadGraceScreen(): Promise<GraceScreen> {
   await requireHod();
   const db = createUserClient(await currentAccessToken());
 
-  const { data: session } = await db
+  const { data: session } = ok(await db
     .from("academic_sessions")
     .select("id")
     .eq("is_active", true)
-    .single();
+    .single(), "session");
 
   const [{ data: periods }, { data: students }, { data: closedWindows }, { data: confirmed }] =
-    await Promise.all([
+    allOk(await Promise.all([
       db
         .from("grace_periods")
         .select(
@@ -560,7 +561,7 @@ export async function loadGraceScreen(): Promise<GraceScreen> {
         .select("student_id, semester")
         .eq("academic_session_id", session?.id ?? "")
         .eq("status", "confirmed"),
-    ]);
+    ]), "periods, students, closedWindows, confirmed");
 
   // A student is shut out when some semester's window has closed and they
   // never confirmed for it. Computed the same way `grace_period_impact()`
@@ -581,12 +582,12 @@ export async function loadGraceScreen(): Promise<GraceScreen> {
 
   // Lectures they are being marked absent from while they stay shut out. The
   // number that makes the decision concrete rather than procedural.
-  const { data: missed } = shutOutIds.size
+  const { data: missed } = ok(shutOutIds.size
     ? await db
         .from("session_scores")
         .select("student_id, score")
         .in("student_id", [...shutOutIds])
-    : { data: [] };
+    : { data: [] }, "missed");
 
   const lecturesMissed = (missed ?? []).filter((row) => Number(row.score) === 0).length;
 
@@ -642,13 +643,13 @@ export async function loadDisputes(): Promise<AttendanceDispute[]> {
   await requireHod();
   const db = createUserClient(await currentAccessToken());
 
-  const { data: rows } = await db
+  const { data: rows } = ok(await db
     .from("attendance_disputes")
     .select(
       "id, student_id, checkpoint_id, student_note, status, raised_at, students(matric_no, profiles!students_id_fkey(surname, first_name, other_names)), session_instances(held_on, courses(code))",
     )
     .eq("status", "open")
-    .order("raised_at", { ascending: false });
+    .order("raised_at", { ascending: false }), "rows");
 
   if (!rows || rows.length === 0) return [];
 
@@ -656,12 +657,12 @@ export async function loadDisputes(): Promise<AttendanceDispute[]> {
   // — a rejection for being outside the hall reads very differently from one
   // for a code that had already expired.
   const checkpointIds = rows.map((row) => row.checkpoint_id).filter(Boolean) as string[];
-  const { data: marks } = checkpointIds.length
+  const { data: marks } = ok(checkpointIds.length
     ? await db
         .from("attendance_marks")
         .select("student_id, checkpoint_id, reject_reason")
         .in("checkpoint_id", checkpointIds)
-    : { data: [] };
+    : { data: [] }, "marks");
 
   return rows.map((row) => {
     const student = one(
@@ -732,11 +733,11 @@ export async function loadStudentRecord(matricNo: string): Promise<StudentRecord
   // Matched on the student's id, not their matric number. Audit rows record
   // whichever key the action was about — a dispute row carries the dispute's id —
   // so the student id in the metadata is the only field common to all of them.
-  const { data: rows } = await db
+  const { data: rows } = ok(await db
     .from("audit_log")
     .select("id, actor_id, action, reason, created_at, target_id, metadata")
     .order("created_at", { ascending: false })
-    .limit(200);
+    .limit(200), "rows");
 
   const mine = (rows ?? []).filter(
     (row) =>
@@ -745,9 +746,9 @@ export async function loadStudentRecord(matricNo: string): Promise<StudentRecord
   );
 
   const actorIds = [...new Set(mine.map((row) => row.actor_id).filter(Boolean))];
-  const { data: people } = actorIds.length
+  const { data: people } = ok(actorIds.length
     ? await db.from("profiles").select("id, surname, first_name").in("id", actorIds)
-    : { data: [] };
+    : { data: [] }, "people");
 
   const nameById = new Map(
     (people ?? []).map((person) => [person.id, `${person.first_name} ${person.surname}`]),
@@ -789,26 +790,26 @@ export async function loadLecturerOversight(): Promise<LecturerOversight[]> {
   await requireHod();
   const db = createUserClient(await currentAccessToken());
 
-  const { data: lecturers } = await db
+  const { data: lecturers } = ok(await db
     .from("profiles")
     .select("id, surname, first_name")
     .eq("role", "lecturer")
-    .order("surname");
+    .order("surname"), "lecturers");
 
   const lecturerIds = (lecturers ?? []).map((row) => row.id);
   if (lecturerIds.length === 0) return [];
 
-  const { data: courses } = await db
+  const { data: courses } = ok(await db
     .from("courses")
     .select("id, lecturer_id")
-    .in("lecturer_id", lecturerIds);
+    .in("lecturer_id", lecturerIds), "courses");
 
   const courseIds = (courses ?? []).map((course) => course.id);
   const lecturerByCourse = new Map(
     (courses ?? []).map((course) => [course.id, course.lecturer_id as string]),
   );
 
-  const [{ data: instances }, { data: batches }] = await Promise.all([
+  const [{ data: instances }, { data: batches }] = allOk(await Promise.all([
     courseIds.length
       ? db
           .from("session_instances")
@@ -816,7 +817,7 @@ export async function loadLecturerOversight(): Promise<LecturerOversight[]> {
           .in("course_id", courseIds)
       : Promise.resolve({ data: [] }),
     db.from("manual_attendance_batches").select("session_instance_id"),
-  ]);
+  ]), "instances, batches");
 
   const batched = new Set((batches ?? []).map((row) => row.session_instance_id));
 
@@ -873,12 +874,12 @@ export async function messageAudience(
   programme: string | null = null,
 ): Promise<number> {
   const db = createServiceClient();
-  const { data } = await db.rpc("hod_message_audience", {
+  const { data } = ok(await db.rpc("hod_message_audience", {
     p_scope: scope,
     p_target: target,
     p_level: level,
     p_programme: programme,
-  });
+  }), "the message audience count");
   return Number(data ?? 0);
 }
 
@@ -925,13 +926,13 @@ export async function loadSentMessages(): Promise<SentMessage[]> {
   await requireHod();
   const db = createUserClient(await currentAccessToken());
 
-  const { data } = await db
+  const { data } = ok(await db
     .from("hod_messages")
     .select(
       "id, scope, level, programme, subject, body, recipients, sent_at, courses(code), students(matric_no)",
     )
     .order("sent_at", { ascending: false })
-    .limit(30);
+    .limit(30), "sent messages");
 
   return (data ?? []).map((row) => {
     const course = one(row.courses as unknown as { code: string });
@@ -976,9 +977,9 @@ export async function loadPaymentCompliance(): Promise<PaymentComplianceRow[]> {
   await requireHod();
   const db = createUserClient(await currentAccessToken());
 
-  const { data } = await db.rpc("payment_compliance_report", {
+  const { data } = ok(await db.rpc("payment_compliance_report", {
     p_academic_session_id: null,
-  });
+  }), "the payment compliance report");
 
   return ((data ?? []) as Record<string, unknown>[]).map((row) => ({
     level: Number(row.level ?? 0),
@@ -997,17 +998,17 @@ export async function loadCourseChoices(): Promise<CourseChoice[]> {
   await requireHod();
   const db = createUserClient(await currentAccessToken());
 
-  const { data: session } = await db
+  const { data: session } = ok(await db
     .from("academic_sessions")
     .select("id")
     .eq("is_active", true)
-    .maybeSingle();
+    .maybeSingle(), "session");
 
-  const { data } = await db
+  const { data } = ok(await db
     .from("courses")
     .select("id, code, title")
     .eq("academic_session_id", session?.id ?? "")
-    .order("code");
+    .order("code"), "the course catalogue");
 
   return (data ?? []).map((row) => ({
     courseId: row.id,

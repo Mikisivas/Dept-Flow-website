@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { currentUser } from "@/lib/auth/current-user";
 import { createServiceClient } from "@/lib/supabase/client";
 import { lagosToday } from "@/lib/format";
+import { ok } from "@/lib/supabase/result";
 
 /**
  * Starting a lecture.
@@ -31,11 +32,11 @@ export async function POST(request: Request) {
 
   const db = createServiceClient();
 
-  const { data: entry } = await db
+  const { data: entry } = ok(await db
     .from("timetable_entries")
     .select("id, course_id, venue_id, start_time, end_time, courses(lecturer_id)")
     .eq("id", timetableEntryId)
-    .maybeSingle();
+    .maybeSingle(), "entry");
 
   if (!entry) {
     return NextResponse.json({ error: "That class isn't on your timetable." }, { status: 404 });
@@ -51,21 +52,29 @@ export async function POST(request: Request) {
 
   const { date } = lagosToday();
 
-  const { data: existing } = await db
+  const { data: existing } = ok(await db
     .from("session_instances")
     .select("id, status")
     .eq("timetable_entry_id", timetableEntryId)
     .eq("held_on", date)
-    .maybeSingle();
+    .maybeSingle(), "existing");
 
   // Tapping "Start session" twice — on a phone, in a hall, over a slow
   // connection — must not produce two lectures on the same day.
   if (existing) {
     if (existing.status === "scheduled") {
-      await db
-        .from("session_instances")
-        .update({ status: "open", opened_at: new Date().toISOString() })
-        .eq("id", existing.id);
+      // Checked, because this is the write that opens the lecture. Discarded, a
+      // refusal here answers with the session id anyway: the lecturer reads a
+      // code off a board to a full hall, every submission is measured against a
+      // session that was never opened, and the first anyone knows of it is the
+      // register afterwards.
+      ok(
+        await db
+          .from("session_instances")
+          .update({ status: "open", opened_at: new Date().toISOString() })
+          .eq("id", existing.id),
+        "opening the lecture",
+      );
     }
     return NextResponse.json({ sessionInstanceId: existing.id });
   }

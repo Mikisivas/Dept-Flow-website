@@ -4,6 +4,7 @@ import { randomInt } from "node:crypto";
 import { createServiceClient } from "@/lib/supabase/client";
 import { hashPassword, verifyPassword } from "@/lib/auth/passwords";
 import { normaliseMatric } from "@/lib/format";
+import { ok } from "@/lib/supabase/result";
 
 /**
  * Resetting a forgotten password.
@@ -41,11 +42,11 @@ export async function startPasswordReset(matricNo: string): Promise<StartResetRe
   const db = createServiceClient();
   const matric = normaliseMatric(matricNo);
 
-  const { data: student } = await db
+  const { data: student } = ok(await db
     .from("students")
     .select("id, status, profiles!students_id_fkey(phone)")
     .eq("matric_no", matric)
-    .maybeSingle();
+    .maybeSingle(), "student");
 
   const profile = Array.isArray(student?.profiles) ? student?.profiles[0] : student?.profiles;
   const phone = profile?.phone as string | undefined;
@@ -59,12 +60,12 @@ export async function startPasswordReset(matricNo: string): Promise<StartResetRe
   }
 
   const since = new Date(Date.now() - 60 * 60_000).toISOString();
-  const { count } = await db
+  const { count } = ok(await db
     .from("otp_codes")
     .select("id", { count: "exact", head: true })
     .eq("phone", phone)
     .eq("purpose", "password_reset")
-    .gte("created_at", since);
+    .gte("created_at", since), "count");
 
   if ((count ?? 0) >= OTP_SEND_LIMIT) return { outcome: "rate_limited" };
 
@@ -124,7 +125,7 @@ export async function completePasswordReset(input: {
   const db = createServiceClient();
   const matric = normaliseMatric(input.matricNo);
 
-  const { data: row } = await db
+  const { data: row } = ok(await db
     .from("otp_codes")
     .select("id, profile_id, code_hash, expires_at, attempts, max_attempts")
     .eq("matric_no", matric)
@@ -132,7 +133,7 @@ export async function completePasswordReset(input: {
     .is("consumed_at", null)
     .order("created_at", { ascending: false })
     .limit(1)
-    .maybeSingle();
+    .maybeSingle(), "row");
 
   if (!row) return { outcome: "bad_code", reason: "Ask for a new code." };
   if (row.attempts >= row.max_attempts) {
@@ -143,14 +144,23 @@ export async function completePasswordReset(input: {
   }
 
   if (!(await verifyPassword(input.code, row.code_hash))) {
-    await db
-      .from("otp_codes")
-      .update({ attempts: row.attempts + 1 })
-      .eq("id", row.id);
+    // Checked, because this counter is the only thing standing between a
+    // six-digit code and somebody guessing it. A write that fails silently is
+    // an attempt limit that never arrives.
+    ok(
+      await db
+        .from("otp_codes")
+        .update({ attempts: row.attempts + 1 })
+        .eq("id", row.id),
+      "the failed-attempt count",
+    );
     return { outcome: "bad_code", reason: "That code isn't right." };
   }
 
-  await db
+  // The one write on this path that must not fail quietly. Discarded, a
+  // refusal here returns "changed" to a student whose password did not change
+  // — and who is now certain of a password that does not work.
+  ok(await db
     .from("profiles")
     .update({
       password_hash: await hashPassword(input.password),
@@ -161,9 +171,13 @@ export async function completePasswordReset(input: {
       failed_attempts: 0,
       locked_until: null,
     })
-    .eq("id", row.profile_id);
+    .eq("id", row.profile_id), "the new password");
 
-  await db.from("otp_codes").update({ consumed_at: new Date().toISOString() }).eq("id", row.id);
+  // Consuming it is what stops it being used again.
+  ok(
+    await db.from("otp_codes").update({ consumed_at: new Date().toISOString() }).eq("id", row.id),
+    "consuming the code",
+  );
 
   return { outcome: "changed" };
 }
@@ -194,24 +208,27 @@ export async function changePassword(input: {
 
   const db = createServiceClient();
 
-  const { data: profile } = await db
+  const { data: profile } = ok(await db
     .from("profiles")
     .select("password_hash")
     .eq("id", input.profileId)
-    .maybeSingle();
+    .maybeSingle(), "profile");
 
   if (!profile?.password_hash) return { outcome: "wrong_current" };
   if (!(await verifyPassword(input.currentPassword, profile.password_hash))) {
     return { outcome: "wrong_current" };
   }
 
-  await db
-    .from("profiles")
-    .update({
-      password_hash: await hashPassword(input.newPassword),
-      password_updated_at: new Date().toISOString(),
-    })
-    .eq("id", input.profileId);
+  ok(
+    await db
+      .from("profiles")
+      .update({
+        password_hash: await hashPassword(input.newPassword),
+        password_updated_at: new Date().toISOString(),
+      })
+      .eq("id", input.profileId),
+    "the new password",
+  );
 
   return { outcome: "changed" };
 }
@@ -246,21 +263,21 @@ export async function startPhoneChange(input: {
 
   // One phone, one account. Two students sharing a number would each be able
   // to reset the other's password.
-  const { data: taken } = await db
+  const { data: taken } = ok(await db
     .from("profiles")
     .select("id")
     .eq("phone", phone)
-    .maybeSingle();
+    .maybeSingle(), "taken");
 
   if (taken && taken.id !== input.profileId) return { outcome: "phone_taken" };
 
   const since = new Date(Date.now() - 60 * 60_000).toISOString();
-  const { count } = await db
+  const { count } = ok(await db
     .from("otp_codes")
     .select("id", { count: "exact", head: true })
     .eq("phone", phone)
     .eq("purpose", "phone_change")
-    .gte("created_at", since);
+    .gte("created_at", since), "count");
 
   if ((count ?? 0) >= OTP_SEND_LIMIT) return { outcome: "rate_limited" };
 
@@ -292,7 +309,7 @@ export async function completePhoneChange(input: {
   const db = createServiceClient();
   const phone = input.phone.replace(/[^0-9+]/g, "");
 
-  const { data: row } = await db
+  const { data: row } = ok(await db
     .from("otp_codes")
     .select("id, code_hash, expires_at, attempts, max_attempts")
     .eq("profile_id", input.profileId)
@@ -301,7 +318,7 @@ export async function completePhoneChange(input: {
     .is("consumed_at", null)
     .order("created_at", { ascending: false })
     .limit(1)
-    .maybeSingle();
+    .maybeSingle(), "row");
 
   if (!row) return { outcome: "bad_code", reason: "Ask for a new code." };
   if (row.attempts >= row.max_attempts) {
@@ -312,15 +329,24 @@ export async function completePhoneChange(input: {
   }
 
   if (!(await verifyPassword(input.code, row.code_hash))) {
-    await db
-      .from("otp_codes")
-      .update({ attempts: row.attempts + 1 })
-      .eq("id", row.id);
+    ok(
+      await db
+        .from("otp_codes")
+        .update({ attempts: row.attempts + 1 })
+        .eq("id", row.id),
+      "the failed-attempt count",
+    );
     return { outcome: "bad_code", reason: "That code isn't right." };
   }
 
-  await db.from("profiles").update({ phone }).eq("id", input.profileId);
-  await db.from("otp_codes").update({ consumed_at: new Date().toISOString() }).eq("id", row.id);
+  // The number every alert this system sends will be addressed to. Told it
+  // changed when it did not, a student stops watching the old handset and
+  // nothing reaches the new one.
+  ok(await db.from("profiles").update({ phone }).eq("id", input.profileId), "the new number");
+  ok(
+    await db.from("otp_codes").update({ consumed_at: new Date().toISOString() }).eq("id", row.id),
+    "consuming the code",
+  );
 
   return { outcome: "changed" };
 }

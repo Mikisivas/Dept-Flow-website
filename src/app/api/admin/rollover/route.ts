@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { currentUser } from "@/lib/auth/current-user";
 import { createServiceClient } from "@/lib/supabase/client";
+import { ok } from "@/lib/supabase/result";
 
 /**
  * The level rollover.
@@ -30,11 +31,11 @@ export async function POST(request: Request) {
 
   const db = createServiceClient();
 
-  const { data: active } = await db
+  const { data: active } = ok(await db
     .from("academic_sessions")
     .select("id, name")
     .eq("is_active", true)
-    .limit(1);
+    .limit(1), "active");
 
   const current = active?.[0];
   if (!current) {

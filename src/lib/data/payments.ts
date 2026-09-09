@@ -9,6 +9,7 @@ import {
   verifyTransaction,
 } from "@/lib/paystack";
 import type { PaymentChannel, PaymentRecord } from "@/lib/types";
+import { ok } from "@/lib/supabase/result";
 
 export type { PaymentRecord };
 
@@ -33,36 +34,36 @@ export async function startDuesPayment(
 ): Promise<StartResult> {
   const db = createServiceClient();
 
-  const { data: student } = await db
+  const { data: student } = ok(await db
     .from("students")
     .select("id, matric_no")
     .eq("id", studentId)
-    .single();
+    .single(), "student");
 
   if (!student) throw new Error("No such student.");
 
-  const { data: session } = await db
+  const { data: session } = ok(await db
     .from("academic_sessions")
     .select("id")
     .eq("is_active", true)
-    .single();
+    .single(), "session");
 
   if (!session) return { outcome: "no_dues_period" };
 
-  const { data: dues } = await db
+  const { data: dues } = ok(await db
     .from("dues_periods")
     .select("dues_amount_kobo")
     .eq("academic_session_id", session.id)
-    .maybeSingle();
+    .maybeSingle(), "dues");
 
   if (!dues) return { outcome: "no_dues_period" };
 
-  const { data: compliance } = await db
+  const { data: compliance } = ok(await db
     .from("compliance_statuses")
     .select("state")
     .eq("student_id", studentId)
     .eq("academic_session_id", session.id)
-    .maybeSingle();
+    .maybeSingle(), "compliance");
 
   // Charging a student who is already cleared is the one outcome with no way
   // back that does not involve a refund.
@@ -75,10 +76,10 @@ export async function startDuesPayment(
   // Checked here and NOT in settlePayment: a transfer begun on day 29 can land
   // on day 32, and refusing to verify money that has already left a student's
   // account would take the payment and withhold the clearance.
-  const { data: open } = await db.rpc("is_payment_open", {
+  const { data: open } = ok(await db.rpc("is_payment_open", {
     p_student_id: studentId,
     p_academic_session_id: session.id,
-  });
+  }), "open");
 
   if (open === false) return { outcome: "window_closed" };
 
@@ -164,11 +165,11 @@ export async function settlePayment(
 ): Promise<SettleOutcome> {
   const db = createServiceClient();
 
-  const { data: payment } = await db
+  const { data: payment } = ok(await db
     .from("payments")
     .select("id, student_id, academic_session_id, amount_kobo, status")
     .eq("paystack_reference", reference)
-    .maybeSingle();
+    .maybeSingle(), "payment");
 
   if (!payment) throw new Error("Unknown payment reference.");
   if (expectStudentId && payment.student_id !== expectStudentId) {
@@ -256,10 +257,10 @@ export async function settlePayment(
     );
   }
 
-  const { data: balance } = await db.rpc("dues_balance_kobo", {
+  const { data: balance } = ok(await db.rpc("dues_balance_kobo", {
     p_student_id: payment.student_id,
     p_academic_session_id: payment.academic_session_id,
-  });
+  }), "balance");
 
   return {
     status: "success",
@@ -285,7 +286,7 @@ export async function settlePayment(
 export async function reconcilePendingPayments(studentId: string): Promise<void> {
   const db = createServiceClient();
 
-  const { data: due } = await db
+  const { data: due } = ok(await db
     .from("payments")
     .select("id, paystack_reference")
     .eq("student_id", studentId)
@@ -293,7 +294,7 @@ export async function reconcilePendingPayments(studentId: string): Promise<void>
     .not("next_check_at", "is", null)
     .lte("next_check_at", new Date().toISOString())
     .order("initialized_at", { ascending: true })
-    .limit(3);
+    .limit(3), "due");
 
   for (const row of due ?? []) {
     try {
@@ -323,11 +324,11 @@ export async function reconcilePendingPayments(studentId: string): Promise<void>
 export async function loadPaymentHistory(studentId: string): Promise<PaymentRecord[]> {
   const db = createUserClient(await currentAccessToken());
 
-  const { data } = await db
+  const { data } = ok(await db
     .from("payments")
     .select("paystack_reference, amount_kobo, status, channel, verified_at, initialized_at")
     .eq("student_id", studentId)
-    .order("initialized_at", { ascending: false });
+    .order("initialized_at", { ascending: false }), "the student's payment history");
 
   return (data ?? []).map((row) => ({
     reference: row.paystack_reference,

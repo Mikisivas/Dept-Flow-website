@@ -5,6 +5,7 @@ import { createServiceClient } from "@/lib/supabase/client";
 import { hashPassword, needsRehash, verifyPassword } from "@/lib/auth/passwords";
 import { issueSession, SESSION_COOKIE, SESSION_COOKIE_OPTIONS } from "@/lib/auth/session";
 import { normaliseMatric } from "@/lib/format";
+import { ok } from "@/lib/supabase/result";
 import type { AppRole } from "@/lib/types";
 
 /**
@@ -81,13 +82,13 @@ export async function POST(request: Request) {
 
   // Load the digest separately: the lookup function deliberately returns no
   // credential material, because it runs before a session exists.
-  const { data: profile } = match
+  const { data: profile } = ok(match
     ? await supabase
         .from("profiles")
         .select("id, role, password_hash, failed_attempts, locked_until, surname, first_name")
         .eq("id", match.profile_id)
         .single()
-    : { data: null };
+    : { data: null }, "profile");
 
   if (profile?.locked_until && new Date(profile.locked_until) > new Date()) {
     return NextResponse.json(
@@ -101,12 +102,12 @@ export async function POST(request: Request) {
 
   // Runs against a dummy digest when there is no account, so an unregistered
   // matric number takes the same time as a wrong password.
-  const ok = await verifyPassword(password, profile?.password_hash ?? null);
+  const passwordOk = await verifyPassword(password, profile?.password_hash ?? null);
 
-  if (!ok || !profile || !match) {
+  if (!passwordOk || !profile || !match) {
     if (profile) {
       const attempts = (profile.failed_attempts ?? 0) + 1;
-      await supabase
+      const { error: lockoutError } = await supabase
         .from("profiles")
         .update({
           failed_attempts: attempts,
@@ -116,6 +117,15 @@ export async function POST(request: Request) {
               : null,
         })
         .eq("id", profile.id);
+
+      // Logged, not thrown. A throw here would answer differently depending on
+      // whether the account exists, which is the enumeration this route spends
+      // a dummy digest to prevent. But a lockout counter that cannot be written
+      // is a brute-force limit that silently is not there, so it is never
+      // simply discarded.
+      if (lockoutError) {
+        console.error("lockout counter not written", lockoutError.message);
+      }
     }
     return NextResponse.json({ error: CREDENTIALS_REJECTED }, { status: 401 });
   }
@@ -141,7 +151,7 @@ export async function POST(request: Request) {
       ? await hashPassword(password)
       : null;
 
-  await supabase
+  const { error: loginBookkeepingError } = await supabase
     .from("profiles")
     .update({
       failed_attempts: 0,
@@ -150,6 +160,14 @@ export async function POST(request: Request) {
       ...(upgraded ? { password_hash: upgraded, password_updated_at: new Date().toISOString() } : {}),
     })
     .eq("id", profile.id);
+
+  // Logged, not thrown: the password was correct, and refusing a valid login
+  // over bookkeeping is worse than the bookkeeping being wrong. It still says
+  // so, because a counter that never resets leaves a student who mistyped four
+  // times one attempt from a lockout for ever.
+  if (loginBookkeepingError) {
+    console.error("login bookkeeping not written", loginBookkeepingError.message);
+  }
 
   const token = await issueSession({
     profileId: profile.id,

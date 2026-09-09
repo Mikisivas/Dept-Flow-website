@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { randomInt } from "node:crypto";
 import { currentUser } from "@/lib/auth/current-user";
 import { createServiceClient } from "@/lib/supabase/client";
+import { ok } from "@/lib/supabase/result";
 
 /**
  * Issuing the attendance code.
@@ -30,11 +31,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const { id } = await params;
   const db = createServiceClient();
 
-  const { data: instance } = await db
+  const { data: instance } = ok(await db
     .from("session_instances")
     .select("id, status, courses(lecturer_id)")
     .eq("id", id)
-    .maybeSingle();
+    .maybeSingle(), "instance");
 
   if (!instance) {
     return NextResponse.json({ error: "No such session." }, { status: 404 });
@@ -52,11 +53,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     );
   }
 
-  const { data: existing } = await db
+  const { data: existing } = ok(await db
     .from("checkpoints")
     .select("id, expires_at")
     .eq("session_instance_id", id)
-    .maybeSingle();
+    .maybeSingle(), "existing");
 
   // Never a second code while the first is still live: two valid codes on one
   // board is a student-support problem, not a feature.

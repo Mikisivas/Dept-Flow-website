@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { currentUser } from "@/lib/auth/current-user";
 import { createServiceClient } from "@/lib/supabase/client";
+import { ok } from "@/lib/supabase/result";
 
 /**
  * Ending a lecture, which is when it is scored.
@@ -26,11 +27,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   const db = createServiceClient();
 
-  const { data: instance } = await db
+  const { data: instance } = ok(await db
     .from("session_instances")
     .select("id, course_id, status, courses(lecturer_id)")
     .eq("id", id)
-    .maybeSingle();
+    .maybeSingle(), "instance");
 
   if (!instance) return NextResponse.json({ error: "No such session." }, { status: 404 });
 
@@ -43,11 +44,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json({ alreadyClosed: true, scored: 0 });
   }
 
-  const { data: code } = await db
+  const { data: code } = ok(await db
     .from("checkpoints")
     .select("id")
     .eq("session_instance_id", id)
-    .maybeSingle();
+    .maybeSingle(), "code");
 
   if (!code) {
     return NextResponse.json(
@@ -68,11 +69,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   // Dropped enrolments are excluded: a student who left the course is not
   // absent from it, and scoring them would put a zero into a denominator they
   // are no longer part of.
-  const { data: enrolled } = await db
+  const { data: enrolled } = ok(await db
     .from("enrolments")
     .select("student_id")
     .eq("course_id", instance.course_id)
-    .is("dropped_at", null);
+    .is("dropped_at", null), "enrolled");
 
   const students = (enrolled ?? []).map((row) => row.student_id);
 

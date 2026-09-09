@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { currentUser } from "@/lib/auth/current-user";
 import { createServiceClient } from "@/lib/supabase/client";
+import { ok } from "@/lib/supabase/result";
 
 /**
  * The admin opening or moving a semester's registration window.
@@ -51,11 +52,11 @@ export async function POST(request: Request) {
   // The active session, not one named in the request. A window is only ever set
   // for the session the department is actually in, and taking the id from the
   // body would let a misdirected request move a closed session's deadline.
-  const { data: active } = await db
+  const { data: active } = ok(await db
     .from("academic_sessions")
     .select("id")
     .eq("is_active", true)
-    .limit(1);
+    .limit(1), "active");
 
   const current = active?.[0];
   if (!current) {

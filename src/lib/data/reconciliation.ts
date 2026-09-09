@@ -4,6 +4,7 @@ import { createServiceClient } from "@/lib/supabase/client";
 import { settlePayment } from "@/lib/data/payments";
 import { dispatchQueuedNotifications } from "@/lib/data/notifications";
 import { naira } from "@/lib/format";
+import { ok, QueryFailed } from "@/lib/supabase/result";
 
 /**
  * Payments that settle themselves (§8.4).
@@ -41,7 +42,7 @@ const BATCH = 25;
 export async function reconcilePayments(limit = BATCH): Promise<SweepSummary> {
   const db = createServiceClient();
 
-  const { data: due } = await db.rpc("payments_due_for_check", { p_limit: limit });
+  const { data: due } = ok(await db.rpc("payments_due_for_check", { p_limit: limit }), "due");
 
   const rows = (due ?? []) as Array<{
     payment_id: string;
@@ -80,13 +81,19 @@ export async function reconcilePayments(limit = BATCH): Promise<SweepSummary> {
 
       // Paystack answered — "pending", "failed" or "abandoned" — so the age
       // curve applies and the row can eventually be given up on.
-      const { data: next } = await db.rpc("schedule_payment_check", {
+      const { data: next } = ok(await db.rpc("schedule_payment_check", {
         p_payment_id: row.payment_id,
         p_answered: true,
-      });
+      }), "next");
 
       if (next === null) summary.abandoned += 1;
-    } catch {
+    } catch (error) {
+      // This catch means one thing: Paystack could not be asked. A refused
+      // query is not that, and counting it as unreachable would file a broken
+      // database under weather — a number that is supposed to go up and down
+      // on its own, so nobody looks twice at it.
+      if (error instanceof QueryFailed) throw error;
+
       // We could not ask. That is a fact about the network and not about the
       // student's money, so it is rescheduled and never abandoned — however
       // many times it happens.
@@ -120,7 +127,10 @@ async function announce(
   amountKobo: number,
   cleared: boolean,
 ): Promise<void> {
-  await db.rpc("queue_notification", {
+  // Checked. This whole function exists because nobody was looking at the
+  // screen, so a queue_notification that failed quietly means the student is
+  // never told at all — the sweep credits the money and says nothing.
+  ok(await db.rpc("queue_notification", {
     p_recipient_id: studentId,
     p_kind: "payment_confirmed",
     p_title: cleared ? "Your dues are paid in full" : "Your payment came through",
@@ -128,5 +138,5 @@ async function announce(
       ? `We confirmed ${naira(amountKobo)} with Paystack. Your dues are now clear — the attendance half of your exam permit is the only thing left.`
       : `We confirmed ${naira(amountKobo)} with Paystack and it has come off your balance.`,
     p_link: "/dues",
-  });
+  }), "the payment notice");
 }

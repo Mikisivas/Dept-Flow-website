@@ -3,6 +3,7 @@ import { currentUser } from "@/lib/auth/current-user";
 import { messageAudience, sendHodMessage, type MessageScope } from "@/lib/data/hod";
 import { createServiceClient } from "@/lib/supabase/client";
 import { dispatchQueuedNotifications } from "@/lib/data/notifications";
+import { ok } from "@/lib/supabase/result";
 
 /**
  * The HOD messaging students.
@@ -51,11 +52,11 @@ export async function POST(request: Request) {
   let target: string | null = null;
   if (scope === "student") {
     const matricNo = String(body.matricNo ?? "").trim().toUpperCase();
-    const { data: student } = await db
+    const { data: student } = ok(await db
       .from("students")
       .select("id")
       .eq("matric_no", matricNo)
-      .maybeSingle();
+      .maybeSingle(), "student");
 
     if (!student) {
       return NextResponse.json(
@@ -101,8 +102,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ recipients: await messageAudience(scope, target, level, programme) });
   }
 
+  let result;
   try {
-    const result = await sendHodMessage({
+    result = await sendHodMessage({
       actorId: session.profileId,
       scope,
       target,
@@ -111,17 +113,28 @@ export async function POST(request: Request) {
       subject: String(body.subject ?? ""),
       body: String(body.body ?? ""),
     });
-
-    // Drained now rather than on the next scheduled tick. An HOD who has just
-    // told four hundred students that a lecture moved should not be waiting on
-    // a cron job for it to leave the building.
-    await dispatchQueuedNotifications(200);
-
-    return NextResponse.json({ ok: true, ...result });
   } catch (error) {
     const message = error instanceof Error ? error.message : "That didn't send.";
     return NextResponse.json({ error: readable(message) }, { status: 400 });
   }
+
+  // Drained now rather than on the next scheduled tick. An HOD who has just
+  // told four hundred students that a lecture moved should not be waiting on a
+  // cron job for it to leave the building.
+  //
+  // Outside the try that reports a failed send, and deliberately: the message
+  // rows already exist and the audit row is written. A queue that would not
+  // drain here is still drained by the scheduled tick, and answering "that
+  // didn't send" would be a lie about four hundred messages that did. Logged
+  // rather than swallowed, because a queue that never drains is its own
+  // failure and /api/health is where it shows.
+  try {
+    await dispatchQueuedNotifications(200);
+  } catch (error) {
+    console.error("hod message queued but not drained", error);
+  }
+
+  return NextResponse.json({ ok: true, ...result });
 }
 
 /** The database raises in plain English; this strips Postgres's prefix. */

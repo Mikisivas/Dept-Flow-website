@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { currentUser } from "@/lib/auth/current-user";
 import { createServiceClient } from "@/lib/supabase/client";
+import { ok } from "@/lib/supabase/result";
 
 /**
  * A browser registering itself for Web Push.
@@ -86,11 +87,17 @@ export async function DELETE(request: Request) {
   const endpoint = String(body.endpoint ?? "");
   if (!endpoint) return NextResponse.json({ error: "Which browser?" }, { status: 400 });
 
-  await createServiceClient()
-    .from("push_subscriptions")
-    .delete()
-    .eq("endpoint", endpoint)
-    .eq("profile_id", session.profileId);
+  // Checked, because the answer below is `ok: true`. A student turning
+  // notifications off and being told it worked, while the subscription row
+  // survives, keeps receiving them from a system that has said it stopped.
+  ok(
+    await createServiceClient()
+      .from("push_subscriptions")
+      .delete()
+      .eq("endpoint", endpoint)
+      .eq("profile_id", session.profileId),
+    "removing the subscription",
+  );
 
   return NextResponse.json({ ok: true });
 }

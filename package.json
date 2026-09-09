@@ -9,10 +9,11 @@
     "dev": "next dev",
     "lint": "eslint",
     "start": "next start",
-    "test": "npm run test:paystack && npm run test:reset && npm run test:timetable",
+    "test": "npm run test:paystack && npm run test:reset && npm run test:timetable && npm run test:result",
     "test:paystack": "node --conditions=react-server --experimental-strip-types tests/paystack.mts",
     "test:reset": "node --conditions=react-server --experimental-strip-types --experimental-test-module-mocks --import ./tests/register-hooks.mjs tests/password-reset.mts",
-    "test:timetable": "node --conditions=react-server --experimental-strip-types --import ./tests/register-hooks.mjs tests/timetable-csv.mts"
+    "test:timetable": "node --conditions=react-server --experimental-strip-types --import ./tests/register-hooks.mjs tests/timetable-csv.mts",
+    "test:result": "node --conditions=react-server --experimental-strip-types --import ./tests/register-hooks.mjs tests/query-result.mts"
   },
   "dependencies": {
     "@node-rs/argon2": "^2.0.2",

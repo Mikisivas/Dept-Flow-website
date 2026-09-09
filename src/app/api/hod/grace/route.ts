@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { currentUser } from "@/lib/auth/current-user";
 import { createServiceClient } from "@/lib/supabase/client";
+import { ok } from "@/lib/supabase/result";
 
 /**
  * Opening and revoking a registration exception.
@@ -54,11 +55,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true });
   }
 
-  const { data: active } = await db
+  const { data: active } = ok(await db
     .from("academic_sessions")
     .select("id")
     .eq("is_active", true)
-    .single();
+    .single(), "active");
 
   if (!active) {
     return NextResponse.json({ error: "There is no active academic session." }, { status: 409 });
@@ -74,11 +75,11 @@ export async function POST(request: Request) {
   let studentId: string | null = null;
   if (scope === "student") {
     const matricNo = String(body.matricNo ?? "").trim().toUpperCase();
-    const { data: student } = await db
+    const { data: student } = ok(await db
       .from("students")
       .select("id, status")
       .eq("matric_no", matricNo)
-      .maybeSingle();
+      .maybeSingle(), "student");
 
     if (!student) {
       return NextResponse.json(

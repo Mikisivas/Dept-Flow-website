@@ -21,13 +21,14 @@ import type { ComplianceState } from "@/lib/types";
  * a database task.
  */
 
-const COMPLIANCE_VARIANT: Record<ComplianceState, "counted" | "pending" | "locked"> = {
+const COMPLIANCE_VARIANT: Record<ComplianceState, "counted" | "unpaid" | "pending" | "locked"> = {
   cleared: "counted",
-  // No badge of its own: owing dues is the ordinary state for most of a term
-  // and, since payment was decoupled, it costs a student nothing they can see
-  // on this screen. Overstating it here would be the screen making a judgement
-  // the system does not.
-  uncleared: "pending",
+  // Owing dues is the ordinary state for most of a term and, since payment was
+  // decoupled, it costs a student nothing they can see on this screen. So it is
+  // said quietly — no fill, dashed, muted — rather than not at all. It used to
+  // borrow `pending`, which reads "Checking payment…" and was the screen making
+  // a claim about a payment that does not exist.
+  uncleared: "unpaid",
   pending_verification: "pending",
   locked: "locked",
 };
@@ -104,7 +105,7 @@ export function StudentTable({ students }: { students: AdminStudent[] }) {
       mobile: "meta",
       cell: (student) => (
         <StatusBadge
-          variant={COMPLIANCE_VARIANT[student.compliance as ComplianceState] ?? "pending"}
+          variant={COMPLIANCE_VARIANT[student.compliance as ComplianceState] ?? "unpaid"}
         />
       ),
     },

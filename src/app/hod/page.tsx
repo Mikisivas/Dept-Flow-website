@@ -81,7 +81,7 @@ export default async function HodDashboardPage() {
         <ul className="mt-3 flex flex-col gap-2">
           {[
             { variant: "counted" as const, label: "Paid in full", value: compliance.cleared },
-            { variant: "pending" as const, label: "Still owing", value: compliance.provisional },
+            { variant: "unpaid" as const, label: "Still owing", value: compliance.provisional },
             { variant: "pending" as const, label: "Payment being checked", value: compliance.pending },
             { variant: "locked" as const, label: "Payment closed, still owing", value: compliance.locked },
           ].map((row) => (

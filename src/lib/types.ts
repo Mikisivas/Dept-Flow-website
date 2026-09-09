@@ -17,8 +17,13 @@ export type ScoreSource = "digital" | "manually_entered";
  * counted until you pay", and payment no longer decides whether a lecture
  * counts — so a badge saying it would be describing a condition the system
  * cannot produce.
+ *
+ * `unpaid` is a different thing and not its replacement: it describes the dues
+ * a student owes while the window is still open, never a lecture. It is here
+ * because the compliance screens were borrowing `pending` for it, and `pending`
+ * reads "Checking payment…" — a claim about a payment nobody has made.
  */
-export type StatusVariant = "counted" | "pending" | "locked" | "atRisk";
+export type StatusVariant = "counted" | "unpaid" | "pending" | "locked" | "atRisk";
 
 export type AppRole = "student" | "lecturer" | "hod" | "admin";
 

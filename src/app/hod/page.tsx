@@ -53,7 +53,14 @@ export default async function HodDashboardPage() {
           <Stat
             label="Below 75% now"
             value={belowThreshold}
-            detail={`${formatPercent(Math.round((belowThreshold / totalStudents) * 100))} of the department`}
+            detail={
+              // A department with nobody in it has no percentage, and "NaN% of
+              // the department" is what an empty register looks like on a
+              // screen that assumed one. Say the true thing instead.
+              totalStudents === 0
+                ? "No students in the active session yet."
+                : `${formatPercent(Math.round((belowThreshold / totalStudents) * 100))} of the department`
+            }
             emphasis
           />
           <Stat

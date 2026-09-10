@@ -23,8 +23,8 @@ identically.
 
 **Filters**: any combination of the three EMAs (price on the correct side of every
 enabled EMA, and correct ordering between every enabled pair), an optional daily-reset
-VWAP filter, and an optional session filter combining Asian, London, New York and custom
-windows.
+VWAP filter, and a session filter combining any of the Asian, London, New York and
+custom windows. The filter ships enabled with London and New York on and Asian off.
 
 **Levels**: entry is the sweep candle's close. The stop is the sweep candle's low minus
 (or high plus) the pip buffer. TP1 and TP2 are multiples of that entry-to-stop risk.
@@ -76,14 +76,16 @@ timezone inputs. `Use default session timezone` keeps it on New York.
 
 The shipped defaults are the three main sessions written on a New York clock:
 
-| Window | Default | Equivalent |
-| --- | --- | --- |
-| Asian | `1900-0300` | Tokyo 08:00-16:00 |
-| London | `0300-1100` | London 08:00-16:00 |
-| New York | `0800-1600` | New York cash hours |
-| Custom | 08:00-12:00 | New York morning |
+| Window | Default | Equivalent | Enabled |
+| --- | --- | --- | --- |
+| London | `0300-1100` | London 08:00-16:00 | yes |
+| New York | `0800-1600` | New York cash hours | yes |
+| Asian | `1900-0300` | Tokyo 08:00-16:00 | no |
+| Custom | 08:00-12:00 | New York morning | no |
 
-The Asian window crosses midnight, which the filter handles as a wrap-around.
+London and New York overlap, so the tradeable stretch is a single block from 03:00 to
+16:00 New York time. The Asian window is defined but switched off; it crosses midnight,
+which the filter handles as a wrap-around if you turn it back on.
 
 Conversion is calendar-based rather than a fixed offset:
 
@@ -105,10 +107,11 @@ drift by:
 | London | 56 hours |
 | Asian | 254 hours |
 
-The London figure is only the DST-mismatch weeks. The Asian figure is the whole US
-winter, when `1900-0300` New York time is Tokyo 09:00-17:00 rather than 08:00-16:00. To
-remove either drift, set that window's timezone input to its home zone and write the
-hours locally: Asian as Asia/Tokyo `0800-1600`, London as Europe/London `0800-1600`.
+The London figure is only the DST-mismatch weeks. The Asian figure covers the whole US
+winter, when `1900-0300` New York time is Tokyo 09:00-17:00 rather than 08:00-16:00, and
+is academic while that window stays off. To remove either drift, set that window's
+timezone input to its home zone and write the hours locally: London as Europe/London
+`0800-1600`, Asian as Asia/Tokyo `0800-1600`.
 
 ## Backtesting
 

@@ -76,8 +76,8 @@ input bool   InpUseVWAP           = false;          // Use VWAP Filter (daily re
 //| 5. Trading Session                                               |
 //+------------------------------------------------------------------+
 input group "5. Trading Session"
-input bool   InpUseSessionFilter  = false;          // Use Session Filter
-input bool   InpTradeAsian        = true;           // Trade Asian Session
+input bool   InpUseSessionFilter  = true;           // Use Session Filter
+input bool   InpTradeAsian        = false;          // Trade Asian Session (off)
 input bool   InpTradeLondon       = true;           // Trade London Session
 input bool   InpTradeNewYork      = true;           // Trade New York Session
 input bool   InpTradeCustom       = false;          // Trade Custom Session

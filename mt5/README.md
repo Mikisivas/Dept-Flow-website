@@ -41,7 +41,7 @@ and the stop optionally moves to entry after TP1. One trade at a time, matching
 | TP1 detection | Bar high/low while the position is open | Bid/Ask on every tick |
 | Partial close | Two `strategy.exit` legs | One position, partially closed at TP1, stop then moved to entry |
 | VWAP | Session VWAP on the signal timeframe, `hlc3 * volume`, daily reset | Same formula, real volume when the broker supplies it and tick volume otherwise, reset at server-time midnight |
-| Session timezone | IANA zone from the exchange calendar | Broker server time converted to GMT with the offset you supply, then to the selected zone; London and New York apply EU and US daylight-saving rules |
+| Session timezone | IANA zone from the exchange calendar | Server time converted to GMT with the offset you supply, then to the target zone; New York applies US rules and London applies EU/UK rules, per session window |
 | Position size | 1 contract | Fixed lots, or lots derived from a risk percentage of balance |
 | Drawing | Boxes, lines and labels | Rectangles, trend lines and text objects for each trade; the EMAs and VWAP are not plotted, since an EA has no indicator buffers |
 
@@ -52,9 +52,10 @@ Experts log.
 
 ## Settings that need attention before a long backtest
 
-- **Broker Server GMT Offset** only matters when the session filter is on. Most brokers
-  run at UTC+2 in winter and UTC+3 in summer, which is the default (offset 2, DST on).
-  Check your broker and correct it, otherwise the session windows shift by hours.
+- **Broker Server GMT Offset** is 0 with DST shifting off, which is correct for Exness.
+  The offset is an input, not a constant, so any other broker works by changing it. The
+  EA prints its resolved clocks at startup and, on a live chart, warns when the offset
+  you set disagrees with what the terminal reports.
 - **Manual Pip Size** applies when automatic pip sizing is off. Automatic sizing gives
   0.0001 on five and four digit forex pairs, 0.01 on three and two digit JPY pairs, and
   one point on everything else, which is what XAUUSD and indices usually need.
@@ -63,6 +64,28 @@ Experts log.
   split the EA logs a warning, holds the full position to TP2, and still moves to
   break-even.
 - **Magic Number** isolates this EA's positions. Change it if you run several instances.
+
+## Session timezones
+
+Windows are defined as `HHMM-HHMM` clock times in a target zone, and the EA converts
+server time to that zone on every evaluation. The default zone is **America/New_York**,
+so all four windows are read as New York local time unless you override them.
+
+Each window can carry its own zone through the Asian, London, New York and Custom
+timezone inputs. `Use default session timezone` keeps it on New York.
+
+Conversion is calendar-based rather than a fixed offset:
+
+- **New York** switches on the second Sunday of March at 02:00 local and back on the
+  first Sunday of November at 02:00 local.
+- **London** switches on the last Sunday of March and back on the last Sunday of October,
+  both at 01:00 UTC.
+
+Those dates do not coincide, so for roughly two weeks in March and one week in
+October/November, London sits four or six hours ahead of New York instead of five. A
+London window expressed in New York clock time therefore lands an hour early or late
+during those weeks. If that matters, set the London window's timezone to Europe/London
+and write its hours in London time.
 
 ## Backtesting
 

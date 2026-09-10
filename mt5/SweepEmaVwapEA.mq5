@@ -21,10 +21,22 @@ enum ENUM_SESSION_TZ
   {
    TZ_LAGOS,      // Africa/Lagos (UTC+1)
    TZ_UTC,        // Etc/UTC
-   TZ_LONDON,     // Europe/London (DST aware)
-   TZ_NEWYORK,    // America/New_York (DST aware)
+   TZ_LONDON,     // Europe/London (GMT/BST, EU-UK rules)
+   TZ_NEWYORK,    // America/New_York (EST/EDT, US rules)
    TZ_TOKYO,      // Asia/Tokyo (UTC+9)
    TZ_SINGAPORE   // Asia/Singapore (UTC+8)
+  };
+
+// Per-session override: TZO_DEFAULT falls back to the default session timezone.
+enum ENUM_SESSION_TZ_OPT
+  {
+   TZO_DEFAULT,   // Use default session timezone
+   TZO_LAGOS,     // Africa/Lagos (UTC+1)
+   TZO_UTC,       // Etc/UTC
+   TZO_LONDON,    // Europe/London (GMT/BST, EU-UK rules)
+   TZO_NEWYORK,   // America/New_York (EST/EDT, US rules)
+   TZO_TOKYO,     // Asia/Tokyo (UTC+9)
+   TZO_SINGAPORE  // Asia/Singapore (UTC+8)
   };
 
 //+------------------------------------------------------------------+
@@ -76,9 +88,13 @@ input int    InpCustomStartHour   = 8;              // Custom Start Hour
 input int    InpCustomStartMinute = 0;              // Custom Start Minute
 input int    InpCustomEndHour     = 12;             // Custom End Hour
 input int    InpCustomEndMinute   = 0;              // Custom End Minute
-input ENUM_SESSION_TZ InpSessionTz = TZ_LAGOS;      // Session Timezone
-input double InpServerGmtOffset   = 2.0;            // Broker Server GMT Offset (winter hours)
-input bool   InpServerUsesDst     = true;           // Broker Server Observes DST (US rules)
+input ENUM_SESSION_TZ InpSessionTz = TZ_NEWYORK;    // Default Session Timezone
+input ENUM_SESSION_TZ_OPT InpAsianTz   = TZO_DEFAULT; // Asian Session Timezone
+input ENUM_SESSION_TZ_OPT InpLondonTz  = TZO_DEFAULT; // London Session Timezone
+input ENUM_SESSION_TZ_OPT InpNewYorkTz = TZO_DEFAULT; // New York Session Timezone
+input ENUM_SESSION_TZ_OPT InpCustomTz  = TZO_DEFAULT; // Custom Session Timezone
+input double InpServerGmtOffset   = 0.0;            // Broker Server GMT Offset in hours (Exness: 0)
+input bool   InpServerUsesDst     = false;          // Broker Server Shifts With DST (Exness: no)
 
 //+------------------------------------------------------------------+
 //| 6. Risk & Trade Management                                       |
@@ -344,12 +360,30 @@ bool ParseSession(const string spec, int &startMin, int &endMin)
    return true;
   }
 
-int SessionMinuteNow(const datetime serverTime)
+ENUM_SESSION_TZ ResolveTz(const ENUM_SESSION_TZ_OPT opt)
   {
-   datetime gmt   = ServerToGmt(serverTime);
-   datetime local = gmt + (datetime)TzOffsetSeconds(InpSessionTz, gmt);
+   switch(opt)
+     {
+      case TZO_LAGOS:     return TZ_LAGOS;
+      case TZO_UTC:       return TZ_UTC;
+      case TZO_LONDON:    return TZ_LONDON;
+      case TZO_NEWYORK:   return TZ_NEWYORK;
+      case TZO_TOKYO:     return TZ_TOKYO;
+      case TZO_SINGAPORE: return TZ_SINGAPORE;
+     }
+   return InpSessionTz;                                // TZO_DEFAULT
+  }
+
+datetime ServerToTz(const datetime serverTime, const ENUM_SESSION_TZ tz)
+  {
+   datetime gmt = ServerToGmt(serverTime);
+   return gmt + (datetime)TzOffsetSeconds(tz, gmt);
+  }
+
+int SessionMinuteNow(const datetime serverTime, const ENUM_SESSION_TZ tz)
+  {
    MqlDateTime dt;
-   TimeToStruct(local, dt);
+   TimeToStruct(ServerToTz(serverTime, tz), dt);
    return dt.hour * 60 + dt.min;
   }
 
@@ -362,19 +396,19 @@ bool WindowContains(const int startMin, const int endMin, const int nowMin)
    return (nowMin >= startMin || nowMin < endMin);     // overnight window
   }
 
-bool SessionActive(const string spec, const datetime serverTime)
+bool SessionActive(const string spec, const datetime serverTime, const ENUM_SESSION_TZ tz)
   {
    int s = 0, e = 0;
    if(!ParseSession(spec, s, e))
       return false;
-   return WindowContains(s, e, SessionMinuteNow(serverTime));
+   return WindowContains(s, e, SessionMinuteNow(serverTime, tz));
   }
 
-bool CustomSessionActive(const datetime serverTime)
+bool CustomSessionActive(const datetime serverTime, const ENUM_SESSION_TZ tz)
   {
    int s = InpCustomStartHour * 60 + InpCustomStartMinute;
    int e = InpCustomEndHour * 60 + InpCustomEndMinute;
-   return WindowContains(s, e, SessionMinuteNow(serverTime));
+   return WindowContains(s, e, SessionMinuteNow(serverTime, tz));
   }
 
 bool InTradingSession(const datetime serverTime)
@@ -382,13 +416,13 @@ bool InTradingSession(const datetime serverTime)
    if(!InpUseSessionFilter)
       return true;
 
-   if(InpTradeAsian && SessionActive(InpAsianSession, serverTime))
+   if(InpTradeAsian && SessionActive(InpAsianSession, serverTime, ResolveTz(InpAsianTz)))
       return true;
-   if(InpTradeLondon && SessionActive(InpLondonSession, serverTime))
+   if(InpTradeLondon && SessionActive(InpLondonSession, serverTime, ResolveTz(InpLondonTz)))
       return true;
-   if(InpTradeNewYork && SessionActive(InpNewYorkSession, serverTime))
+   if(InpTradeNewYork && SessionActive(InpNewYorkSession, serverTime, ResolveTz(InpNewYorkTz)))
       return true;
-   if(InpTradeCustom && CustomSessionActive(serverTime))
+   if(InpTradeCustom && CustomSessionActive(serverTime, ResolveTz(InpCustomTz)))
       return true;
 
    return false;
@@ -1045,6 +1079,52 @@ void RestoreState()
   }
 
 //+------------------------------------------------------------------+
+//| Timezone diagnostics                                             |
+//+------------------------------------------------------------------+
+string TzName(const ENUM_SESSION_TZ tz)
+  {
+   switch(tz)
+     {
+      case TZ_LAGOS:     return "Africa/Lagos";
+      case TZ_UTC:       return "Etc/UTC";
+      case TZ_LONDON:    return "Europe/London";
+      case TZ_NEWYORK:   return "America/New_York";
+      case TZ_TOKYO:     return "Asia/Tokyo";
+      case TZ_SINGAPORE: return "Asia/Singapore";
+     }
+   return "Unknown";
+  }
+
+void LogTimezones()
+  {
+   datetime server = TimeCurrent();
+   datetime gmt    = ServerToGmt(server);
+
+   PrintFormat("Clocks | server %s (configured GMT%+.1f%s) | GMT %s | New York %s %s | London %s %s",
+               TimeToString(server, TIME_DATE | TIME_MINUTES),
+               InpServerGmtOffset, (InpServerUsesDst ? ", DST shift on" : ""),
+               TimeToString(gmt, TIME_DATE | TIME_MINUTES),
+               TimeToString(ServerToTz(server, TZ_NEWYORK), TIME_DATE | TIME_MINUTES),
+               (IsUsDst(gmt) ? "EDT" : "EST"),
+               TimeToString(ServerToTz(server, TZ_LONDON), TIME_DATE | TIME_MINUTES),
+               (IsEuDst(gmt) ? "BST" : "GMT"));
+
+   PrintFormat("Session zones | default %s | Asian %s | London %s | New York %s | Custom %s",
+               TzName(InpSessionTz), TzName(ResolveTz(InpAsianTz)), TzName(ResolveTz(InpLondonTz)),
+               TzName(ResolveTz(InpNewYorkTz)), TzName(ResolveTz(InpCustomTz)));
+
+   if(!MQLInfoInteger(MQL_TESTER))
+     {
+      double configured = InpServerGmtOffset + ((InpServerUsesDst && IsUsDst(server)) ? 1.0 : 0.0);
+      double detected   = (double)((long)server - (long)TimeGMT()) / 3600.0;
+      if(MathAbs(detected - configured) > 0.75)
+         PrintFormat("Warning: this server looks like GMT%+.1f but the offset input resolves to GMT%+.1f. "
+                     "Session windows would be shifted by %.1f hours.",
+                     detected, configured, detected - configured);
+     }
+  }
+
+//+------------------------------------------------------------------+
 //| Expert initialization                                            |
 //+------------------------------------------------------------------+
 int OnInit()
@@ -1119,6 +1199,9 @@ int OnInit()
    g_lastChartBar  = iTime(_Symbol, _Period, 0);
 
    RestoreState();
+
+   if(!MQLInfoInteger(MQL_OPTIMIZATION))
+      LogTimezones();
 
    PrintFormat("Sweep EMA VWAP started. signalTF=%s pip=%s buffer=%s barLag=%s",
                EnumToString(g_sigTF), DoubleToString(g_pipSize, g_digits),

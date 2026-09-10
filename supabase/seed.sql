@@ -55,7 +55,12 @@ end $$;
 insert into academic_sessions (id, name, starts_on, ends_on, is_active) values
   (
     '11111111-1111-1111-1111-111111111111',
-    to_char(current_date - 91, 'YYYY') || '/' || to_char(current_date + 119, 'YYYY'),
+    -- Start year and the one after it, never the calendar years the window
+    -- happens to touch. A session runs about seven months here, so those two
+    -- dates sit inside ONE calendar year for most of the year and the label
+    -- came out as '2026/2026' — which names no academic session anywhere.
+    to_char(current_date - 91, 'YYYY') || '/' ||
+      to_char((current_date - 91) + interval '1 year', 'YYYY'),
     current_date - 91,
     current_date + 119,
     true

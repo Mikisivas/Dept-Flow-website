@@ -50,7 +50,18 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en-NG" className={inter.variable}>
-      <body>
+      {/*
+        Browser extensions write to <body> before React hydrates — Grammarly
+        adds data-gr-ext-installed, password managers and translators add their
+        own — and React then reports a hydration mismatch for markup this
+        application never produced. It is a red error card over a page that
+        rendered perfectly, and in a demo it is the first thing anybody sees.
+
+        This suppresses the warning for THIS element's own attributes only. It
+        does not reach the children, so a genuine mismatch inside any page is
+        still reported.
+      */}
+      <body suppressHydrationWarning>
         <ToastProvider>{children}</ToastProvider>
         <ServiceWorker />
       </body>

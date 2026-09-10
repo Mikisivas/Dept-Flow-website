@@ -131,6 +131,15 @@ input bool   InpEnableAlerts      = true;           // Enable Alerts
 input bool   InpEnablePush        = false;          // Send Push Notifications
 
 //+------------------------------------------------------------------+
+//| 9. Reporting                                                     |
+//+------------------------------------------------------------------+
+input group "9. Reporting"
+input bool   InpWriteReports      = true;           // Write Trade And Period Reports
+input bool   InpCommonFolder      = true;           // Write To Shared Files Folder
+input string InpCsvSeparator      = ",";            // CSV Separator (use ; for some locales)
+input bool   InpLogPeriodTable    = true;           // Print Period Tables To The Journal
+
+//+------------------------------------------------------------------+
 //| Globals                                                          |
 //+------------------------------------------------------------------+
 #define OBJ_PREFIX "SEV_"
@@ -529,6 +538,363 @@ double ClosingDealPrice(const ulong positionId)
   }
 
 //+------------------------------------------------------------------+
+//| Trade journal and period reporting                               |
+//+------------------------------------------------------------------+
+struct TradeRecord
+  {
+   datetime          openTime;
+   datetime          closeTime;
+   int               dir;
+   double            volume;
+   double            entry;
+   double            stop;
+   double            target1;
+   double            target2;
+   double            riskMoney;
+   double            netProfit;
+   double            rMultiple;
+   bool              tp1Hit;
+   string            outcome;
+  };
+
+struct PeriodStats
+  {
+   string            label;
+   datetime          start;
+   datetime          end;
+   int               trades;
+   int               wins;
+   int               losses;
+   int               countTP;
+   int               countBE;
+   int               countSL;
+   double            net;
+   double            grossProfit;
+   double            grossLoss;
+   double            totalR;
+   double            maxDD;
+   double            maxDDPercent;
+  };
+
+TradeRecord g_journal[];
+double      g_startBalance = 0.0;
+datetime    g_openTime     = 0;
+double      g_riskMoney    = 0.0;
+
+// Money at risk between entry and stop for the given volume.
+double RiskMoney(const double distance, const double volume)
+  {
+   double tickValue = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_VALUE);
+   double tickSize  = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_SIZE);
+   if(distance <= 0.0 || tickValue <= 0.0 || tickSize <= 0.0 || volume <= 0.0)
+      return 0.0;
+   return (distance / tickSize) * tickValue * volume;
+  }
+
+double PositionNetProfit(const ulong positionId)
+  {
+   if(positionId == 0 || !HistorySelectByPosition(positionId))
+      return 0.0;
+
+   double sum = 0.0;
+   for(int i = HistoryDealsTotal() - 1; i >= 0; i--)
+     {
+      ulong deal = HistoryDealGetTicket(i);
+      if(deal == 0)
+         continue;
+      sum += HistoryDealGetDouble(deal, DEAL_PROFIT)
+             + HistoryDealGetDouble(deal, DEAL_SWAP)
+             + HistoryDealGetDouble(deal, DEAL_COMMISSION);
+     }
+   return sum;
+  }
+
+void RecordTrade(const string outcome)
+  {
+   int n = ArraySize(g_journal);
+   ArrayResize(g_journal, n + 1);
+
+   g_journal[n].openTime  = g_openTime;
+   g_journal[n].closeTime = TimeCurrent();
+   g_journal[n].dir       = g_activeDir;
+   g_journal[n].volume    = g_origVolume;
+   g_journal[n].entry     = g_entry;
+   g_journal[n].stop      = g_sl;
+   g_journal[n].target1   = g_tp1;
+   g_journal[n].target2   = g_tp2;
+   g_journal[n].riskMoney = g_riskMoney;
+   g_journal[n].netProfit = PositionNetProfit(g_posId);
+   g_journal[n].rMultiple = (g_riskMoney > 0.0) ? g_journal[n].netProfit / g_riskMoney : 0.0;
+   g_journal[n].tp1Hit    = g_tp1Hit;
+   g_journal[n].outcome   = outcome;
+  }
+
+int MonthKey(const datetime t)
+  {
+   MqlDateTime dt;
+   TimeToStruct(t, dt);
+   return dt.year * 12 + (dt.mon - 1);
+  }
+
+string MonthLabel(const int key)
+  {
+   return StringFormat("%04d-%02d", key / 12, (key % 12) + 1);
+  }
+
+// Statistics over journal entries [from, to), balance curve seeded at startBalance.
+void ComputeStats(const int from, const int to, const double startBalance,
+                  const string label, PeriodStats &st)
+  {
+   st.label        = label;
+   st.trades       = 0;
+   st.wins         = 0;
+   st.losses       = 0;
+   st.countTP      = 0;
+   st.countBE      = 0;
+   st.countSL      = 0;
+   st.net          = 0.0;
+   st.grossProfit  = 0.0;
+   st.grossLoss    = 0.0;
+   st.totalR       = 0.0;
+   st.maxDD        = 0.0;
+   st.maxDDPercent = 0.0;
+   st.start        = 0;
+   st.end          = 0;
+
+   double balance = startBalance;
+   double peak    = startBalance;
+
+   for(int i = from; i < to; i++)
+     {
+      double profit = g_journal[i].netProfit;
+
+      if(st.trades == 0)
+         st.start = g_journal[i].openTime;
+      st.end = g_journal[i].closeTime;
+
+      st.trades++;
+      st.net    += profit;
+      st.totalR += g_journal[i].rMultiple;
+
+      if(profit > 0.0)
+        {
+         st.wins++;
+         st.grossProfit += profit;
+        }
+      else if(profit < 0.0)
+        {
+         st.losses++;
+         st.grossLoss += -profit;
+        }
+
+      if(g_journal[i].outcome == "TP")
+         st.countTP++;
+      else if(g_journal[i].outcome == "BE")
+         st.countBE++;
+      else
+         st.countSL++;
+
+      balance += profit;
+      if(balance > peak)
+         peak = balance;
+
+      double drawdown = peak - balance;
+      if(drawdown > st.maxDD)
+        {
+         st.maxDD        = drawdown;
+         st.maxDDPercent = (peak > 0.0) ? drawdown / peak * 100.0 : 0.0;
+        }
+     }
+  }
+
+string ProfitFactorText(const PeriodStats &st)
+  {
+   if(st.grossLoss > 0.0)
+      return DoubleToString(st.grossProfit / st.grossLoss, 2);
+   return (st.grossProfit > 0.0) ? "inf" : "0.00";
+  }
+
+string StatsRow(const PeriodStats &st, const string sep)
+  {
+   string winRate = (st.trades > 0) ? DoubleToString(100.0 * st.wins / st.trades, 1) : "0.0";
+   string expect  = (st.trades > 0) ? DoubleToString(st.net / st.trades, 2) : "0.00";
+   string avgR    = (st.trades > 0) ? DoubleToString(st.totalR / st.trades, 2) : "0.00";
+
+   string startText = (st.trades > 0) ? TimeToString(st.start, TIME_DATE) : "";
+   string endText   = (st.trades > 0) ? TimeToString(st.end, TIME_DATE) : "";
+
+   return st.label + sep +
+          startText + sep +
+          endText + sep +
+          IntegerToString(st.trades) + sep +
+          IntegerToString(st.wins) + sep +
+          IntegerToString(st.losses) + sep +
+          winRate + sep +
+          IntegerToString(st.countTP) + sep +
+          IntegerToString(st.countBE) + sep +
+          IntegerToString(st.countSL) + sep +
+          DoubleToString(st.net, 2) + sep +
+          DoubleToString(st.grossProfit, 2) + sep +
+          DoubleToString(st.grossLoss, 2) + sep +
+          ProfitFactorText(st) + sep +
+          expect + sep +
+          DoubleToString(st.totalR, 2) + sep +
+          avgR + sep +
+          DoubleToString(st.maxDD, 2) + sep +
+          DoubleToString(st.maxDDPercent, 2);
+  }
+
+bool WriteLines(const string fileName, string &lines[])
+  {
+   int flags  = FILE_WRITE | FILE_TXT | FILE_ANSI | (InpCommonFolder ? FILE_COMMON : 0);
+   int handle = FileOpen(fileName, flags);
+   if(handle == INVALID_HANDLE)
+     {
+      PrintFormat("Could not write %s. Error %d.", fileName, GetLastError());
+      return false;
+     }
+   for(int i = 0; i < ArraySize(lines); i++)
+      FileWriteString(handle, lines[i] + "\r\n");
+   FileClose(handle);
+   PrintFormat("Report written: %s", fileName);
+   return true;
+  }
+
+void WriteReports()
+  {
+   int total = ArraySize(g_journal);
+   if(total == 0)
+     {
+      Print("No closed trades, so no report was written.");
+      return;
+     }
+
+   string sep = (InpCsvSeparator == "") ? "," : InpCsvSeparator;
+
+   string stamp = _Symbol + "_" + EnumToString((ENUM_TIMEFRAMES)Period()) + "_" +
+                  TimeToString(g_journal[0].openTime, TIME_DATE) + "_" +
+                  TimeToString(g_journal[total - 1].closeTime, TIME_DATE);
+   StringReplace(stamp, ".", "");
+   StringReplace(stamp, " ", "_");
+   StringReplace(stamp, ":", "");
+
+   //--- trade by trade ------------------------------------------------
+   string tradeLines[];
+   ArrayResize(tradeLines, total + 1);
+   tradeLines[0] = "No" + sep + "Direction" + sep + "OpenTime" + sep + "CloseTime" + sep +
+                   "Lots" + sep + "Entry" + sep + "Stop" + sep + "TP1" + sep + "TP2" + sep +
+                   "TP1Hit" + sep + "Outcome" + sep + "RiskMoney" + sep + "NetProfit" + sep +
+                   "R" + sep + "BalanceAfter";
+
+   double running = g_startBalance;
+   for(int i = 0; i < total; i++)
+     {
+      running += g_journal[i].netProfit;
+      tradeLines[i + 1] =
+         IntegerToString(i + 1) + sep +
+         (g_journal[i].dir > 0 ? "Long" : "Short") + sep +
+         TimeToString(g_journal[i].openTime, TIME_DATE | TIME_MINUTES) + sep +
+         TimeToString(g_journal[i].closeTime, TIME_DATE | TIME_MINUTES) + sep +
+         DoubleToString(g_journal[i].volume, 2) + sep +
+         DoubleToString(g_journal[i].entry, g_digits) + sep +
+         DoubleToString(g_journal[i].stop, g_digits) + sep +
+         DoubleToString(g_journal[i].target1, g_digits) + sep +
+         DoubleToString(g_journal[i].target2, g_digits) + sep +
+         (g_journal[i].tp1Hit ? "yes" : "no") + sep +
+         g_journal[i].outcome + sep +
+         DoubleToString(g_journal[i].riskMoney, 2) + sep +
+         DoubleToString(g_journal[i].netProfit, 2) + sep +
+         DoubleToString(g_journal[i].rMultiple, 2) + sep +
+         DoubleToString(running, 2);
+     }
+   WriteLines("SweepEmaVwap_" + stamp + "_trades.csv", tradeLines);
+
+   //--- calendar months spanned, including any with no trades ---------
+   int firstKey = MonthKey(g_journal[0].closeTime);
+   int lastKey  = MonthKey(g_journal[total - 1].closeTime);
+   int months   = lastKey - firstKey + 1;
+
+   int monthKeys[];
+   int monthFirst[];                                // first journal index of the month
+   int monthEnd[];                                  // exclusive journal index ending the month
+   ArrayResize(monthKeys, months);
+   ArrayResize(monthFirst, months);
+   ArrayResize(monthEnd, months);
+
+   int cursor = 0;
+   for(int m = 0; m < months; m++)
+     {
+      monthKeys[m]  = firstKey + m;
+      monthFirst[m] = cursor;
+      while(cursor < total && MonthKey(g_journal[cursor].closeTime) == monthKeys[m])
+         cursor++;
+      monthEnd[m] = cursor;
+     }
+
+   string header = "Period" + sep + "Start" + sep + "End" + sep + "Trades" + sep + "Wins" + sep +
+                   "Losses" + sep + "WinRatePct" + sep + "TP2" + sep + "BE" + sep + "SL" + sep +
+                   "Net" + sep + "GrossProfit" + sep + "GrossLoss" + sep + "ProfitFactor" + sep +
+                   "Expectancy" + sep + "TotalR" + sep + "AvgR" + sep + "MaxDD" + sep + "MaxDDPct";
+
+   PeriodStats st;
+
+   //--- one row per calendar month ------------------------------------
+   string monthlyLines[];
+   ArrayResize(monthlyLines, months + 1);
+   monthlyLines[0] = header;
+
+   double monthStartBalance = g_startBalance;
+   for(int m = 0; m < months; m++)
+     {
+      ComputeStats(monthFirst[m], monthEnd[m], monthStartBalance, MonthLabel(monthKeys[m]), st);
+      monthlyLines[m + 1] = StatsRow(st, sep);
+      monthStartBalance  += st.net;
+     }
+   WriteLines("SweepEmaVwap_" + stamp + "_monthly.csv", monthlyLines);
+
+   //--- first month, first two months, first three, and so on ---------
+   string cumulativeLines[];
+   ArrayResize(cumulativeLines, months + 1);
+   cumulativeLines[0] = header;
+   for(int m = 0; m < months; m++)
+     {
+      ComputeStats(0, monthEnd[m], g_startBalance,
+                   StringFormat("First %d month%s", m + 1, (m == 0 ? "" : "s")), st);
+      cumulativeLines[m + 1] = StatsRow(st, sep);
+     }
+   WriteLines("SweepEmaVwap_" + stamp + "_cumulative.csv", cumulativeLines);
+
+   //--- journal tables ------------------------------------------------
+   if(!InpLogPeriodTable)
+      return;
+
+   Print("=== Results by month ===");
+   Print("Month       Trades   Win%        Net   ProfFactor   TotalR     MaxDD");
+   monthStartBalance = g_startBalance;
+   for(int m = 0; m < months; m++)
+     {
+      ComputeStats(monthFirst[m], monthEnd[m], monthStartBalance, MonthLabel(monthKeys[m]), st);
+      PrintFormat("%-10s %6d  %5.1f  %9.2f  %11s  %7.2f  %8.2f",
+                  st.label, st.trades,
+                  (st.trades > 0 ? 100.0 * st.wins / st.trades : 0.0),
+                  st.net, ProfitFactorText(st), st.totalR, st.maxDD);
+      monthStartBalance += st.net;
+     }
+
+   Print("=== Cumulative from the start ===");
+   Print("Period            Trades   Win%        Net   ProfFactor   TotalR     MaxDD");
+   for(int m = 0; m < months; m++)
+     {
+      ComputeStats(0, monthEnd[m], g_startBalance,
+                   StringFormat("First %d month%s", m + 1, (m == 0 ? "" : "s")), st);
+      PrintFormat("%-17s %6d  %5.1f  %9.2f  %11s  %7.2f  %8.2f",
+                  st.label, st.trades,
+                  (st.trades > 0 ? 100.0 * st.wins / st.trades : 0.0),
+                  st.net, ProfitFactorText(st), st.totalR, st.maxDD);
+     }
+  }
+
+//+------------------------------------------------------------------+
 //| Chart objects                                                    |
 //+------------------------------------------------------------------+
 void MakeRectangle(const string name, const datetime t1, const datetime t2,
@@ -731,6 +1097,8 @@ bool OpenTrade(const int dir, const double entry, const double sl,
    g_tp2         = tp2;
    g_tp1Hit      = false;
    g_beDone      = false;
+   g_openTime    = (datetime)PositionGetInteger(POSITION_TIME);
+   g_riskMoney   = RiskMoney(MathAbs(entry - sl), g_origVolume);
 
    CreateTradeVisuals(dir);
 
@@ -868,6 +1236,8 @@ void HandleTradeClosed()
    Notify(StringFormat("%s position closed at %s (%s).",
                        (g_activeDir > 0 ? "Long" : "Short"),
                        DoubleToString(price, g_digits), outcome));
+
+   RecordTrade(outcome);
 
    g_tradeActive   = false;
    g_activeDir     = 0;
@@ -1197,6 +1567,7 @@ int OnInit()
 
    g_lastSignalBar = iTime(_Symbol, g_sigTF, 1);
    g_lastChartBar  = iTime(_Symbol, _Period, 0);
+   g_startBalance  = AccountInfoDouble(ACCOUNT_BALANCE);
 
    RestoreState();
 
@@ -1214,6 +1585,9 @@ int OnInit()
 //+------------------------------------------------------------------+
 void OnDeinit(const int reason)
   {
+   if(InpWriteReports && !MQLInfoInteger(MQL_OPTIMIZATION))
+      WriteReports();
+
    if(g_hEma1 != INVALID_HANDLE) IndicatorRelease(g_hEma1);
    if(g_hEma2 != INVALID_HANDLE) IndicatorRelease(g_hEma2);
    if(g_hEma3 != INVALID_HANDLE) IndicatorRelease(g_hEma3);

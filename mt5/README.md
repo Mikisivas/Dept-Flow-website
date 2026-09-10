@@ -126,3 +126,36 @@ chart and keep the bar-lag option on.
 To compare results against TradingView, keep the one-bar entry lag enabled, set
 commission to zero, and remember that spread handling differs: Pine fills both sides at
 the same price, MT5 buys at the ask and sells at the bid.
+
+## Reports
+
+At the end of every run, and when the EA is removed from a chart, three CSV files are
+written to the shared files folder, which on Windows is
+`C:\Users\<you>\AppData\Roaming\MetaQuotes\Terminal\Common\Files`. Each name carries
+the symbol, timeframe and tested date span.
+
+| File | Contents |
+| --- | --- |
+| `..._monthly.csv` | One row per calendar month |
+| `..._cumulative.csv` | First month, first two months, first three, and so on |
+| `..._trades.csv` | One row per closed trade |
+
+Both summary files carry the same columns: trades, wins, losses, win rate, the split
+between TP2, break-even and stop exits, net profit, gross profit and loss, profit factor,
+expectancy per trade, total and average R, and maximum drawdown in currency and percent.
+
+Wins and losses are counted by money, so a trade stopped at break-even after a TP1
+partial counts as a win while still appearing in the break-even column. R is realised
+profit divided by the money at risk between entry and the original stop, so it accounts
+for the partial close.
+
+Months inside the tested span with no trades still get a row, which keeps "first N
+months" meaning N calendar months rather than N months that happened to trade.
+
+The same two tables print to the Journal tab at the end of a run, so a quick look needs
+no files at all. Reports are skipped during optimisation passes. Set `Write Trade And
+Period Reports` to false to turn the files off, and switch the CSV separator to `;` if
+your Excel locale expects it.
+
+For the standard MetaTrader metrics, right-click inside the tester's Backtest tab and
+choose Report. That is independent of these files.

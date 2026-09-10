@@ -74,6 +74,17 @@ so all four windows are read as New York local time unless you override them.
 Each window can carry its own zone through the Asian, London, New York and Custom
 timezone inputs. `Use default session timezone` keeps it on New York.
 
+The shipped defaults are the three main sessions written on a New York clock:
+
+| Window | Default | Equivalent |
+| --- | --- | --- |
+| Asian | `1900-0300` | Tokyo 08:00-16:00 |
+| London | `0300-1100` | London 08:00-16:00 |
+| New York | `0800-1600` | New York cash hours |
+| Custom | 08:00-12:00 | New York morning |
+
+The Asian window crosses midnight, which the filter handles as a wrap-around.
+
 Conversion is calendar-based rather than a fixed offset:
 
 - **New York** switches on the second Sunday of March at 02:00 local and back on the
@@ -82,10 +93,22 @@ Conversion is calendar-based rather than a fixed offset:
   both at 01:00 UTC.
 
 Those dates do not coincide, so for roughly two weeks in March and one week in
-October/November, London sits four or six hours ahead of New York instead of five. A
-London window expressed in New York clock time therefore lands an hour early or late
-during those weeks. If that matters, set the London window's timezone to Europe/London
-and write its hours in London time.
+October/November, London sits four or six hours ahead of New York instead of five. Tokyo
+keeps no daylight time at all, so it moves against New York for the whole US winter.
+
+Measured against each session's home-zone hours across 2026, the New York clock defaults
+drift by:
+
+| Window | Drift per year |
+| --- | --- |
+| New York | 0 hours |
+| London | 56 hours |
+| Asian | 254 hours |
+
+The London figure is only the DST-mismatch weeks. The Asian figure is the whole US
+winter, when `1900-0300` New York time is Tokyo 09:00-17:00 rather than 08:00-16:00. To
+remove either drift, set that window's timezone input to its home zone and write the
+hours locally: Asian as Asia/Tokyo `0800-1600`, London as Europe/London `0800-1600`.
 
 ## Backtesting
 

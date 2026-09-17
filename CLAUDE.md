@@ -43,8 +43,10 @@ only the surname is matched against the register.
 
 ## Hard rules
 
-- Compliance states are only: provisional, confirmed, pending verification,
-  locked, cleared. **Never invent one.**
+- Two separate enumerations, and merging them produces a state machine that
+  does not exist. Compliance states are only: uncleared, cleared, pending
+  verification, locked. Score statuses are only: provisional, confirmed.
+  **Never invent a value in either.**
 - Orange surfaces carry **black** text. White on `#FF9935` is 2.13:1 — never.
   Orange as text on white darkens to `#A85E0A`.
 - Orange is the brand, never a status. Provisional has no colour — dashed
@@ -185,7 +187,14 @@ default that is right for new rows can be wrong for old ones. See
 
 ## Stack
 
-Next.js / React (TypeScript) · Tailwind · shadcn/ui on Radix · FastAPI ·
-Supabase (Postgres) · Redis · Paystack · scikit-learn.
+Next.js 16 / React 19 (TypeScript) · Tailwind 4 · shadcn/ui on Radix ·
+Supabase (Postgres) with row-level security · self-signed JWT, not Supabase
+Auth · Paystack · web-push · PWA.
+
+**There is no separate backend service.** Server code runs inside Next.js —
+server components read, route handlers write — and the business logic lives in
+Postgres, in 84 functions. FastAPI, Redis and scikit-learn were in the original
+plan and none of them is in the build; the forecast is a Postgres function.
+Don't reintroduce them from an older document.
 
 Build order: **schema first**, then screens.

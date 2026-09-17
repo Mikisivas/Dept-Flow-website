@@ -1,6 +1,6 @@
 # Dept-Flow — System Reference for Thesis Writing
 
-**Status of this document.** Written directly from the codebase at commit `4bec095` on
+**Status of this document.** Written directly from the codebase at commit `3a08f5f` on
 branch `claude/supervisor-adjustments-c8e5ac`. Every algorithm, threshold and design
 decision below was read out of the migrations and source files rather than recalled.
 Where the project's own older documents contradict this, the code is authoritative and
@@ -326,16 +326,21 @@ is not knowable and is never claimed.
 
 ### 7.1 Two state enumerations, often confused
 
-The project's own `CLAUDE.md` states the compliance states as "provisional, confirmed,
-pending verification, locked, cleared". **That conflates two separate enumerations.** The
-schema has:
+There are **two** enumerations here, and merging them produces a state machine with no
+counterpart in the schema:
 
 ```sql
 create type compliance_state as enum ('uncleared', 'cleared', 'pending_verification', 'locked');
 create type score_status     as enum ('provisional', 'confirmed');
 ```
 
-Write the state machine in Chapter Three from the schema, not from that line.
+`compliance_state` is fee status for a student in a session. `score_status` is a property
+of one attendance row, derived from the compliance state at the time of that lecture (see
+§6.1), and since the decoupling it is a record only.
+
+They are easy to conflate, and `CLAUDE.md` did conflate them, listing five values as one
+enumeration; that was corrected in commit `3a08f5f`. Draw the state diagram in Chapter
+Three from the schema above.
 
 ---
 
@@ -435,8 +440,11 @@ courses across years.
 | Push | web-push with VAPID |
 | Other | qrcode for the permit QR; progressive web app manifest and service worker |
 
-**Not present, despite older documents:** FastAPI, Python, Redis, scikit-learn. The
-forecast is a PostgreSQL function.
+**Not present:** FastAPI, Python, Redis, scikit-learn. They were in the original plan,
+none of them reached the build, and the forecast is a PostgreSQL function. `CLAUDE.md`
+listed them in its stack line until commit `3a08f5f`; `decisions.md` and the design
+mockups still predate the revision generally, so treat any stack claim in them as
+superseded by this section.
 
 ---
 

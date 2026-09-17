@@ -20,6 +20,7 @@ Where anything below still describes the old system, the new one wins:
 | `docs/operational-flow.md` | **The current specification.** The supervisor's August 2026 revision. Where it disagrees with anything else — including `decisions.md` and every design mockup — it wins. |
 | `docs/decisions.md` | The decisions agreed before any code was written. Still the reference for everything the revision did not touch; superseded on GPS, on dues gating attendance, and on the checkpoint pair. |
 | `docs/system-operation-and-logic.md` | Functional reference: roles, entities, the compliance state machine, attendance logic, payment and registration flows. |
+| `docs/system-reference.md` | What the system actually does and **why**, read out of the code rather than recalled: the revision's three reversals, the forecast's real formula, the design decisions with their rationale, and what is verified versus assumed. Written for the thesis; useful to anyone asking why something is the way it is. |
 | `docs/ui-build-specification.md` | Screen-by-screen build spec: every route, its role, contents and required states. |
 | `docs/dept-flow-design-skill.md` | Design system: palette, typography, the checkpoint motif, per-role patterns, pre-ship checklist. |
 | `design/*.dc.html` | The design mockups — six groups, drawn before the revision and **superseded** by it. Each carries a banner saying what changed. Open in a browser; the running app is the current reference. |

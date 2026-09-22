@@ -2936,6 +2936,22 @@ end $$;
 -- reluctance — it is a student who lost track of the day.
 -- ---------------------------------------------------------------------------
 
+-- The clock pinned to 10:00 today, Lagos time, for this block only. The
+-- fixtures below are "a lecture starting in forty minutes" and "one that
+-- started five minutes ago", written as times of day, and a time of day wraps.
+-- Run after about 21:15 and the forty-minute lecture ends past midnight, which
+-- the timetable refuses; run just after midnight and "five minutes ago" is
+-- tonight. Today's date is kept so day_of_week still means today. The suite
+-- is one transaction and rolls back, and the real clock is restored below
+-- anyway, so nothing after this block runs on a pinned clock.
+create or replace function lagos_now()
+returns timestamp
+language sql
+stable
+as $$
+  select (now() at time zone 'Africa/Lagos')::date + time '10:00';
+$$;
+
 do $$
 declare
   -- The ACTIVE session, read rather than assumed. The rollover block earlier in
@@ -2951,7 +2967,7 @@ declare
   v_dropped uuid := gen_random_uuid();
   v_sent    integer;
   v_again   integer;
-  v_local   timestamp := (now() at time zone 'Africa/Lagos');
+  v_local   timestamp := lagos_now();
 begin
   insert into courses (id, academic_session_id, code, title, level, kind, credit_units, semester, lecturer_id)
   values (v_course, v_session, 'MTH 393', 'Reminder Fixture', 300, 'core', 3, 1,
@@ -3077,6 +3093,15 @@ begin
     'a lecture that started five minutes ago is not upcoming — telling a student they are late is not something they can fix'
   );
 end $$;
+
+-- The real clock back, exactly as the migration defines it.
+create or replace function lagos_now()
+returns timestamp
+language sql
+stable
+as $$
+  select (now() at time zone 'Africa/Lagos');
+$$;
 
 -- The reports, and the one thing that makes a report more than a number.
 do $$

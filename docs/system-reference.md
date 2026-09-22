@@ -418,10 +418,6 @@ belongs in future work.
 - **Deployment.**
 - **Web Push is wired end to end** and needs only VAPID keys.
 
-**Known open issue.** `loadStandings` reads enrolments with no academic-session filter.
-Correct with one session; after the first level rollover it will merge each student's
-courses across years.
-
 ---
 
 ## 12. Technology stack

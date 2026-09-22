@@ -95,13 +95,32 @@ function one<T>(value: T | T[] | null | undefined): T | null {
  * the hint says so.
  */
 export async function loadStandings(db: Db, courseId?: string): Promise<StudentStanding[]> {
+  // Everything below is this session's. Courses are rows per session, so an
+  // unscoped read of enrolments, after the first level rollover, sums last
+  // year's CMP 201 into this year's overall percentage — and the eligibility
+  // screen reads that number.
+  const { data: session } = ok(await db
+    .from("academic_sessions")
+    .select("id")
+    .eq("is_active", true)
+    .maybeSingle(), "session");
+  // No active session means no current courses, not a failed read. Filtering
+  // on "" instead would hand Postgres an invalid uuid and throw the screen.
+  const sessionId = session?.id ?? null;
+  const none = { data: [], error: null };
+
   const [{ data: students }, { data: enrolments }, { data: instances }, { data: scores }] =
     allOk(await Promise.all([
       db.from("students").select("id, matric_no, level, profiles!students_id_fkey(surname, first_name, other_names)"),
-      db
-        .from("enrolments")
-        .select("student_id, course_id, enrolled_on, courses(id, code)")
-        .is("dropped_at", null),
+      // `!inner` so the filter on the embed drops the enrolment, not just
+      // the embedded course.
+      sessionId
+        ? db
+          .from("enrolments")
+          .select("student_id, course_id, enrolled_on, courses!inner(id, code)")
+          .eq("courses.academic_session_id", sessionId)
+          .is("dropped_at", null)
+        : none,
       db
         .from("session_instances")
         .select("id, course_id, held_on")
@@ -110,9 +129,14 @@ export async function loadStandings(db: Db, courseId?: string): Promise<StudentS
       db.from("session_scores").select("student_id, session_instance_id, score"),
     ]), "students, enrolments, instances, scores");
 
-  const { data: compliance } = ok(await db
-    .from("compliance_statuses")
-    .select("student_id, state"), "compliance");
+  // One row per student per session. Unfiltered, the map below keeps
+  // whichever arrived last, which may be last year's "cleared".
+  const { data: compliance } = ok(sessionId
+    ? await db
+      .from("compliance_statuses")
+      .select("student_id, state")
+      .eq("academic_session_id", sessionId)
+    : none, "compliance");
 
   const stateByStudent = new Map((compliance ?? []).map((row) => [row.student_id, row.state]));
 

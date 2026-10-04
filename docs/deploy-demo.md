@@ -195,14 +195,55 @@ from a laptop:
 
 - **Registration.** `STA/2022/091`, surname **Bassey**, level **300** is the
   one seeded student without an account. The code appears in a dashed
-  "Demonstration deployment" box under the code field. To register more people
-  live, log in as admin and add rows to the register first.
+  "Demonstration deployment" box under the code field. For more, see
+  "Adding students for the demo" below.
 - **A test payment.** Card `4084 0840 8408 4081`, any future expiry, CVV `408`,
   PIN `0000`, OTP `123456`.
 - **The permit's QR code.** Scan it with a second phone; it should open
   `/check/permit` on your address, not `localhost`.
 
 Logins for every role are in `docs/demo.md`; all use `demo-password`.
+
+## Adding students for the demo
+
+The admin does not create student accounts — nobody does but the student.
+The admin puts students on the **register**, the department's list of who may
+sign up, and each student then creates their own account on their phone. That
+is the flow worth showing: it is how a real cohort would join.
+
+1. Log in as the admin (`STF/ADM/007`, `demo-password`) → **Register** →
+   **Upload register**.
+2. Paste one row per student, `matric_no, surname, level`:
+
+   ```
+   CMP/2022/101, Agbo, 300
+   CMP/2022/102, Terver, 300
+   MTH/2022/103, Ochoche, 300
+   ```
+
+   - Matric numbers must start `CMP/`, `MTH/` or `STA/` — the database refuses
+     anything else, including `CSC/`.
+   - Use level **300**. Registration enrols each student in their level's core
+     courses, and the seed's 300-level core course is CMP 301, which has a
+     term of lectures and today's slot. A level with no seeded core course
+     gives an account with nothing on its dashboard.
+3. **Preview changes**, check the counts, then **Save N rows**. Nothing is
+   written before the save.
+4. On each student's phone: **Create account** → matric number, surname,
+   level → full name and a phone number → the code appears on screen → choose
+   a password.
+
+Two rules that catch people at a rehearsal:
+
+- **One phone number, one account.** Two students cannot register with the
+  same number, so each person needs their own. Seeded students already use
+  `+2348050000001` to `…003` and `+2348051111111`.
+- **Five codes per number per hour.** Practise with one number and it can run
+  out; the next hour it is back.
+
+New students start with no attendance, so their forecast appears only after
+five lectures. For the forecast itself, show the seeded students — Chidera's is
+the one the walkthrough in `docs/demo.md` is built around.
 
 ## What to say if the panel asks
 

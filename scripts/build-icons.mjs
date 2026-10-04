@@ -1,40 +1,43 @@
 /**
- * Rasterises the site mark into the PNGs a home-screen icon needs.
+ * Rasterises the university logo into the PNGs a home-screen icon needs, and
+ * the favicon.
  *
- * The SIMPLIFIED mark, never the crest. The crest's ribbon outlines are
- * hairlines and its banner text turns to mud below about 200px, which is most
- * of the sizes an installed icon is drawn at.
+ * The logo is the university's own mark and it is used whole: it is not ours
+ * to simplify, crop or redraw. Below about 48px its ring text cannot be read,
+ * but the red ring, the black field and the blue T still are, and that is what
+ * a student recognises in a row of tabs.
  *
- * Run with `npm run build:icons`. Committed output, not a build step: the mark
- * changes about once a year, and a build that shells out to sharp is a build
+ * Run with `npm run build:icons`. Committed output, not a build step: the logo
+ * changes about once a decade, and a build that shells out to sharp is a build
  * that breaks on a machine where sharp did not compile.
  */
 import { mkdirSync, writeFileSync } from "node:fs";
 import sharp from "sharp";
 
-const BRAND = "#ff9935";
-const ON_BRAND = "#0a0a0a";
+const LOGO = "public/university-logo.png";
 
 /**
  * `padding` is the maskable safe zone. Android crops an adaptive icon to
  * whatever shape the launcher uses — a circle, a squircle, a rounded square —
- * and anything outside the middle 80% can be cut. The shield drawn edge to
- * edge would lose its point.
+ * and anything outside the middle 80% can be cut. The ring drawn edge to edge
+ * would lose its text.
  */
-function markSvg({ size, padding = 0, background = null }) {
+async function icon({ size, padding = 0, background = null }) {
   const inner = size - padding * 2;
-  const scale = inner / 24;
-
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
-  ${background ? `<rect width="${size}" height="${size}" fill="${background}"/>` : ""}
-  <g transform="translate(${padding} ${padding}) scale(${scale})">
-    <path d="M12 2 4 4.6v7.1c0 4.9 3.3 8.6 8 10.3 4.7-1.7 8-5.4 8-10.3V4.6z"
-          fill="${BRAND}" stroke="${ON_BRAND}" stroke-width="1.5"
-          stroke-linejoin="round"/>
-    <rect x="8" y="9" width="8" height="5.4" fill="${ON_BRAND}"/>
-    <rect x="10.4" y="15" width="3.2" height="1.5" fill="${ON_BRAND}"/>
-  </g>
-</svg>`;
+  const logo = await sharp(LOGO).resize(inner, inner, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } }).toBuffer();
+  return sharp({
+    create: {
+      width: size,
+      height: size,
+      channels: 4,
+      background: background ?? { r: 0, g: 0, b: 0, alpha: 0 },
+    },
+  })
+    .composite([{ input: logo, top: padding, left: padding }])
+    // Palette PNG: a quarter of the size, no visible change on a flat-colour
+    // mark, and the icon is fetched over the same patchy data as everything else.
+    .png({ palette: true, quality: 95, effort: 10, compressionLevel: 9 })
+    .toBuffer();
 }
 
 const icons = [
@@ -51,9 +54,42 @@ const icons = [
 
 mkdirSync("public", { recursive: true });
 
-for (const icon of icons) {
-  const svg = markSvg(icon);
-  const png = await sharp(Buffer.from(svg)).png({ compressionLevel: 9 }).toBuffer();
-  writeFileSync(icon.file, png);
-  console.log(`${icon.file} — ${icon.size}px, ${(png.length / 1024).toFixed(1)}kB`);
+for (const spec of icons) {
+  const png = await icon(spec);
+  writeFileSync(spec.file, png);
+  console.log(`${spec.file} — ${spec.size}px, ${(png.length / 1024).toFixed(1)}kB`);
 }
+
+/**
+ * favicon.ico, which Next serves from src/app/ on its own. Without this the
+ * tab shows whatever create-next-app left there.
+ *
+ * Each entry is a PNG rather than a bitmap — every browser this product
+ * supports reads PNG-in-ICO, and it keeps the alpha channel intact.
+ */
+const sizes = [16, 32, 48];
+const images = await Promise.all(sizes.map((size) => icon({ size })));
+
+const header = Buffer.alloc(6);
+header.writeUInt16LE(0, 0); // reserved
+header.writeUInt16LE(1, 2); // type: icon
+header.writeUInt16LE(sizes.length, 4);
+
+let offset = 6 + 16 * sizes.length;
+const entries = sizes.map((size, index) => {
+  const entry = Buffer.alloc(16);
+  entry.writeUInt8(size, 0); // width
+  entry.writeUInt8(size, 1); // height
+  entry.writeUInt8(0, 2); // no palette
+  entry.writeUInt8(0, 3); // reserved
+  entry.writeUInt16LE(1, 4); // colour planes
+  entry.writeUInt16LE(32, 6); // bits per pixel
+  entry.writeUInt32LE(images[index].length, 8);
+  entry.writeUInt32LE(offset, 12);
+  offset += images[index].length;
+  return entry;
+});
+
+const ico = Buffer.concat([header, ...entries, ...images]);
+writeFileSync("src/app/favicon.ico", ico);
+console.log(`src/app/favicon.ico — ${sizes.join("/")}px, ${(ico.length / 1024).toFixed(1)}kB`);

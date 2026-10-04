@@ -1,4 +1,4 @@
-# Dept-Flow — System Reference for Thesis Writing
+# Examination-Eligibility Alert System — System Reference for Thesis Writing
 
 **Status of this document.** Written directly from the codebase at commit `3a08f5f` on
 branch `claude/supervisor-adjustments-c8e5ac`. Every algorithm, threshold and design
@@ -10,20 +10,31 @@ the contradiction is flagged.
 how each mechanism works, and — most usefully for Chapters One, Three and Five — *why*
 each design decision was taken, since those rationales are what a committee will probe.
 
+**Name.** The thesis is titled *Development of an Examination-Eligibility Alert System
+for Rev. Fr. Moses Orshio Adasu University, Makurdi*, scoped to the Department of
+Mathematics and Computer Science, Faculty of Science. The system was developed under the
+working name "Dept-Flow", which survives only in the repository and in internal
+identifiers. In the thesis it is the Examination-Eligibility Alert System (EEAS). It is
+not, and never was, an agent.
+
 ---
 
 ## 1. Identity and purpose
 
-Dept-Flow is a web-based attendance and examination-eligibility system for a single
-university department. Its governing purpose is stated in one line in the project's own
+The EEAS is a web-based attendance and examination-eligibility system for a single
+department of Rev. Fr. Moses Orshio Adasu University, Makurdi. The landing page lists
+every faculty of the university and the departments under each, and marks the one
+department the system serves; the others are listed, and say they are not yet on the
+system. That list is a directory, not a multi-department deployment: everything
+operational belongs to the one department. Its governing purpose is stated in one line in the project's own
 instructions:
 
-> Dept-Flow warns students before they fall below the 75% exam-eligibility threshold,
+> The system warns students before they fall below the 75% exam-eligibility threshold,
 > and does it early enough to be worth acting on — a forecast of where a student will
 > finish, per course, not a tally of where they are.
 
 That distinction is the thesis. Almost every attendance system in the literature
-improves the *accuracy of a retrospective record*. Dept-Flow's contribution is the
+improves the *accuracy of a retrospective record*. The EEAS's contribution is the
 *projection*: it computes where each student will end the semester in each course, from
 around week five, while there is still time for the answer to change.
 
@@ -48,7 +59,7 @@ Four roles reach it through a browser at a URL: student, lecturer, Head of Depar
    who attended and begins describing who has paid, and the two cannot afterwards be
    separated.
 
-Dept-Flow's position is the intersection: forecast early, do not surveil, and keep the
+The EEAS's position is the intersection: forecast early, do not surveil, and keep the
 attendance record independent of fee status.
 
 ---
@@ -386,7 +397,7 @@ These are the defensible positions. Each has a reason, not just a preference.
 
 | Check | Scale |
 |---|---|
-| Schema assertions against a local PostgreSQL | 430 |
+| Schema assertions against a local PostgreSQL | 437 |
 | Select-column checks (every column any query asks for exists) | 510 |
 | Application test suites (Paystack, account, timetable, query-result) | 4 suites, 99 assertions |
 
@@ -488,7 +499,10 @@ to receive notifications when not open, without an application store.
 - Computer Science is **CMP** in this department, **not CSC**. Programme prefixes are
   `MTH | CMP | STA`, in matric numbers (`CMP/2021/047`) and course codes (`CMP 301`).
   The database rejects `CSC` in both positions.
-- The department is the **Department of Mathematics and Computer Science**.
+- The department is the **Department of Mathematics and Computer Science**, Faculty of
+  Science, Rev. Fr. Moses Orshio Adasu University, Makurdi.
+- The system is the **Examination-Eligibility Alert System (EEAS)**. "Dept-Flow" was the
+  working name; do not use it in the thesis.
 - Registration identity is **matric number + surname + level**. No date of birth.
 - An *academic session* (`2025/2026`) and a *lecture session* are different things;
   keep the terms distinct in writing.

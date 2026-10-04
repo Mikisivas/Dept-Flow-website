@@ -1,26 +1,32 @@
 @import "tailwindcss";
 
 /* ---------------------------------------------------------------------------
-   Dept-Flow palette — derived from the SAMACOSS crest
+   Palette — derived from the university logo
 
-   Brand orange is #FF9935, eyedropped from the shield fill. Every ratio here is
-   measured against WCAG 2.1, not estimated.
+   The logo carries red, black, blue and green. The brand is its blue,
+   #2CAAE1, sampled from the T. Not the red, though red dominates the logo:
+   this is a system whose most important signal is a red "Critical", and a red
+   primary button on every screen would teach students to stop seeing it. Red
+   stays where the university put it — in the logo — and nowhere else as
+   decoration.
 
-   The one rule that matters most: orange is a fill that carries BLACK text.
-   White on #FF9935 is 2.13:1 and appears nowhere in this product.
+   Every ratio here is measured against WCAG 2.1, not estimated.
+
+   The one rule that matters most: brand blue is a fill that carries BLACK
+   text. White on #2CAAE1 is 2.64:1 and appears nowhere in this product.
 --------------------------------------------------------------------------- */
 
 :root {
-  --brand: #ff9935;         /* fills, motif, primary button. BLACK text: 9.30:1 AAA */
-  --brand-hover: #e58419;   /* black text 7.21:1 */
-  --brand-pressed: #c96e10; /* black text 5.39:1 */
-  --brand-text: #a85e0a;    /* the only orange usable as text on white: 4.92:1 */
-  --brand-tint: #fff4e8;
-  --brand-tint-2: #ffe7ce;
+  --brand: #2caae1;         /* fills, motif, primary button. BLACK text: 7.49:1 AAA */
+  --brand-hover: #1b97cd;   /* black text 5.99:1 */
+  --brand-pressed: #1583b3; /* black text 4.65:1 */
+  --brand-text: #0b6f9c;    /* the only brand blue usable as text on white: 5.57:1 */
+  --brand-tint: #eaf7fc;    /* brand-text on it: 5.10:1 */
+  --brand-tint-2: #d3eef9;
 
-  /* The foreground for anything sitting ON an orange fill.
+  /* The foreground for anything sitting ON a brand fill.
      This is deliberately NOT --ink: --ink flips to near-white in dark mode,
-     and white on #FF9935 is 2.13:1. An orange surface carries black text in
+     and white on #2CAAE1 is 2.64:1. A brand surface carries black text in
      both schemes, so this token never changes. */
   --on-brand: #0a0a0a;
 
@@ -31,11 +37,13 @@
   --surface: #ffffff;
   --surface-sunken: #fafafa;
 
-  /* Status is kept clear of hue 30° so the brand can never read as a warning. */
+  /* Status is kept clear of the brand's hue so the brand can never read as a
+     status. "Pending" was blue until the brand became blue; it is violet now
+     for that reason alone. White on it: 7.10:1. */
   --ok: #15803d;
   --ok-tint: #dcfce7;
-  --info: #1d4ed8;
-  --info-tint: #dbeafe;
+  --info: #6d28d9;
+  --info-tint: #ede9fe;
   --danger: #b91c1c;
   --danger-tint: #fee2e2;
 
@@ -49,10 +57,10 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    /* Brand orange is already 8.52:1 on ink — only the text variant lightens. */
-    --brand-text: #f2a040;
-    --brand-tint: #241a0d;
-    --brand-tint-2: #33240f;
+    /* Brand blue is already 7.49:1 on ink — only the text variant lightens. */
+    --brand-text: #5cc3ec; /* 9.87:1 on surface, 8.94:1 on sunken */
+    --brand-tint: #0c1d24;
+    --brand-tint-2: #11303c;
 
     --ink: #fafafa;
     --slate: #a3a3a3;
@@ -63,8 +71,8 @@
 
     --ok: #4ade80;
     --ok-tint: #14321f;
-    --info: #60a5fa;
-    --info-tint: #16233d;
+    --info: #a78bfa; /* 7.27:1 on ink */
+    --info-tint: #241a3d;
     --danger: #f87171;
     --danger-tint: #3a1717;
 

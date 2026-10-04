@@ -44,6 +44,7 @@ supabase/
     ..._admin_sets_the_dues.sql        the session's dues, with a preview of who it puts in debt
     ..._retire_the_waiver.sql          the waiver removed; it forgave nothing the permit read
     ..._register_do_not_attend.sql     a blocked student is told to register, not to attend
+    ..._university_structure.sql       the faculty/department directory on the landing page
   seed.sql                             development data, relative to current_date
   seed_today.sql                       a class on today's weekday, for testing
   setup.sql                            GENERATED — every migration, in order

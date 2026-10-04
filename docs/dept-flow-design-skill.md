@@ -3,6 +3,11 @@ name: dept-flow-design
 description: The design system and frontend workflow for Dept-Flow. Use when building or reviewing any UI in this project — pages, components, dashboards, forms, status indicators — or when choosing colors, typography, or layout, adding shadcn/ui components, or auditing a screen before shipping. Encodes the technology stack, the SAMACOSS-derived palette (orange/white/black), the attendance-strip visual signature, per-role screen patterns, and the accessibility rules this project must not break. Triggers on "design this page", "build this component", "what color should this be", "review this UI", "add a shadcn component".
 ---
 
+> **Superseded on brand (October 2026).** The SAMACOSS crest and orange palette below are
+> retired. The brand is now the university logo and its blue `#2CAAE1` (black text,
+> 7.49:1); "pending" is violet. `CLAUDE.md` and `src/app/globals.css` are authoritative
+> for colour and mark; everything else here still applies.
+
 # Dept-Flow design system
 
 Product logic and state definitions live in `docs/system-operation-and-logic.md` —

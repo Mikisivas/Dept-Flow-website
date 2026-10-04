@@ -148,7 +148,7 @@ export function ForgotForm() {
           Remembered it?{" "}
           <Link
             href="/login"
-            className="font-medium text-brand-text underline underline-offset-2 hover:text-brand-pressed"
+            className="font-medium text-brand-text underline underline-offset-2 hover:text-ink"
           >
             Log in
           </Link>

@@ -150,7 +150,7 @@ function IdentityStep({ onMatched }: { onMatched: (match: Matched) => void }) {
           Already registered?{" "}
           <Link
             href="/login"
-            className="font-medium text-brand-text underline underline-offset-2 hover:text-brand-pressed"
+            className="font-medium text-brand-text underline underline-offset-2 hover:text-ink"
           >
             Log in
           </Link>
@@ -511,7 +511,7 @@ function ContactStep({
               setCodeError(null);
               setPhase("details");
             }}
-            className="text-[15px] text-brand-text underline underline-offset-2 hover:text-brand-pressed"
+            className="text-[15px] text-brand-text underline underline-offset-2 hover:text-ink"
           >
             Use a different number
           </button>
@@ -661,7 +661,7 @@ function PasswordStep({ matched, contact }: { matched: Matched; contact: Contact
             short period.{" "}
             <Link
               href="/privacy"
-              className="text-brand-text underline underline-offset-2 hover:text-brand-pressed"
+              className="text-brand-text underline underline-offset-2 hover:text-ink"
             >
               Privacy notice
             </Link>

@@ -26,7 +26,8 @@ import {
 } from "lucide-react";
 import type { AppRole } from "@/lib/types";
 import { LogOutButton } from "@/components/log-out-button";
-import { SiteMark } from "@/components/site-mark";
+import { UniversityLogo } from "@/components/university-logo";
+import { INSTITUTION } from "@/lib/institution";
 import { cn } from "@/lib/utils";
 
 /**
@@ -166,8 +167,10 @@ function BottomBarLayout({
     <>
       <header className="sticky top-0 z-40 border-b border-line bg-surface">
         <div className="mx-auto flex h-14 max-w-3xl items-center gap-2 px-4">
-          <SiteMark size={24} />
-          <span className="text-[15px] font-semibold tracking-[-0.01em]">Dept-Flow</span>
+          <UniversityLogo size={28} decorative />
+          <span className="text-[15px] font-semibold tracking-[-0.01em]" title={INSTITUTION.system}>
+            {INSTITUTION.systemShort}
+          </span>
           {/* Every role needs a way out of the session, on every screen. The
               student also has one on /profile; lecturers had nowhere at all,
               which meant a shared staff laptop could not be handed over. */}
@@ -239,8 +242,10 @@ function SidebarLayout({
     <div className="lg:grid lg:grid-cols-[16rem_1fr]">
       <header className="border-b border-line bg-surface lg:sticky lg:top-0 lg:h-dvh lg:border-r lg:border-b-0">
         <div className="flex h-14 items-center gap-2 px-4 lg:h-16">
-          <SiteMark size={24} />
-          <span className="text-[15px] font-semibold tracking-[-0.01em]">Dept-Flow</span>
+          <UniversityLogo size={28} decorative />
+          <span className="text-[15px] font-semibold tracking-[-0.01em]" title={INSTITUTION.system}>
+            {INSTITUTION.systemShort}
+          </span>
           <span className="ml-auto text-[13px] text-muted lg:ml-2">{ROLE_LABEL[role]}</span>
           <LogOutButton className="-mr-2 h-9 px-2 text-[13px] lg:ml-auto lg:-mr-1" />
         </div>

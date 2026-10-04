@@ -1,6 +1,16 @@
-# Project instructions — Dept-Flow
+# Project instructions — Examination-Eligibility Alert System
 
-Dept-Flow warns students before they fall below the 75% exam-eligibility
+**The thesis title, fixed by the supervisor:** "Development of an
+Examination-Eligibility Alert System for Rev. Fr. Moses Orshio Adasu
+University, Makurdi". **Scope:** the Department of Mathematics and Computer
+Science, Faculty of Science. On screens the system is the
+*Examination-Eligibility Alert System*, **EEAS** where space is short. The repo,
+the package and the internal identifiers (`dept_flow_schema_report`, the
+service-worker cache name) keep the old name "Dept-Flow"; nothing a user sees
+does, and nothing new should. It is not an agent and has never been one —
+don't describe it as "agentic".
+
+The system warns students before they fall below the 75% exam-eligibility
 threshold, and does it early enough to be worth acting on — a forecast of where
 a student will finish, per course, not a tally of where they are.
 
@@ -33,9 +43,20 @@ Where anything below still describes the old system, the new one wins:
 are `MTH | CMP | STA` — in matric numbers (`CMP/2021/047`) and course codes
 (`CMP 301`). The database rejects `CSC` in both positions.
 
-The department is the **Department of Mathematics and Computer Science**.
-SAMACOSS, the association whose crest this borrows from, carries Statistics in
-its own name. Don't add Statistics to the department; don't correct the crest.
+The department is the **Department of Mathematics and Computer Science**, in
+the **Faculty of Science**, of **Rev. Fr. Moses Orshio Adasu University,
+Makurdi**. All three come from `src/lib/institution.ts`; never hardcode them.
+Don't add Statistics to the department's name.
+
+**The faculty directory is data, not a tenancy.** `faculties` and `departments`
+(migration `20261004000100`) list the whole university for the landing page,
+and exactly one department is `is_active` — a unique index enforces it.
+Nothing operational references those tables: students, courses, attendance,
+dues and permits are still one department's, and the `MTH | CMP | STA` checks
+stay. Activating a second department means scoping all of that first. They are
+the only tables the `anon` role can read. Departments the student's source
+named only loosely are not invented — their faculty shows "Departments not yet
+listed".
 
 Registration identity is **matric number + surname + level**. No date of birth.
 Full name — surname, first name, other names — is collected at registration;
@@ -47,10 +68,11 @@ only the surname is matched against the register.
   does not exist. Compliance states are only: uncleared, cleared, pending
   verification, locked. Score statuses are only: provisional, confirmed.
   **Never invent a value in either.**
-- Orange surfaces carry **black** text. White on `#FF9935` is 2.13:1 — never.
-  Orange as text on white darkens to `#A85E0A`.
-- Orange is the brand, never a status. Provisional has no colour — dashed
-  border, muted text, no fill.
+- Brand-blue surfaces carry **black** text. White on `#2CAAE1` is 2.64:1 —
+  never. Brand blue as text on white darkens to `#0B6F9C`.
+- Blue is the brand, never a status. Provisional has no colour — dashed
+  border, muted text, no fill. "Pending" is violet, not blue, for exactly this
+  reason.
 - Never encode a state by colour alone.
 - No location UI of any kind, and no biometric, selfie or fingerprint UI
   anywhere. Attendance is trust-based: the code on the board is the whole
@@ -95,37 +117,40 @@ the tab still loses it, and the screen says so in those words.
 
 ## Visual-style precedence
 
-**SAMACOSS governs.** Dept-Flow's palette and typography win over any bound
-design system, including Modernist. Do not substitute red, Archivo, or
-Modernist components into product screens.
+**The university's identity governs.** This palette and typography win over
+any bound design system, including Modernist. Do not substitute Archivo or
+Modernist components into product screens. The SAMACOSS crest and orange are
+retired; older docs and the design mockups still show them.
 
-## Brand orange — eyedropped from the crest
+## Brand blue — sampled from the university logo
 
-The shield fill samples as **`#FF9935`**, not the `#F0952B` the older docs carry
-as a visual estimate. These are the confirmed tokens:
+The logo carries red `#EC1C22`, near-black, blue `#2CAAE1` and green
+`#0EA44F`. The brand is the **blue**, sampled from the T. Not the red, though
+the logo is mostly red: the most important thing this system shows is a red
+"Critical", and a red button on every screen teaches students to stop seeing
+it. Red stays inside the logo.
 
 ```css
---brand:         #FF9935;  /* crest orange, sampled. BLACK text: 9.30:1 AAA */
---brand-hover:   #E58419;  /* black text 7.21:1 */
---brand-pressed: #C96E10;  /* black text 5.39:1 */
---brand-text:    #A85E0A;  /* the only orange as text on white: 4.92:1 */
---brand-tint:    #FFF4E8;
---brand-tint-2:  #FFE7CE;
+--brand:         #2CAAE1;  /* logo blue. BLACK text: 7.49:1 AAA */
+--brand-hover:   #1B97CD;  /* black text 5.99:1 */
+--brand-pressed: #1583B3;  /* black text 4.65:1 — a fill only, never text */
+--brand-text:    #0B6F9C;  /* the only brand blue as text on white: 5.57:1 */
+--brand-tint:    #EAF7FC;
+--brand-tint-2:  #D3EEF9;
 ```
 
-`#FF9935` on white is 2.13:1, so the black-text rule is harder than the older
-docs suggest, not softer.
+No blue carries black text above 4.5:1 *and* reads as text on white above
+4.5:1, so links hover to ink, not to a darker blue.
 
-## Crest vs. site mark
+## The university logo
 
-**Full crest** — login page, landing page, printed reports. Nowhere else.
-
-**Simplified mark** (shield + monitor, no ribbons, no banner text) — site
-header, favicon, home-screen icon, small buttons.
-
-Never place the full crest at header or favicon size, never recolour or stretch
-it, never put it on an orange fill. The supplied file is a raster on opaque
-white and needs cutting out before it sits on a tinted panel or in dark mode.
+`public/university-logo.png` (transparent, 640px), through
+`<UniversityLogo>`. One mark at every size — landing page, login, permit,
+header, favicon, home-screen icon (`npm run build:icons`). It is the
+university's: never crop, redraw, recolour or stretch it, and never put it on a
+brand-blue fill, where the T disappears. In dark mode it sits on a white tile,
+because its outer ring is black. Small uses are accepted because every page
+that shows it small also names the university in text.
 
 ## Where the work is
 
@@ -172,7 +197,7 @@ production rather than pretending), deployment. Web Push **is** wired end to
 end and needs only VAPID keys — `npx web-push generate-vapid-keys`.
 
 **Checks:** `npm test` (24 Paystack + 32 account + 28 timetable assertions, no
-network) and `./scripts/schema-test.sh` (430 assertions against a local
+network) and `./scripts/schema-test.sh` (437 assertions against a local
 Postgres, which also verifies the whole schema applies inside ONE transaction —
 the Supabase SQL Editor runs it that way, so a migration that only works
 outside one is a migration that cannot be deployed).

@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Crest } from "@/components/crest";
+import { UniversityLogo } from "@/components/university-logo";
+import { INSTITUTION } from "@/lib/institution";
 import { Button } from "@/components/ui/button";
 import type { ExamPermit } from "@/lib/data/student";
 import { formatDateTime, formatPercent } from "@/lib/format";
@@ -15,8 +16,8 @@ import { formatDateTime, formatPercent } from "@/lib/format";
  * a second place for the numbers to come from — which is how two versions of
  * one permit start disagreeing.
  *
- * The full crest is allowed here. Login page, landing page and printed
- * reports are the only three places it is.
+ * Headed University → Faculty → Department, because an invigilator reads it
+ * top-down and the university is whose examination it is.
  */
 export function PermitDocument({ permit }: { permit: ExamPermit }) {
   return (
@@ -27,10 +28,11 @@ export function PermitDocument({ permit }: { permit: ExamPermit }) {
 
       <article className="rounded-lg border border-line bg-surface p-6 print:rounded-none print:border-0 print:p-0">
         <header className="flex items-start gap-4 border-b border-line pb-5">
-          <Crest size={72} className="shrink-0" />
+          <UniversityLogo size={72} />
           <div className="min-w-0">
+            <p className="text-[14px] font-semibold text-ink">{INSTITUTION.university}</p>
             <p className="text-[13px] text-slate">
-              Department of Mathematics and Computer Science
+              {INSTITUTION.faculty} · {INSTITUTION.department}
             </p>
             <h1 className="mt-0.5 text-[22px] leading-tight font-semibold text-ink">
               Examination permit

@@ -162,11 +162,11 @@ export function PushToggle({ publicKey }: { publicKey: string }) {
         {state === "on" ? (
           <>
             On. You&apos;ll get a notification before a lecture starts, and when your attendance in
-            a course needs your attention — even when Dept-Flow is closed.
+            a course needs your attention — even when this app is closed.
           </>
         ) : state === "denied" ? (
           <>
-            This browser is blocking notifications from Dept-Flow. You can allow them again in your
+            This browser is blocking notifications from this site. You can allow them again in your
             browser&apos;s site settings. Nothing is lost meanwhile — warnings about your attendance
             still reach you on WhatsApp.
           </>
@@ -178,7 +178,7 @@ export function PushToggle({ publicKey }: { publicKey: string }) {
         ) : (
           <>
             Get a reminder before a lecture starts, and a warning while you can still do something
-            about your attendance — without opening Dept-Flow. You can turn these off at any time.
+            about your attendance — without opening the app. You can turn these off at any time.
           </>
         )}
       </p>

@@ -1,5 +1,5 @@
 /**
- * Dept-Flow's service worker.
+ * The service worker.
  *
  * It exists for two things, and deliberately does not grow a third:
  *
@@ -27,7 +27,9 @@
  * while someone is looking at the result.
  */
 
-const VERSION = "dept-flow-v1";
+// Bumped when anything in SHELL changes. The icons became the university logo
+// in v2, and an installed copy holding v1 would go on showing the old mark.
+const VERSION = "dept-flow-v2";
 const SHELL = [
   "/offline",
   "/icon-192.png",
@@ -94,9 +96,9 @@ self.addEventListener("push", (event) => {
     payload = {};
   }
 
-  const title = payload.title || "Dept-Flow";
+  const title = payload.title || "Examination-Eligibility Alert System";
   const options = {
-    body: payload.body || "Open Dept-Flow to see what changed.",
+    body: payload.body || "Open the app to see what changed.",
     icon: "/icon-192.png",
     badge: "/icon-192.png",
     data: { link: payload.link || "/notifications" },
@@ -115,7 +117,7 @@ self.addEventListener("notificationclick", (event) => {
   const link = (event.notification.data && event.notification.data.link) || "/notifications";
 
   // An already-open tab is focused rather than a second one opened. A student
-  // tapping three notifications should not end up with three Dept-Flows.
+  // tapping three notifications should not end up with three copies of the app open.
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
       for (const client of clients) {

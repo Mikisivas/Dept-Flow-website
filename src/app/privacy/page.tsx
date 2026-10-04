@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { SiteMark } from "@/components/site-mark";
+import { UniversityLogo } from "@/components/university-logo";
+import { INSTITUTION } from "@/lib/institution";
 
 export const metadata: Metadata = {
   title: "Privacy notice",
@@ -20,16 +21,16 @@ export default function PrivacyPage() {
     <div className="min-h-dvh bg-surface">
       <main className="mx-auto max-w-2xl px-4 py-10 sm:py-14">
         <Link href="/" className="flex w-fit items-center gap-2 rounded-md">
-          <SiteMark size={24} />
-          <span className="text-[15px] font-semibold tracking-[-0.01em]">Dept-Flow</span>
+          <UniversityLogo size={32} decorative />
+          <span className="text-[15px] font-semibold tracking-[-0.01em]">{INSTITUTION.system}</span>
         </Link>
 
         <h1 className="mt-8 text-[28px] leading-tight font-semibold tracking-[-0.02em] text-ink">
           What we collect, and what we don&apos;t
         </h1>
         <p className="mt-3 text-[16px] leading-relaxed text-slate">
-          Dept-Flow is run by the Department of Mathematics and Computer Science to record lecture
-          attendance and departmental dues. This notice explains what it holds about you, why, and
+          The {INSTITUTION.system} is run by the {INSTITUTION.department}, {INSTITUTION.faculty},{" "}
+          {INSTITUTION.university}, to record lecture attendance and departmental dues. This notice explains what it holds about you, why, and
           for how long. It follows the Nigeria Data Protection Act 2023.
         </p>
 
@@ -55,7 +56,7 @@ export default function PrivacyPage() {
 
         <Section title="Your location — we don't collect it">
           <p>
-            Dept-Flow does not ask for your location, at any point.{" "}
+            This system does not ask for your location, at any point.{" "}
             <strong className="font-semibold text-ink">
               Your browser will never prompt this site for location access
             </strong>
@@ -78,7 +79,7 @@ export default function PrivacyPage() {
         <Section title="What we never collect">
           <p>
             No fingerprints, no face or selfie capture, no biometrics of any kind. No photographs.
-            No access to your contacts, messages, files or camera. Dept-Flow is a website, so it has
+            No access to your contacts, messages, files or camera. This system is a website, so it has
             no ability to reach any of that even if it wanted to.
           </p>
         </Section>
@@ -125,7 +126,7 @@ export default function PrivacyPage() {
         </Section>
 
         <p className="mt-10 border-t border-line pt-6 text-[14px] text-muted">
-          Department of Mathematics and Computer Science · Departmental office, Faculty of Science
+          {INSTITUTION.department} · {INSTITUTION.faculty} · {INSTITUTION.university}
         </p>
       </main>
     </div>

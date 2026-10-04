@@ -91,7 +91,7 @@ export default async function DashboardPage() {
                   for rather than something they need one tap away. */}
               <Link
                 href="/reports"
-                className="rounded text-[13px] font-medium text-brand-text underline underline-offset-2 hover:text-brand-pressed focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand-text)]"
+                className="rounded text-[13px] font-medium text-brand-text underline underline-offset-2 hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand-text)]"
               >
                 Weekly and monthly
               </Link>
@@ -129,7 +129,7 @@ export default async function DashboardPage() {
               </h2>
               <Link
                 href="/courses/register"
-                className="rounded text-[13px] font-medium text-brand-text underline underline-offset-2 hover:text-brand-pressed focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand-text)]"
+                className="rounded text-[13px] font-medium text-brand-text underline underline-offset-2 hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand-text)]"
               >
                 Add or remove
               </Link>

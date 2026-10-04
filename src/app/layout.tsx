@@ -14,16 +14,17 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: {
-    default: "Dept-Flow",
-    template: "%s · Dept-Flow",
+    default: "Examination-Eligibility Alert System",
+    template: "%s · EEAS",
   },
   description:
-    "Attendance and dues for the Department of Mathematics and Computer Science. Record attendance, clear your dues, track your exam eligibility.",
-  applicationName: "Dept-Flow",
+    "The Examination-Eligibility Alert System of Rev. Fr. Moses Orshio Adasu University, Makurdi, for the Department of Mathematics and Computer Science. Record attendance, see where you will finish against the 75% line, and get your exam permit.",
+  applicationName: "Examination-Eligibility Alert System",
   // iOS ignores the manifest for the home screen and reads these instead.
   appleWebApp: {
     capable: true,
-    title: "Dept-Flow",
+    // The home-screen label, which iOS truncates at about twelve characters.
+    title: "EEAS",
     // "default" keeps the status bar legible over a white page; the
     // translucent option puts black text over whatever scrolls under it.
     statusBarStyle: "default",

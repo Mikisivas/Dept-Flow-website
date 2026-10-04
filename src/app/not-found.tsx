@@ -1,12 +1,12 @@
 import Link from "next/link";
-import { SiteMark } from "@/components/site-mark";
+import { UniversityLogo } from "@/components/university-logo";
 import { Button } from "@/components/ui/button";
 
-/** Typographic, site mark, link home. No illustrations anywhere. */
+/** Typographic, logo, link home. No illustrations anywhere. */
 export default function NotFound() {
   return (
     <div className="flex min-h-dvh flex-col items-center justify-center bg-surface px-4 text-center">
-      <SiteMark size={40} />
+      <UniversityLogo size={48} />
       <h1 className="mt-6 text-[26px] font-semibold tracking-[-0.02em] text-ink">
         This page isn&apos;t here
       </h1>

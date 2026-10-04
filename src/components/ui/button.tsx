@@ -4,10 +4,9 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 /**
- * The primary button is an orange fill carrying BLACK text — the pattern the
- * crest itself uses, and 9.30:1.
+ * The primary button is a brand-blue fill carrying BLACK text, 7.49:1.
  *
- * White on #FF9935 is 2.13:1. It is the likeliest mistake in this project and
+ * White on #2CAAE1 is 2.64:1. It is the likeliest mistake in this project and
  * it appears in no variant here.
  */
 const buttonVariants = cva(
@@ -22,15 +21,17 @@ const buttonVariants = cva(
     variants: {
       variant: {
         // text-on-brand, never text-ink: --ink inverts in dark mode and would
-        // put white on orange at 2.13:1.
+        // put white on brand blue at 2.64:1.
         primary: "bg-brand text-on-brand hover:bg-brand-hover active:bg-brand-pressed",
         secondary:
           "border border-line bg-surface text-ink hover:bg-surface-sunken active:bg-brand-tint",
         ghost: "text-ink hover:bg-surface-sunken active:bg-brand-tint",
-        /* Destructive keeps white text: 6.47:1 on #B91C1C. An orange fill here
+        /* Destructive keeps white text: 6.47:1 on #B91C1C. A brand fill here
            would read as routine, which deactivation is not. */
         destructive: "bg-danger text-white hover:opacity-90 active:opacity-80",
-        link: "text-brand-text underline underline-offset-2 hover:text-brand-pressed",
+        // Hover goes to ink, not to a darker blue: no blue that still carries
+        // black text on a button also reaches 4.5:1 as text on white.
+        link: "text-brand-text underline underline-offset-2 hover:text-ink",
       },
       size: {
         /* 44px minimum, everywhere. Students tap these one-handed, standing. */

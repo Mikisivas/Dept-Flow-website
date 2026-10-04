@@ -1,11 +1,11 @@
 import Link from "next/link";
-import { Crest } from "@/components/crest";
+import { UniversityLogo } from "@/components/university-logo";
+import { INSTITUTION } from "@/lib/institution";
 import { cn } from "@/lib/utils";
 
 /**
- * The frame every unauthenticated screen sits in: crest, one heading, one
- * column. The crest is allowed here — this and the landing page are the only
- * places in the product it appears at size.
+ * The frame every unauthenticated screen sits in: the university logo, whose
+ * system this is, one heading, one column.
  */
 export function AuthShell({
   title,
@@ -26,11 +26,13 @@ export function AuthShell({
   return (
     <div className="min-h-dvh bg-surface">
       <main className={cn("mx-auto w-full max-w-md px-4 py-10 sm:py-14", className)}>
-        {/* 200px is a floor, not a preference: below roughly this size the
-            crest's ribbon hairlines and banner text turn to mud. Anything
-            smaller must use the simplified site mark instead. */}
-        <Link href="/" className="mx-auto flex w-fit rounded-md">
-          <Crest size={200} />
+        <Link href="/" className="mx-auto flex w-fit flex-col items-center gap-3 rounded-md text-center">
+          <UniversityLogo size={120} priority />
+          <span className="text-[13px] leading-snug text-muted">
+            {INSTITUTION.system}
+            <br />
+            {INSTITUTION.department}
+          </span>
         </Link>
 
         {step ? <p className="mt-6 text-[13px] text-muted tabular">{step}</p> : null}

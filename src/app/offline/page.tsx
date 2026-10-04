@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { CloudOff } from "lucide-react";
-import { SiteMark } from "@/components/site-mark";
 
 export const metadata: Metadata = { title: "No connection" };
 
@@ -18,10 +17,14 @@ export const metadata: Metadata = { title: "No connection" };
 export default function OfflinePage() {
   return (
     <main className="mx-auto flex min-h-dvh max-w-md flex-col justify-center px-4 py-10">
-      <SiteMark size={32} />
+      {/* A plain <img> of a file the service worker caches, not next/image:
+          the optimiser's URL is not in the cache, and this page is only ever
+          seen when the network is gone. */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/icon-192.png" alt="" width={40} height={40} />
       <h1 className="mt-5 text-[24px] leading-tight font-semibold text-ink">No connection</h1>
       <p className="mt-2 text-[15px] leading-relaxed text-slate">
-        Dept-Flow needs the network to show you anything that is yours — your attendance, your
+        The Examination-Eligibility Alert System needs the network to show you anything that is yours — your attendance, your
         dues, your permit. None of it is stored on this phone.
       </p>
 

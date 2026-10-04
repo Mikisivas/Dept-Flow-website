@@ -12,23 +12,24 @@ import type { MetadataRoute } from "next";
  * clock and the signal strength, and this is an app whose most important
  * screen is answered against a three-minute timer on a patchy network.
  *
- * The icons are the SIMPLIFIED mark, never the crest.
+ * The icons are the university logo, built by scripts/build-icons.mjs.
  */
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Dept-Flow — Mathematics and Computer Science",
-    short_name: "Dept-Flow",
+    name: "Examination-Eligibility Alert System",
+    // The label under the home-screen icon; launchers cut anything longer.
+    short_name: "EEAS",
     description:
-      "Attendance, dues and exam eligibility for the Department of Mathematics and Computer Science.",
+      "Attendance, exam eligibility and the exam permit for the Department of Mathematics and Computer Science, Rev. Fr. Moses Orshio Adasu University, Makurdi.",
     start_url: "/dashboard",
     // Deep links stay inside the installed window: a notification opening
     // /notifications should not bounce the student out to a browser tab.
     scope: "/",
     display: "standalone",
     background_color: "#ffffff",
-    // The brand, which is the one place orange is allowed to be a large flat
+    // The brand, which is the one place it is allowed to be a large flat
     // surface with nothing on it.
-    theme_color: "#ff9935",
+    theme_color: "#2caae1",
     orientation: "portrait",
     lang: "en-NG",
     categories: ["education"],

@@ -30,12 +30,13 @@ create temporary table assertion_log (
 -- prove what a student can and cannot read. That role needs to reach this log,
 -- or every assertion made under it fails on the log rather than on the thing
 -- being tested. The temp schema has a generated name, hence the format().
-grant all on assertion_log to authenticated;
-grant usage, select on sequence assertion_log_seq_seq to authenticated;
+-- `anon` too, for the one table anonymous visitors may read.
+grant all on assertion_log to authenticated, anon;
+grant usage, select on sequence assertion_log_seq_seq to authenticated, anon;
 do $$
 begin
   execute format(
-    'grant usage on schema %I to authenticated',
+    'grant usage on schema %I to authenticated, anon',
     (select nspname from pg_namespace where oid = pg_my_temp_schema())
   );
 end $$;
@@ -4317,6 +4318,65 @@ select assert_true(
   ),
   'the venue directory carries names only — it bypasses the geo-fence policy, so it must expose nothing else'
 );
+
+-- ---------------------------------------------------------------------------
+-- The university directory
+--
+-- The landing page lists every faculty and its departments, and exactly one
+-- department runs on this system. Everything downstream is that department's,
+-- so a second active row would send another department's students to a
+-- register that rejects them.
+-- ---------------------------------------------------------------------------
+
+select assert_true(
+  (select count(*) from departments where is_active) = 1
+  and exists (
+    select 1 from departments d join faculties f on f.id = d.faculty_id
+    where d.is_active
+      and d.name = 'Mathematics and Computer Science'
+      and f.name = 'Faculty of Science'
+  ),
+  'exactly one department is on the system, and it is Mathematics and Computer Science, Faculty of Science'
+);
+
+select assert_rejects(
+  $sql$ update departments set is_active = true where name = 'Physics' $sql$,
+  'a second department cannot be switched on — nothing downstream is scoped by department yet'
+);
+
+select assert_true(
+  (select count(*) from faculties) = 10 and (select count(*) from departments) = 38,
+  'the directory carries the faculties and departments as supplied, and invents none'
+);
+
+-- Before anyone logs in. The landing page reads this as the anonymous role.
+set local role anon;
+
+select assert_true(
+  (select count(*) from faculties) = 10 and (select count(*) from departments) = 38,
+  'an anonymous visitor can read the directory — it is shown before login'
+);
+
+select assert_rejects(
+  $sql$ select 1 from students limit 1 $sql$,
+  'and nothing else: the directory is the only table the anonymous role can read'
+);
+
+select assert_rejects(
+  $sql$ insert into faculties (name, sort_order) values ('Faculty of Nonsense', 999) $sql$,
+  'an anonymous visitor cannot add to the directory'
+);
+
+reset role;
+set local role authenticated;
+set local request.jwt.claim.sub = '44444444-4444-4444-4444-444444444401';
+
+select assert_rejects(
+  $sql$ update departments set name = 'Renamed' where is_active $sql$,
+  'nor can a signed-in user — the directory changes by migration only'
+);
+
+reset role;
 
 -- The report /api/health reads. Running the full migration set and being told
 -- something is missing would mean the report's own expectations have drifted

@@ -85,7 +85,7 @@ export function EligibilityPanel({ panel }: { panel: PermitPanel }) {
           {!duesClear ? (
             <Link
               href="/dues"
-              className="mt-1.5 inline-flex min-h-11 items-center text-[15px] font-semibold text-brand-text underline underline-offset-2 hover:text-brand-pressed"
+              className="mt-1.5 inline-flex min-h-11 items-center text-[15px] font-semibold text-brand-text underline underline-offset-2 hover:text-ink"
             >
               Pay the balance
             </Link>

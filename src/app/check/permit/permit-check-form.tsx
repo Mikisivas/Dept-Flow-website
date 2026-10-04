@@ -113,7 +113,7 @@ export function PermitCheckForm({ initialReference = "" }: { initialReference?: 
           Checking a matric number instead?{" "}
           <Link
             href="/check"
-            className="font-medium text-brand-text underline underline-offset-2 hover:text-brand-pressed"
+            className="font-medium text-brand-text underline underline-offset-2 hover:text-ink"
           >
             That way
           </Link>

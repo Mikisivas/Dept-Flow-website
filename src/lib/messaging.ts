@@ -194,6 +194,6 @@ export async function sendOtp(input: {
 
   return sendSms({
     to: input.to,
-    body: `${input.code} is your Dept-Flow verification code. It expires in 10 minutes.`,
+    body: `${input.code} is your EEAS verification code. It expires in 10 minutes.`,
   });
 }

@@ -61,14 +61,14 @@ export function MatricCheckForm() {
         <p className="text-[15px] text-slate">
           <Link
             href="/register"
-            className="font-medium text-brand-text underline underline-offset-2 hover:text-brand-pressed"
+            className="font-medium text-brand-text underline underline-offset-2 hover:text-ink"
           >
             Create an account
           </Link>{" "}
           ·{" "}
           <Link
             href="/login"
-            className="font-medium text-brand-text underline underline-offset-2 hover:text-brand-pressed"
+            className="font-medium text-brand-text underline underline-offset-2 hover:text-ink"
           >
             Log in
           </Link>

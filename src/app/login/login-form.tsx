@@ -82,13 +82,13 @@ export function LoginForm() {
 
   return (
     <AuthShell
-      title="Log in to Dept-Flow"
+      title="Log in"
       footer={
         <p className="text-[15px] text-slate">
           New here?{" "}
           <Link
             href="/register"
-            className="font-medium text-brand-text underline underline-offset-2 hover:text-brand-pressed"
+            className="font-medium text-brand-text underline underline-offset-2 hover:text-ink"
           >
             Create an account
           </Link>
@@ -170,7 +170,7 @@ export function LoginForm() {
 
         <Link
           href="/forgot"
-          className="text-center text-[15px] text-brand-text underline underline-offset-2 hover:text-brand-pressed"
+          className="text-center text-[15px] text-brand-text underline underline-offset-2 hover:text-ink"
         >
           Forgot password?
         </Link>

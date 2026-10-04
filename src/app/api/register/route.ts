@@ -119,7 +119,13 @@ async function sendOtp(body: Record<string, unknown>) {
   // Never the code. Only when it dies, and which numbers were written to —
   // the screen has to ask for one code or two, and cannot know which without
   // being told.
-  return NextResponse.json({ expiresAt: result.expiresAt, channels: result.channels });
+  // demoCodes is present only on a demo deployment with no SMS provider,
+  // where the screen shows the code in place of a text message.
+  return NextResponse.json({
+    expiresAt: result.expiresAt,
+    channels: result.channels,
+    demoCodes: result.demoCodes,
+  });
 }
 
 async function verifyOtp(body: Record<string, unknown>) {

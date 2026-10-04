@@ -426,7 +426,11 @@ belongs in future work.
   failure in production rather than pretending to have sent — a stub that silently
   succeeds is the worst possible failure mode for a warning system, because every
   delivery row reads `sent` and nobody finds out until an examination board.
-- **Deployment.**
+- **Deployment.** A demo deployment for the defence is documented in
+  `docs/deploy-demo.md`. It runs with `DEMO_DEPLOYMENT=true`, which shows
+  verification codes on screen (no SMS provider is connected), carries a banner
+  on every page, and refuses to engage next to a live Paystack key. Nothing else
+  changes: SMS and WhatsApp alerts are still recorded as failed, with the reason.
 - **Web Push is wired end to end** and needs only VAPID keys.
 
 ---

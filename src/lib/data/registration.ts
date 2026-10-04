@@ -75,15 +75,22 @@ export async function checkRegisterMatch(input: {
 }
 
 export type SendOtpResult =
-  | { outcome: "sent"; expiresAt: string; channels: Array<"sms" | "whatsapp"> }
+  | {
+      outcome: "sent";
+      expiresAt: string;
+      channels: Array<"sms" | "whatsapp">;
+      /** Demo deployment only: the codes that were shown rather than sent. */
+      demoCodes?: Partial<Record<"sms" | "whatsapp", string>>;
+    }
   | { outcome: "rate_limited" }
   | { outcome: "phone_taken" };
 
 /**
  * Generate, store hashed, and deliver — once per number the student gave.
  *
- * The plaintext code is never in an HTTP response, in any environment — that
- * is the whole reason delivery is an interface rather than a return value.
+ * The plaintext code is never in an HTTP response, except on a demo
+ * deployment with no provider connected (`src/lib/demo.ts`) — that is the
+ * whole reason delivery is an interface rather than a return value.
  *
  * Two numbers, two codes, two verifications. A student whose WhatsApp runs on
  * a data-only SIM gives both, and BOTH have to be proved reachable before
@@ -130,6 +137,8 @@ export async function sendRegistrationOtp(input: {
   const expiresAt = new Date(Date.now() + OTP_TTL_MINUTES * 60_000).toISOString();
   const channels: Array<"sms" | "whatsapp"> = whatsapp ? ["sms", "whatsapp"] : ["sms"];
 
+  const demoCodes: Partial<Record<"sms" | "whatsapp", string>> = {};
+
   for (const channel of channels) {
     const to = channel === "sms" ? input.phone : whatsapp!;
     // randomInt, not Math.random. A predictable code is a bypassed phone
@@ -152,9 +161,12 @@ export async function sendRegistrationOtp(input: {
     if (result.status === "failed") {
       throw new Error(`Could not send a code to ${to}: ${result.error}`);
     }
+    if (result.status === "shown") demoCodes[channel] = result.code;
   }
 
-  return { outcome: "sent", expiresAt, channels };
+  return Object.keys(demoCodes).length > 0
+    ? { outcome: "sent", expiresAt, channels, demoCodes }
+    : { outcome: "sent", expiresAt, channels };
 }
 
 export type VerifyOtpResult = { ok: true } | { ok: false; reason: string };

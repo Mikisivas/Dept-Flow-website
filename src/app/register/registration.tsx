@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { AuthShell } from "@/components/auth-shell";
+import { DemoCode } from "@/components/demo-code";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -282,6 +283,8 @@ function ContactStep({
    * record them as delivered.
    */
   const [pending, setPending] = useState<Array<{ channel: string; number: string }>>([]);
+  /** Demo deployment only: the codes the server showed instead of sending. */
+  const [demoCodes, setDemoCodes] = useState<Record<string, string>>({});
 
   const current = pending[0] ?? null;
 
@@ -322,9 +325,11 @@ function ContactStep({
       return;
     }
 
-    // Only an expiry comes back. The code itself is never in a response, in
-    // any environment — in development it is written to the server log.
+    // Only an expiry comes back. The code itself is never in a response —
+    // in development it is written to the server log — except on a demo
+    // deployment with no SMS provider, where it is shown on this screen.
     setExpiresAt(body.expiresAt);
+    setDemoCodes((body.demoCodes as Record<string, string> | undefined) ?? {});
     setPending(
       (body.channels as string[]).map((channel) => ({
         channel,
@@ -369,14 +374,22 @@ function ContactStep({
   return (
     <AuthShell
       step="Step 2 of 3"
-      title={phase === "details" ? "Confirm who you are" : "Enter the code we sent"}
+      title={
+        phase === "details"
+          ? "Confirm who you are"
+          : current && demoCodes[current.channel]
+            ? "Enter the code"
+            : "Enter the code we sent"
+      }
       intro={
         phase === "details"
           ? "We found you on the register. Add your full name and a phone number we can reach you on."
           : current
-            ? current.channel === "whatsapp"
-              ? `We sent a 6-digit code on WhatsApp to ${current.number}.`
-              : `We sent a 6-digit code by text to ${current.number}.`
+            ? demoCodes[current.channel]
+              ? "Nothing was sent: on this demonstration the code is shown below."
+              : current.channel === "whatsapp"
+                ? `We sent a 6-digit code on WhatsApp to ${current.number}.`
+                : `We sent a 6-digit code by text to ${current.number}.`
             : "Checking…"
       }
     >
@@ -475,6 +488,13 @@ function ContactStep({
         </form>
       ) : (
         <div className="flex flex-col gap-5">
+          {current && demoCodes[current.channel] ? (
+            <DemoCode
+              code={demoCodes[current.channel]}
+              destination={current.channel === "whatsapp" ? `${current.number} on WhatsApp` : current.number}
+            />
+          ) : null}
+
           <CodeInput
             length={6}
             value={code}

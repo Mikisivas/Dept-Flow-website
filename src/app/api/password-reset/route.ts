@@ -57,5 +57,9 @@ export async function POST(request: Request) {
     ok: true,
     maskedPhone: result.maskedPhone,
     expiresAt: result.expiresAt,
+    // Demo deployment only. It does tell the caller the account exists, which
+    // the no_account branch above is careful never to; acceptable on seeded
+    // data with test payments, and impossible next to a live Paystack key.
+    demoCode: result.demoCode,
   });
 }

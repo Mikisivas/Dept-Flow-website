@@ -70,7 +70,7 @@ export async function POST(request: Request) {
         { status: 429 },
       );
     }
-    return NextResponse.json({ ok: true, expiresAt: result.expiresAt });
+    return NextResponse.json({ ok: true, expiresAt: result.expiresAt, demoCode: result.demoCode });
   }
 
   if (body.action === "phone-confirm") {

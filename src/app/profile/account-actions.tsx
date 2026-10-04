@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { DemoCode } from "@/components/demo-code";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -33,6 +34,8 @@ export function ChangePhoneButton({ current }: { current: string }) {
   const [code, setCode] = useState("");
   const [working, setWorking] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** Demo deployment only: the code, shown because no SMS was sent. */
+  const [demoCode, setDemoCode] = useState<string | null>(null);
 
   function close() {
     setOpen(false);
@@ -40,6 +43,7 @@ export function ChangePhoneButton({ current }: { current: string }) {
     setPhone("");
     setCode("");
     setError(null);
+    setDemoCode(null);
   }
 
   async function submit() {
@@ -53,6 +57,7 @@ export function ChangePhoneButton({ current }: { current: string }) {
           setError(body.error ?? "That did not go through.");
           return;
         }
+        setDemoCode(body.demoCode ?? null);
         setPhase("confirm");
         return;
       }
@@ -88,6 +93,11 @@ export function ChangePhoneButton({ current }: { current: string }) {
               so you will need it to hand. Your current number is{" "}
               <span className="tabular">{current}</span> until the change is confirmed.
             </>
+          ) : demoCode ? (
+            <>
+              Nothing was sent: on this demonstration the code is shown below. Your number does not
+              change until you enter it.
+            </>
           ) : (
             <>
               We sent a 6-digit code to <span className="tabular">{phone}</span>. Your number does
@@ -112,16 +122,19 @@ export function ChangePhoneButton({ current }: { current: string }) {
               />
             </Field>
           ) : (
-            <Field label="6-digit code" htmlFor="phone-code">
-              <Input
-                id="phone-code"
-                value={code}
-                onChange={(event) => setCode(event.target.value)}
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                maxLength={6}
-              />
-            </Field>
+            <div className="flex flex-col gap-4">
+              {demoCode ? <DemoCode code={demoCode} destination={phone} /> : null}
+              <Field label="6-digit code" htmlFor="phone-code">
+                <Input
+                  id="phone-code"
+                  value={code}
+                  onChange={(event) => setCode(event.target.value)}
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  maxLength={6}
+                />
+              </Field>
+            </div>
           )
         }
         error={error}

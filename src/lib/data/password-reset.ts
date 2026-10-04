@@ -5,6 +5,7 @@ import { createServiceClient } from "@/lib/supabase/client";
 import { hashPassword, verifyPassword } from "@/lib/auth/passwords";
 import { normaliseMatric } from "@/lib/format";
 import { ok } from "@/lib/supabase/result";
+import { sendOtp } from "@/lib/messaging";
 
 /**
  * Resetting a forgotten password.
@@ -27,7 +28,13 @@ const OTP_SEND_LIMIT = 5;
 const MIN_PASSWORD_LENGTH = 8;
 
 export type StartResetResult =
-  | { outcome: "sent"; maskedPhone: string; expiresAt: string }
+  | {
+      outcome: "sent";
+      maskedPhone: string;
+      expiresAt: string;
+      /** Demo deployment only: the code, shown rather than sent. */
+      demoCode?: string;
+    }
   | { outcome: "rate_limited" }
   /** Deliberately indistinguishable from success at the route. See below. */
   | { outcome: "no_account" };
@@ -84,23 +91,31 @@ export async function startPasswordReset(matricNo: string): Promise<StartResetRe
 
   if (error) throw new Error(`Could not send a code: ${error.message}`);
 
-  await deliverOtp(phone, code);
+  const demoCode = await deliverOtp(phone, code);
 
-  return { outcome: "sent", maskedPhone: maskPhone(phone), expiresAt };
+  return demoCode
+    ? { outcome: "sent", maskedPhone: maskPhone(phone), expiresAt, demoCode }
+    : { outcome: "sent", maskedPhone: maskPhone(phone), expiresAt };
 }
 
 /**
- * The single delivery seam, the same one registration uses.
+ * Through the same seam registration uses, by SMS.
  *
- * Development writes to the server log. It is the one place a plaintext code
- * exists after generation, and it must never become a response body, a toast,
- * or a query string.
+ * This used to be its own stub that logged in development and threw in
+ * production, which meant a provider wired into `sendOtp` would have reached
+ * registration and left password reset still throwing. One seam, one place to
+ * connect a provider.
+ *
+ * Returns the code only on a demo deployment with no provider connected, for
+ * the screen to show. Everywhere else it returns nothing: the plaintext code
+ * must never become a response body, a toast, or a query string.
  */
-async function deliverOtp(phone: string, code: string): Promise<void> {
-  if (process.env.NODE_ENV === "production") {
-    throw new Error("No SMS provider is configured for production.");
+async function deliverOtp(phone: string, code: string): Promise<string | undefined> {
+  const result = await sendOtp({ to: phone, code, channel: "sms" });
+  if (result.status === "failed") {
+    throw new Error(`Could not send a code to ${phone}: ${result.error}`);
   }
-  console.info(`\n  [dev reset OTP] ${phone} → ${code}\n`);
+  return result.status === "shown" ? result.code : undefined;
 }
 
 export type CompleteResetResult =
@@ -238,7 +253,7 @@ export async function changePassword(input: {
 // ---------------------------------------------------------------------------
 
 export type StartPhoneChangeResult =
-  | { outcome: "sent"; expiresAt: string }
+  | { outcome: "sent"; expiresAt: string; demoCode?: string }
   | { outcome: "rate_limited" }
   | { outcome: "invalid" }
   | { outcome: "phone_taken" };
@@ -294,9 +309,9 @@ export async function startPhoneChange(input: {
 
   if (error) throw new Error(`Could not send a code: ${error.message}`);
 
-  await deliverOtp(phone, code);
+  const demoCode = await deliverOtp(phone, code);
 
-  return { outcome: "sent", expiresAt };
+  return demoCode ? { outcome: "sent", expiresAt, demoCode } : { outcome: "sent", expiresAt };
 }
 
 export type CompletePhoneChangeResult = { outcome: "changed" } | { outcome: "bad_code"; reason: string };

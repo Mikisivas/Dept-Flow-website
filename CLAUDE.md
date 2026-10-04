@@ -196,6 +196,15 @@ and a test deletes every prediction and checks the panel does not move.
 production rather than pretending), deployment. Web Push **is** wired end to
 end and needs only VAPID keys — `npx web-push generate-vapid-keys`.
 
+**Demo deployment for the defence** — `docs/deploy-demo.md`. With
+`DEMO_DEPLOYMENT=true` and no SMS provider, `sendOtp` returns the code as
+`shown` and registration, password reset and phone change display it on
+screen; a banner on every page says so. It refuses to engage next to a live
+Paystack key (`src/lib/demo.ts`, tested in `tests/demo-mode.mts`). That is the
+only behaviour it changes: SMS and WhatsApp alerts still fail and say why.
+All three OTP flows go through the one `sendOtp` seam; password reset used to
+have its own stub.
+
 **Checks:** `npm test` (24 Paystack + 32 account + 28 timetable assertions, no
 network) and `./scripts/schema-test.sh` (437 assertions against a local
 Postgres, which also verifies the whole schema applies inside ONE transaction —

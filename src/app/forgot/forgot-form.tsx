@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { AuthShell } from "@/components/auth-shell";
+import { DemoCode } from "@/components/demo-code";
 import { CodeInput } from "@/components/code-input";
 import { Countdown } from "@/components/countdown";
 import { Button } from "@/components/ui/button";
@@ -30,6 +31,8 @@ export function ForgotForm() {
   const [matric, setMatric] = useState("");
   const [maskedPhone, setMaskedPhone] = useState("");
   const [expiresAt, setExpiresAt] = useState<string | null>(null);
+  /** Demo deployment only: the code, shown because no SMS was sent. */
+  const [demoCode, setDemoCode] = useState<string | null>(null);
   const [code, setCode] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -62,6 +65,7 @@ export function ForgotForm() {
       // absent when no code was actually sent.
       setMaskedPhone(result.maskedPhone);
       setExpiresAt(result.expiresAt);
+      setDemoCode(result.demoCode ?? null);
       setPhase("code");
     } catch {
       setError("Could not reach the server. Check the connection and try again.");
@@ -138,9 +142,11 @@ export function ForgotForm() {
         phase === "identify"
           ? "We'll send a code to the phone number on your account."
           : phase === "code"
-            ? maskedPhone
-              ? `We sent a 6-digit code to ${maskedPhone}.`
-              : "If that matric number has an account, a code is on its way to the phone registered to it."
+            ? demoCode
+              ? "Nothing was sent: on this demonstration the code is shown below."
+              : maskedPhone
+                ? `We sent a 6-digit code to ${maskedPhone}.`
+                : "If that matric number has an account, a code is on its way to the phone registered to it."
             : "Choose a new password."
       }
       footer={
@@ -176,6 +182,7 @@ export function ForgotForm() {
 
       {phase === "code" ? (
         <div className="flex flex-col gap-5">
+          {demoCode ? <DemoCode code={demoCode} destination={maskedPhone} /> : null}
           <CodeInput
             length={6}
             value={code}

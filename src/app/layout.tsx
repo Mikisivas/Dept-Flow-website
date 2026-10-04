@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import { ServiceWorker } from "@/components/service-worker";
 import { ToastProvider } from "@/components/toast";
+import { isDemoDeployment } from "@/lib/demo";
 import "./globals.css";
 
 // One variable font subset, swapped in rather than blocking. Every extra font
@@ -63,9 +64,30 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         still reported.
       */}
       <body suppressHydrationWarning>
+        {isDemoDeployment() ? <DemoBanner /> : null}
         <ToastProvider>{children}</ToastProvider>
         <ServiceWorker />
       </body>
     </html>
+  );
+}
+
+/**
+ * On every page of a demo deployment, above everything, in words.
+ *
+ * A panel member who registers an account sees a verification code on screen
+ * and pays with a test card; this is what stops either being mistaken for the
+ * real thing. Not sticky: it is read once, and the student header below it is
+ * the thing that has to stay in reach.
+ */
+function DemoBanner() {
+  return (
+    <p
+      role="note"
+      className="border-b border-dashed border-slate bg-surface-sunken px-4 py-2 text-center text-[13px] leading-snug text-slate"
+    >
+      <strong className="font-semibold text-ink">Demonstration deployment.</strong> Seeded data,
+      Paystack test payments only, and verification codes shown on screen instead of sent by SMS.
+    </p>
   );
 }

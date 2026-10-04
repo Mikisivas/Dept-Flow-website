@@ -1,5 +1,7 @@
 import "server-only";
 
+import { isDemoDeployment } from "@/lib/demo";
+
 /**
  * The one place a message leaves this system.
  *
@@ -16,8 +18,11 @@ import "server-only";
  *    delivery row says `failed` and the WhatsApp→SMS fallback gets its chance.
  *
  * 2. **The caller never sees the message body come back.** Same reason the OTP
- *    code was never a return value: a body that can be returned is a body that
- *    ends up in a log, a toast, or a query string.
+ *    code is not a return value: a body that can be returned is a body that
+ *    ends up in a log, a toast, or a query string. The single exception is a
+ *    demo deployment with no provider connected, where `sendOtp` hands the
+ *    code back as `shown` so the screen can display it — see `src/lib/demo.ts`
+ *    for why, and for the interlock that keeps it off a real launch.
  *
  * 3. **A send is an attempt, not a delivery.** `sent` here means a provider
  *    accepted it. Whether a student read it is not knowable and is never
@@ -67,7 +72,12 @@ export async function sendWhatsApp(input: {
 }): Promise<SendResult> {
   if (!channelIsConfigured("whatsapp")) {
     if (process.env.NODE_ENV === "production") {
-      return { status: "failed", error: "No WhatsApp provider is configured." };
+      return {
+        status: "failed",
+        error: isDemoDeployment()
+          ? "Demo deployment: no WhatsApp provider is connected."
+          : "No WhatsApp provider is configured.",
+      };
     }
     console.info(`\n  [dev WhatsApp] ${input.to} · ${input.template}(${input.variables.join(" | ")})\n`);
     return { status: "sent", providerRef: null };
@@ -90,7 +100,12 @@ export async function sendWhatsApp(input: {
 export async function sendSms(input: { to: string; body: string }): Promise<SendResult> {
   if (!channelIsConfigured("sms")) {
     if (process.env.NODE_ENV === "production") {
-      return { status: "failed", error: "No SMS provider is configured." };
+      return {
+        status: "failed",
+        error: isDemoDeployment()
+          ? "Demo deployment: no SMS provider is connected."
+          : "No SMS provider is configured.",
+      };
     }
     console.info(`\n  [dev SMS] ${input.to} → ${input.body}\n`);
     return { status: "sent", providerRef: null };
@@ -174,16 +189,28 @@ export async function sendWebPush(input: {
 }
 
 /**
+ * What happened to a one-time code. `shown` exists only on a demo deployment
+ * with no provider for the channel: the code was not sent anywhere, and the
+ * caller is to put it on the screen, labelled as a demonstration.
+ */
+export type OtpResult = SendResult | { status: "shown"; code: string };
+
+/**
  * A one-time code, on whichever channel it was asked for.
  *
  * Kept here rather than in the registration module so that there is exactly
- * one place in this codebase where a plaintext code is handed to a provider.
+ * one place in this codebase where a plaintext code is handed to a provider —
+ * registration, password reset and a phone-number change all come through it.
  */
 export async function sendOtp(input: {
   to: string;
   code: string;
   channel: "sms" | "whatsapp";
-}): Promise<SendResult> {
+}): Promise<OtpResult> {
+  if (!channelIsConfigured(input.channel) && isDemoDeployment()) {
+    return { status: "shown", code: input.code };
+  }
+
   if (input.channel === "whatsapp") {
     return sendWhatsApp({
       to: input.to,

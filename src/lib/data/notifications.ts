@@ -103,9 +103,11 @@ export async function dispatchQueuedNotifications(limit = BATCH): Promise<Dispat
     switch (row.channel) {
       case "whatsapp":
         if (!row.destination) return { status: "failed", error: "No WhatsApp number on file." };
+        // One template for every kind: {{1}} is the title, {{2}} the body.
+        // The wording is in docs/deploy-demo.md, and Meta has to approve it.
         return sendWhatsApp({
           to: row.destination,
-          template: "dept_flow_alert",
+          template: process.env.WHATSAPP_ALERT_TEMPLATE || "eeas_alert",
           variables: [notification.title, notification.body],
         });
 

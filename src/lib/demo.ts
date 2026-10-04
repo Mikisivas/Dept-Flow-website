@@ -6,16 +6,18 @@ import "server-only";
  * Switched on by `DEMO_DEPLOYMENT=true`. It changes exactly one behaviour and
  * says so on every page:
  *
- *   - **Verification codes are shown on screen** instead of sent, when no SMS
- *     or WhatsApp provider is connected. Registration and password reset both
- *     need a code to reach a phone, and neither provider is wired (see
+ *   - **Verification codes are shown on screen** instead of sent, when no
+ *     provider can carry them. Registration and password reset both need a
+ *     code to reach a phone; SMS is not wired, and a code by WhatsApp needs an
+ *     authentication template on top of the connection (see
  *     `src/lib/messaging.ts`). Without this, nobody on the panel could create
  *     an account, and the honest production behaviour — refuse — is the right
  *     behaviour for a real launch and the wrong one for a demonstration.
  *
- * Everything else behaves as production does. SMS and WhatsApp alerts still
- * fail and are recorded as failed, with a reason that says why; the in-app copy
- * and Web Push still work; nothing pretends to have been sent.
+ * Everything else behaves as production does. SMS alerts — and WhatsApp ones,
+ * unless WhatsApp is connected — fail and are recorded as failed, with a reason
+ * that says why; the in-app copy and Web Push still work; nothing pretends to
+ * have been sent.
  *
  * THE INTERLOCK
  *

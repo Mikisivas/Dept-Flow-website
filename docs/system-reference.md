@@ -420,17 +420,22 @@ belongs in future work.
 
 ## 11. Not built, and why
 
-- **SMS and WhatsApp delivery.** The queue, the channel policy, the fallback and the
-  delivery record are real and tested. What is missing is one HTTP call per provider,
-  and its shape depends on which number the department registers. Both seams report
-  failure in production rather than pretending to have sent — a stub that silently
-  succeeds is the worst possible failure mode for a warning system, because every
-  delivery row reads `sent` and nobody finds out until an examination board.
+- **SMS delivery.** The queue, the channel policy, the WhatsApp→SMS fallback and
+  the delivery record are real and tested; what is missing is the one HTTP call to a
+  provider (Termii or Africa's Talking). In production the seam reports failure rather
+  than pretending to have sent — a stub that silently succeeds is the worst possible
+  failure mode for a warning system, because every delivery row reads `sent` and nobody
+  finds out until an examination board.
+- **WhatsApp is wired**, to Meta's WhatsApp Cloud API. Every message is a pre-approved
+  template, as Meta requires for business-initiated messages. The request is verified
+  against a fake Meta in `tests/whatsapp.mts`; the first send to Meta itself is the
+  defence rehearsal, using Meta's free test number (`docs/deploy-demo.md` §3b).
 - **Deployment.** A demo deployment for the defence is documented in
   `docs/deploy-demo.md`. It runs with `DEMO_DEPLOYMENT=true`, which shows
   verification codes on screen (no SMS provider is connected), carries a banner
   on every page, and refuses to engage next to a live Paystack key. Nothing else
-  changes: SMS and WhatsApp alerts are still recorded as failed, with the reason.
+  changes: SMS alerts, and WhatsApp ones unless it is connected, are recorded as
+  failed, with the reason.
 - **Web Push is wired end to end** and needs only VAPID keys.
 
 ---

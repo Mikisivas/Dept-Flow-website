@@ -192,8 +192,11 @@ only, and `attendance_pct()` has never been allowed to consult it. Nor does the
 permit panel: `lectures_needed()` is deterministic arithmetic on the threshold,
 and a test deletes every prediction and checks the panel does not move.
 
-**Not built:** SMS and WhatsApp delivery (both seams report failure in
-production rather than pretending), deployment. Web Push **is** wired end to
+**Not built:** SMS delivery (the seam reports failure in production rather
+than pretending), deployment. **WhatsApp is wired** to Meta's Cloud API
+(template sends only; `tests/whatsapp.mts` pins the request against a fake
+Meta) but has not been run against Meta itself from here — the first live
+send is the rehearsal in `docs/deploy-demo.md` §3b. Web Push **is** wired end to
 end and needs only VAPID keys — `npx web-push generate-vapid-keys`.
 
 **Demo deployment for the defence** — `docs/deploy-demo.md`. With
@@ -201,7 +204,8 @@ end and needs only VAPID keys — `npx web-push generate-vapid-keys`.
 `shown` and registration, password reset and phone change display it on
 screen; a banner on every page says so. It refuses to engage next to a live
 Paystack key (`src/lib/demo.ts`, tested in `tests/demo-mode.mts`). That is the
-only behaviour it changes: SMS and WhatsApp alerts still fail and say why.
+only behaviour it changes: SMS alerts, and WhatsApp ones unless it is
+connected, still fail and say why.
 All three OTP flows go through the one `sendOtp` seam; password reset used to
 have its own stub.
 

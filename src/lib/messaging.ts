@@ -54,21 +54,36 @@ export function channelIsConfigured(channel: Channel): boolean {
 }
 
 /**
- * WhatsApp Business API.
+ * WhatsApp, through Meta's WhatsApp Cloud API.
  *
  * Nigerian students overwhelmingly have WhatsApp and it costs the department
- * nothing per message, which is why the policy leans on it for everything
- * short of the final warning. Business-initiated messages outside a 24-hour
- * window must use a pre-approved template — that is a real operational
- * constraint, not a detail, and a send that ignores it is rejected by Meta
- * rather than delivered late.
+ * little or nothing per message, which is why the policy leans on it for
+ * everything short of the final warning.
+ *
+ * Every message this system sends is business-initiated, and Meta only
+ * delivers those as a pre-approved TEMPLATE — free text is rejected outside a
+ * 24-hour window the student would have to open by writing first. So a send
+ * names a template and fills its placeholders; it never carries a body of its
+ * own. The templates are created and approved in Meta's WhatsApp Manager
+ * (docs/deploy-demo.md has the exact wording), and their names are config,
+ * because a renamed template must not need a deploy.
+ *
+ * For a demo, Meta's free test number sends to up to five recipient numbers
+ * that have been verified in the dashboard — enough for a defence, no
+ * business verification needed.
  */
 export async function sendWhatsApp(input: {
   to: string;
-  /** Name of the approved template. Required outside the 24-hour window. */
+  /** Name of the approved template. */
   template: string;
-  /** Ordered substitutions for the template's placeholders. */
+  /** Ordered substitutions for the template body's {{1}}, {{2}}, … */
   variables: string[];
+  /**
+   * The value for an authentication template's copy-code button. Meta
+   * requires it on every authentication template, and the code goes in it as
+   * well as in the body.
+   */
+  copyCode?: string;
 }): Promise<SendResult> {
   if (!channelIsConfigured("whatsapp")) {
     if (process.env.NODE_ENV === "production") {
@@ -83,11 +98,80 @@ export async function sendWhatsApp(input: {
     return { status: "sent", providerRef: null };
   }
 
-  // The real call goes here. Left unwritten rather than guessed: the request
-  // shape depends on which number the department registers with Meta, and a
-  // plausible-looking call to an endpoint nobody has tested is worse than an
-  // honest gap, because it looks finished.
-  return { status: "failed", error: "WhatsApp provider is configured but not implemented." };
+  const version = process.env.WHATSAPP_API_VERSION || "v23.0";
+  const url = `https://graph.facebook.com/${version}/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`;
+
+  const components: unknown[] = [];
+  if (input.variables.length > 0) {
+    components.push({
+      type: "body",
+      parameters: input.variables.map((text) => ({ type: "text", text: templateText(text) })),
+    });
+  }
+  if (input.copyCode) {
+    components.push({
+      type: "button",
+      sub_type: "url",
+      index: "0",
+      parameters: [{ type: "text", text: input.copyCode }],
+    });
+  }
+
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.WHATSAPP_API_TOKEN}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        messaging_product: "whatsapp",
+        // Meta takes the number in international form without the plus.
+        to: input.to.replace(/^\+/, ""),
+        type: "template",
+        template: {
+          name: input.template,
+          language: { code: process.env.WHATSAPP_TEMPLATE_LANGUAGE || "en" },
+          components,
+        },
+      }),
+      // The dispatcher drains a batch per tick. One provider that hangs must
+      // not hold every other student's warning behind it.
+      signal: AbortSignal.timeout(10_000),
+    });
+
+    const body = (await response.json().catch(() => null)) as
+      | { messages?: Array<{ id?: string }>; error?: { message?: string; code?: number } }
+      | null;
+
+    if (!response.ok) {
+      // Meta's own message, verbatim, onto the delivery row: "Recipient phone
+      // number not in allowed list" and "Template name does not exist" are
+      // the two a demo hits, and each says exactly what to fix.
+      const reason = body?.error?.message ?? `HTTP ${response.status}`;
+      return { status: "failed", error: `WhatsApp refused it: ${reason}` };
+    }
+
+    // Accepted by Meta, which is all `sent` has ever claimed. Delivery and
+    // reads arrive later as webhooks this system does not subscribe to.
+    return { status: "sent", providerRef: body?.messages?.[0]?.id ?? null };
+  } catch (error) {
+    return {
+      status: "failed",
+      error: error instanceof Error ? `WhatsApp unreachable: ${error.message}` : "WhatsApp unreachable.",
+    };
+  }
+}
+
+/**
+ * Meta rejects a template parameter containing a newline, a tab or more than
+ * four spaces in a row, and caps its length. A notification body is prose
+ * written for the in-app screen, so it is flattened to one line rather than
+ * refused — the in-app copy keeps its paragraphs.
+ */
+function templateText(text: string): string {
+  const flat = text.replace(/\s+/g, " ").trim();
+  return flat.length > 900 ? `${flat.slice(0, 899)}…` : flat;
 }
 
 /**
@@ -207,15 +291,29 @@ export async function sendOtp(input: {
   code: string;
   channel: "sms" | "whatsapp";
 }): Promise<OtpResult> {
-  if (!channelIsConfigured(input.channel) && isDemoDeployment()) {
+  // A code by WhatsApp needs its own AUTHENTICATION template on top of the
+  // connection itself — Meta will not carry a code in the alert template. So
+  // a WhatsApp connection made for alerts alone is not one that can send
+  // codes, and is treated as absent for this purpose.
+  const otpTemplate = process.env.WHATSAPP_OTP_TEMPLATE;
+  const canSend =
+    input.channel === "sms"
+      ? channelIsConfigured("sms")
+      : channelIsConfigured("whatsapp") && Boolean(otpTemplate);
+
+  if (!canSend && isDemoDeployment()) {
     return { status: "shown", code: input.code };
   }
 
   if (input.channel === "whatsapp") {
+    if (channelIsConfigured("whatsapp") && !otpTemplate) {
+      return { status: "failed", error: "No WhatsApp authentication template is configured." };
+    }
     return sendWhatsApp({
       to: input.to,
-      template: "dept_flow_otp",
+      template: otpTemplate ?? "eeas_otp",
       variables: [input.code],
+      copyCode: input.code,
     });
   }
 

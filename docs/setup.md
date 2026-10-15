@@ -58,8 +58,8 @@ for you. These are not, and each has one place it comes from:
 | `NEXT_PUBLIC_SITE_URL` | your own URL | Paystack's return, and the permit's QR code |
 | `VAPID_PUBLIC_KEY`, `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` | `npx web-push generate-vapid-keys` | Web Push |
 | `VAPID_SUBJECT` | a `mailto:` the department reads | Web Push |
-| `WHATSAPP_API_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID` | Meta Business | not implemented — see below |
-| `SMS_API_KEY` | your SMS provider | not implemented — see below |
+| `WHATSAPP_API_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID` | Meta Business | WhatsApp alerts (`docs/deploy-demo.md` §3b) |
+| `SMS_API_KEY`, `SMS_USERNAME`, `SMS_SANDBOX`, `SMS_SENDER_ID` | Africa's Talking | SMS alerts. Sandbox is free: `SMS_USERNAME=sandbox`, `SMS_SANDBOX=true` |
 
 The public VAPID key appears twice on purpose: the browser needs it to subscribe,
 so it has to be `NEXT_PUBLIC_`, and the server needs it to sign, so it also has to

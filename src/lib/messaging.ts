@@ -195,8 +195,53 @@ export async function sendSms(input: { to: string; body: string }): Promise<Send
     return { status: "sent", providerRef: null };
   }
 
-  // Termii or Africa's Talking, whichever the department contracts with.
-  return { status: "failed", error: "SMS provider is configured but not implemented." };
+  // Africa's Talking. Its sandbox is free and takes the same request as the
+  // live API, so a demo costs nothing and going live changes only the
+  // environment: SMS_USERNAME, SMS_API_KEY and SMS_SANDBOX=false.
+  const username = process.env.SMS_USERNAME;
+  if (!username) {
+    return { status: "failed", error: "SMS_USERNAME is not set." };
+  }
+
+  const sandbox = process.env.SMS_SANDBOX === "true";
+  const host = sandbox ? "api.sandbox.africastalking.com" : "api.africastalking.com";
+  const form = new URLSearchParams({ username, to: input.to, message: input.body });
+  if (process.env.SMS_SENDER_ID) form.set("from", process.env.SMS_SENDER_ID);
+
+  try {
+    const response = await fetch(`https://${host}/version1/messaging`, {
+      method: "POST",
+      headers: {
+        apiKey: process.env.SMS_API_KEY!,
+        Accept: "application/json",
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: form,
+      signal: AbortSignal.timeout(10_000),
+    });
+
+    const body = (await response.json().catch(() => null)) as {
+      SMSMessageData?: { Recipients?: Array<{ status?: string; statusCode?: number; messageId?: string }> };
+    } | null;
+
+    if (!response.ok) {
+      return { status: "failed", error: `SMS refused it: HTTP ${response.status}` };
+    }
+
+    // A 201 with a rejected recipient is still a failure. 100, 101 and 102
+    // are Africa's Talking's processed, sent and queued codes.
+    const recipient = body?.SMSMessageData?.Recipients?.[0];
+    if (!recipient || ![100, 101, 102].includes(recipient.statusCode ?? -1)) {
+      return { status: "failed", error: `SMS refused it: ${recipient?.status ?? "no recipient returned"}` };
+    }
+
+    return { status: "sent", providerRef: recipient.messageId ?? null };
+  } catch (error) {
+    return {
+      status: "failed",
+      error: error instanceof Error ? `SMS unreachable: ${error.message}` : "SMS unreachable.",
+    };
+  }
 }
 
 /**

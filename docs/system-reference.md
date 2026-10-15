@@ -224,6 +224,14 @@ forward_rate  = (recent_rate + rate) / 2
 predicted_pct = (attended_total + remaining × forward_rate) / (held + remaining) × 100
 ```
 
+**Remaining lectures** come from `lectures_remaining()`. For a course with
+`planned_lectures` set, remaining is planned minus the lectures already closed, so each
+lecture held reduces it. Otherwise remaining is the course's weekly timetable slots
+times the weeks left before the session ends. The planned count is for a course taught
+to a fixed number of lectures, and for a test course run in arranged sessions, where
+the calendar would barely move between sessions. It is set from the optional seventh
+column of the admin's course-list upload.
+
 **Why not the regression slope.** The code computes an ordinary-least-squares slope with
 Postgres's `regr_slope()`, but deliberately does **not** extrapolate it to produce the
 projection. Extrapolating the slope "turns one missed lecture in ten into a projected
@@ -306,6 +314,14 @@ breaks and the gate simply never engages.
 
 Alerts escalate **one rung per tier**: in-app, then web push, then WhatsApp, then SMS.
 Reserving the paid channel for the most serious tier is the whole point of the ladder.
+
+Critical has three stages, by how little is left: lectures to spare, no slack (every
+remaining lecture is needed), and out of reach. SMS belongs to the last two. An alert
+goes out on every tier change **and** whenever a Critical student moves to a worse stage
+(migration `20261015000100`). Before that migration the function only fired on a tier
+change, so a student who turned Critical while still able to recover and later ran out
+of slack was never sent the SMS the ladder held back for them — the final warning
+existed in the copy and the comments but was never written.
 
 The queue is drained separately from the writing of notifications, on purpose:
 `queue_notification()` runs inside whatever transaction produced the event, and a
@@ -397,7 +413,7 @@ These are the defensible positions. Each has a reason, not just a preference.
 
 | Check | Scale |
 |---|---|
-| Schema assertions against a local PostgreSQL | 437 |
+| Schema assertions against a local PostgreSQL | 451 |
 | Select-column checks (every column any query asks for exists) | 510 |
 | Application test suites (Paystack, account, timetable, query-result) | 4 suites, 99 assertions |
 

@@ -166,7 +166,7 @@ screens — that order has held throughout.
 | Semester registration | Admin sets the window; the student confirms; `confirm_registration()` stamps it server-side and backfills absences for anyone confirming late. Attendance is gated on it. |
 | Attendance | Lecturer opens a lecture, issues one code, closes it; the student submits the code; `resolve_session_score()` scores everyone. No location, either end. |
 | Dues | Paystack redirect → verify → `apply_payment()`. Instalments run a balance down; nothing about attendance changes. Reversals re-lock, with notice. |
-| Forecast | `compute_risk_predictions()` projects where each student finishes per course; Safe / Watch / Critical; alerts escalate in-app → push → WhatsApp → SMS, one rung per tier. |
+| Forecast | `compute_risk_predictions()` projects where each student finishes per course; Safe / Watch / Critical; alerts escalate in-app → push → WhatsApp → SMS, one rung per tier, and again when a Critical student loses their slack or the chance to recover. A course with `planned_lectures` set counts remaining lectures as planned minus closed; otherwise from the timetable and the session end date. |
 | Reminders and reports | pg_cron fires pre-lecture reminders and the Monday digest; weekly, monthly and semester reports share one generator with the permit. |
 | Exam permit | Needs dues paid in full AND ≥75% per course. A live panel says what is outstanding; the document carries a QR to `/check/permit`. |
 | Course registration | Admin uploads the list; students pick electives and carry-overs against a 24-unit cap. |
@@ -210,7 +210,7 @@ All three OTP flows go through the one `sendOtp` seam; password reset used to
 have its own stub.
 
 **Checks:** `npm test` (24 Paystack + 32 account + 28 timetable assertions, no
-network) and `./scripts/schema-test.sh` (437 assertions against a local
+network) and `./scripts/schema-test.sh` (451 assertions against a local
 Postgres, which also verifies the whole schema applies inside ONE transaction —
 the Supabase SQL Editor runs it that way, so a migration that only works
 outside one is a migration that cannot be deployed).

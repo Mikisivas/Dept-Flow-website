@@ -58,9 +58,11 @@ export function CourseUpload() {
       <p className="mt-1 text-[14px] leading-relaxed text-slate">
         One course per line:{" "}
         <span className="tabular" translate="no">
-          code, title, level, core|elective, credit units, semester
+          code, title, level, core|elective, credit units, semester, planned lectures
         </span>
-        . Units default to 3 and semester to 1. A header row is ignored.
+        . Units default to 3 and semester to 1. Leave planned lectures blank to count the
+        remaining lectures from the timetable; give a number when the course has a fixed
+        length. A header row is ignored.
       </p>
 
       <label htmlFor="course-csv" className="sr-only">

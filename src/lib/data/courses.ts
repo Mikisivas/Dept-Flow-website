@@ -37,11 +37,16 @@ export type CourseUploadResult = {
  * prefix for Computer Science is CMP, the database rejects CSC outright, and a
  * silently skipped row is how a course goes untracked for a term.
  */
-function parseRow(line: string, index: number): { row?: Omit<CatalogueCourse, "courseId" | "lecturer" | "enrolled">; reason?: string } {
+/** A parsed row: the catalogue fields, plus the course's planned length when the sheet states one. */
+type ParsedCourse = Omit<CatalogueCourse, "courseId" | "lecturer" | "enrolled"> & {
+  plannedLectures: number | null;
+};
+
+function parseRow(line: string, index: number): { row?: ParsedCourse; reason?: string } {
   const parts = line.split(",").map((part) => part.trim());
   if (parts.length < 4) return { reason: "needs at least code, title, level, kind" };
 
-  const [code, title, levelText, kindText, unitsText, semesterText] = parts;
+  const [code, title, levelText, kindText, unitsText, semesterText, plannedText] = parts;
   const upper = code.toUpperCase();
 
   if (!/^(MTH|CMP|STA) [0-9]{3}$/.test(upper)) {
@@ -67,8 +72,17 @@ function parseRow(line: string, index: number): { row?: Omit<CatalogueCourse, "c
   const semester = semesterText ? Number(semesterText) : 1;
   if (semester !== 1 && semester !== 2) return { reason: `semester must be 1 or 2` };
 
+  // Optional. Blank leaves the forecast counting the remaining lectures from
+  // the timetable and the session's end date, which is right for most courses.
+  // A number fixes the course's length, so each closed lecture reduces what
+  // remains — for a course taught to a set count, or a test course.
+  const plannedLectures = plannedText ? Number(plannedText) : null;
+  if (plannedLectures !== null && (!Number.isInteger(plannedLectures) || plannedLectures < 1 || plannedLectures > 200)) {
+    return { reason: `planned lectures must be a whole number from 1 to 200, or left blank` };
+  }
+
   void index;
-  return { row: { code: upper, title, level, kind, creditUnits, semester } };
+  return { row: { code: upper, title, level, kind, creditUnits, semester, plannedLectures } };
 }
 
 /**
@@ -98,7 +112,7 @@ export async function uploadCourses(csv: string): Promise<CourseUploadResult> {
     .filter((line, index) => !(index === 0 && /^code\s*,/i.test(line)));
 
   const rejected: CourseUploadResult["rejected"] = [];
-  const rows: Array<ReturnType<typeof parseRow>["row"] & object> = [];
+  const rows: ParsedCourse[] = [];
 
   lines.forEach((line, index) => {
     const { row, reason } = parseRow(line, index);
@@ -124,6 +138,7 @@ export async function uploadCourses(csv: string): Promise<CourseUploadResult> {
       kind: row.kind,
       credit_units: row.creditUnits,
       semester: row.semester,
+      planned_lectures: row.plannedLectures,
     })),
     { onConflict: "academic_session_id,code" },
   );

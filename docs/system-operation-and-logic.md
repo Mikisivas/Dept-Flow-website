@@ -282,8 +282,11 @@ The ladder is about scarcity, not technology. SMS costs money and is the only ch
 that needs no data connection, so it is held for the message that has to arrive. A
 student who gets a text in week six has nothing louder waiting in week eleven.
 
-One alert per student, per course, per tier change. An alert that repeats nightly is
-an alert a student mutes, and a muted channel cannot warn them later.
+One alert per student, per course, per tier change, plus one more each time a Critical
+student's position worsens within Critical: from lectures to spare, to no slack, to out
+of reach. That second rule is how the Final row is ever reached by a student who was
+already Critical. An alert that repeats nightly is an alert a student mutes, so nothing
+is sent while the position stays the same or improves within Critical.
 
 **The copy names the course and the exact number of classes**, always:
 

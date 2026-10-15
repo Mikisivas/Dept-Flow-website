@@ -4378,6 +4378,175 @@ select assert_rejects(
 
 reset role;
 
+-- ---------------------------------------------------------------------------
+-- The final warning, and a course that states its length
+-- ---------------------------------------------------------------------------
+--
+-- The thesis tests the alerts with five scenarios on a course of 20 planned
+-- lectures, run in 12 arranged sessions (Chapter Three, Figure 3.3). This
+-- block runs those exact patterns through compute_risk_predictions() and
+-- send_risk_alerts() after every session, so the numbers in the thesis and
+-- the behaviour of the code cannot drift apart.
+
+do $$
+declare
+  v_course  uuid := gen_random_uuid();
+  v_entry   uuid;
+  v_lecture uuid;
+  v_student uuid;
+  v_pattern text;
+  v_tier    text;
+  v_n       integer := 0;
+  i         integer;
+  s         record;
+begin
+  create temp table scenario_students (scenario text, student_id uuid, pattern text) on commit drop;
+  create temp table scenario_log (scenario text, student_id uuid, session integer, tier text,
+                                  alerts integer, sms integer) on commit drop;
+
+  insert into courses (id, academic_session_id, code, title, level, kind, credit_units,
+                       semester, lecturer_id, planned_lectures)
+  values (v_course, '11111111-1111-1111-1111-111111111111', 'CMP 393', 'Scenario Fixture',
+          300, 'core', 3, 1, '33333333-3333-3333-3333-333333333301', 20);
+
+  -- A weekly slot as well, so the test proves the planned count wins over the
+  -- calendar rather than merely filling in for a missing timetable.
+  insert into timetable_entries (academic_session_id, course_id, day_of_week, start_time, end_time, venue_id)
+  values ('11111111-1111-1111-1111-111111111111', v_course, 4, '09:00', '11:00',
+          '22222222-2222-2222-2222-222222222201')
+  returning id into v_entry;
+
+  -- Two students per scenario. 1 = present, 0 = absent, session by session.
+  for s in
+    select * from (values
+      ('A', '111111111111'), ('B', '111111111010'), ('C', '111111101000'),
+      ('D', '111010010001'), ('E', '111111001111')
+    ) as t(scenario, pattern)
+  loop
+    for i in 1..2 loop
+      v_student := gen_random_uuid();
+      v_n := v_n + 1;
+      insert into profiles (id, role, surname, first_name, phone)
+      values (v_student, 'student', 'Scenario' || s.scenario, 'Student' || i,
+              '+23480500077' || lpad(v_n::text, 2, '0'));
+      insert into students (id, matric_no, level)
+      values (v_student, 'CMP/2024/7' || lpad(v_n::text, 2, '0'), 300);
+      insert into enrolments (student_id, course_id, source, enrolled_on)
+      values (v_student, v_course, 'core', session_day(0));
+      insert into scenario_students values (s.scenario, v_student, s.pattern);
+    end loop;
+  end loop;
+
+  perform assert_true(
+    lectures_remaining(v_course) = 20,
+    'a course that states 20 lectures has 20 remaining before any is held — the calendar is not consulted'
+  );
+
+  for i in 1..12 loop
+    v_lecture := gen_random_uuid();
+    insert into session_instances (id, course_id, timetable_entry_id, held_on, venue_id,
+                                  type, status, closed_at, created_by)
+    values (v_lecture, v_course, v_entry, session_day(i),
+            '22222222-2222-2222-2222-222222222201', 'recurring', 'closed', now(),
+            '33333333-3333-3333-3333-333333333301');
+
+    insert into session_scores (student_id, session_instance_id, score, source)
+    select ss.student_id, v_lecture,
+           case when substr(ss.pattern, i, 1) = '1' then 1.0 else 0 end, 'digital'
+    from scenario_students ss;
+
+    perform compute_risk_predictions();
+    perform send_risk_alerts();
+
+    insert into scenario_log
+    select ss.scenario, ss.student_id, i,
+           (select rp.tier::text from risk_predictions rp
+             where rp.student_id = ss.student_id and rp.course_id = v_course),
+           (select count(*) from risk_alerts_sent ra
+             where ra.student_id = ss.student_id and ra.course_id = v_course),
+           (select count(*) from risk_alerts_sent ra
+              join notification_deliveries nd on nd.notification_id = ra.notification_id
+             where ra.student_id = ss.student_id and ra.course_id = v_course
+               and nd.channel = 'sms')
+    from scenario_students ss;
+  end loop;
+
+  perform assert_true(
+    lectures_remaining(v_course) = 8,
+    'and 8 after twelve are closed — holding a lecture now reduces what remains'
+  );
+
+  perform assert_true(
+    not exists (select 1 from scenario_log where session < 5 and tier is not null),
+    'no scenario is forecast before the fifth closed lecture'
+  );
+
+  perform assert_true(
+    not exists (select 1 from scenario_log where scenario = 'A' and session >= 5 and tier <> 'safe')
+    and not exists (select 1 from scenario_log where scenario = 'A' and alerts > 0),
+    'Scenario A, present at every session, stays Safe and is never warned'
+  );
+
+  perform assert_true(
+    not exists (select 1 from scenario_log where scenario = 'B' and session between 5 and 11 and tier <> 'safe')
+    and not exists (select 1 from scenario_log where scenario = 'B' and session = 12 and tier <> 'watch'),
+    'Scenario B reaches Watch at session 12'
+  );
+
+  perform assert_true(
+    not exists (select 1 from scenario_log where scenario = 'C' and session = 10 and tier <> 'watch')
+    and not exists (select 1 from scenario_log where scenario = 'C' and session = 11 and tier <> 'critical'),
+    'Scenario C reaches Watch at session 10 — the projection lands exactly on 75%, which is Watch — and Critical at 11'
+  );
+
+  perform assert_true(
+    not exists (select 1 from scenario_log where scenario = 'C' and sms > 0),
+    'and Scenario C, still able to recover, receives no SMS'
+  );
+
+  perform assert_true(
+    not exists (select 1 from scenario_log where scenario = 'D' and session = 6 and (tier <> 'critical' or alerts <> 1 or sms <> 0)),
+    'Scenario D turns Critical at session 6 with lectures to spare: one warning, no SMS'
+  );
+
+  -- The bug this block exists to keep out. Same tier, worse position: the
+  -- warning the SMS was held back for has to be sent.
+  perform assert_true(
+    not exists (select 1 from scenario_log where scenario = 'D' and session = 10 and (alerts <> 2 or sms <> 1)),
+    'at session 10 every remaining lecture is needed, and a second warning goes out by SMS though the tier has not changed'
+  );
+
+  perform assert_true(
+    not exists (select 1 from scenario_log where scenario = 'D' and session = 11 and (alerts <> 3 or sms <> 2)),
+    'at session 11 75% is out of reach, and the final warning goes out by SMS'
+  );
+
+  perform assert_true(
+    not exists (select 1 from scenario_log where scenario = 'D' and session = 12 and alerts <> 3),
+    'and nothing more at session 12 — out of reach once is out of reach, not a nightly message'
+  );
+
+  perform assert_true(
+    not exists (select 1 from scenario_log where scenario = 'E' and session = 8 and tier <> 'critical')
+    and not exists (select 1 from scenario_log where scenario = 'E' and session = 10 and tier <> 'watch')
+    and not exists (select 1 from scenario_log where scenario = 'E' and session = 12 and tier <> 'safe'),
+    'Scenario E turns Critical at session 8, recovers to Watch at 10 and to Safe at 12'
+  );
+
+  perform assert_true(
+    exists (select 1 from scenario_log where scenario = 'E' and session = 8)
+    and (select attendance_pct(student_id, v_course) from scenario_log
+          where scenario = 'E' and session = 12 limit 1) >= 75,
+    'Scenario E is Critical at session 8 while attendance so far stands at 75% — the warning a tally would never give'
+  );
+
+  perform assert_true(
+    send_risk_alerts() = 0,
+    'run again with nothing changed, the alerts stay silent'
+  );
+end;
+$$;
+
 -- The report /api/health reads. Running the full migration set and being told
 -- something is missing would mean the report's own expectations have drifted
 -- from the migrations, which is worse than no report.

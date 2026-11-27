@@ -45,11 +45,15 @@ export type SendResult =
 export function channelIsConfigured(channel: Channel): boolean {
   switch (channel) {
     case "whatsapp":
-      return Boolean(process.env.WHATSAPP_API_TOKEN && process.env.WHATSAPP_PHONE_NUMBER_ID);
+      return Boolean(
+        process.env.WHATSAPP_API_TOKEN && process.env.WHATSAPP_PHONE_NUMBER_ID,
+      );
     case "sms":
       return Boolean(process.env.SMS_API_KEY);
     case "web_push":
-      return Boolean(process.env.VAPID_PRIVATE_KEY && process.env.VAPID_PUBLIC_KEY);
+      return Boolean(
+        process.env.VAPID_PRIVATE_KEY && process.env.VAPID_PUBLIC_KEY,
+      );
   }
 }
 
@@ -94,7 +98,9 @@ export async function sendWhatsApp(input: {
           : "No WhatsApp provider is configured.",
       };
     }
-    console.info(`\n  [dev WhatsApp] ${input.to} · ${input.template}(${input.variables.join(" | ")})\n`);
+    console.info(
+      `\n  [dev WhatsApp] ${input.to} · ${input.template}(${input.variables.join(" | ")})\n`,
+    );
     return { status: "sent", providerRef: null };
   }
 
@@ -105,7 +111,10 @@ export async function sendWhatsApp(input: {
   if (input.variables.length > 0) {
     components.push({
       type: "body",
-      parameters: input.variables.map((text) => ({ type: "text", text: templateText(text) })),
+      parameters: input.variables.map((text) => ({
+        type: "text",
+        text: templateText(text),
+      })),
     });
   }
   if (input.copyCode) {
@@ -140,9 +149,10 @@ export async function sendWhatsApp(input: {
       signal: AbortSignal.timeout(10_000),
     });
 
-    const body = (await response.json().catch(() => null)) as
-      | { messages?: Array<{ id?: string }>; error?: { message?: string; code?: number } }
-      | null;
+    const body = (await response.json().catch(() => null)) as {
+      messages?: Array<{ id?: string }>;
+      error?: { message?: string; code?: number };
+    } | null;
 
     if (!response.ok) {
       // Meta's own message, verbatim, onto the delivery row: "Recipient phone
@@ -158,7 +168,10 @@ export async function sendWhatsApp(input: {
   } catch (error) {
     return {
       status: "failed",
-      error: error instanceof Error ? `WhatsApp unreachable: ${error.message}` : "WhatsApp unreachable.",
+      error:
+        error instanceof Error
+          ? `WhatsApp unreachable: ${error.message}`
+          : "WhatsApp unreachable.",
     };
   }
 }
@@ -181,7 +194,10 @@ function templateText(text: string): string {
  * for the final warning and why `record_delivery_failure()` refuses to fall
  * back to it for anything else.
  */
-export async function sendSms(input: { to: string; body: string }): Promise<SendResult> {
+export async function sendSms(input: {
+  to: string;
+  body: string;
+}): Promise<SendResult> {
   if (!channelIsConfigured("sms")) {
     if (process.env.NODE_ENV === "production") {
       return {
@@ -204,8 +220,14 @@ export async function sendSms(input: { to: string; body: string }): Promise<Send
   }
 
   const sandbox = process.env.SMS_SANDBOX === "true";
-  const host = sandbox ? "api.sandbox.africastalking.com" : "api.africastalking.com";
-  const form = new URLSearchParams({ username, to: input.to, message: input.body });
+  const host = sandbox
+    ? "api.sandbox.africastalking.com"
+    : "api.africastalking.com";
+  const form = new URLSearchParams({
+    username,
+    to: input.to,
+    message: input.body,
+  });
   if (process.env.SMS_SENDER_ID) form.set("from", process.env.SMS_SENDER_ID);
 
   try {
@@ -221,25 +243,40 @@ export async function sendSms(input: { to: string; body: string }): Promise<Send
     });
 
     const body = (await response.json().catch(() => null)) as {
-      SMSMessageData?: { Recipients?: Array<{ status?: string; statusCode?: number; messageId?: string }> };
+      SMSMessageData?: {
+        Recipients?: Array<{
+          status?: string;
+          statusCode?: number;
+          messageId?: string;
+        }>;
+      };
     } | null;
 
     if (!response.ok) {
-      return { status: "failed", error: `SMS refused it: HTTP ${response.status}` };
+      return {
+        status: "failed",
+        error: `SMS refused it: HTTP ${response.status}`,
+      };
     }
 
     // A 201 with a rejected recipient is still a failure. 100, 101 and 102
     // are Africa's Talking's processed, sent and queued codes.
     const recipient = body?.SMSMessageData?.Recipients?.[0];
     if (!recipient || ![100, 101, 102].includes(recipient.statusCode ?? -1)) {
-      return { status: "failed", error: `SMS refused it: ${recipient?.status ?? "no recipient returned"}` };
+      return {
+        status: "failed",
+        error: `SMS refused it: ${recipient?.status ?? "no recipient returned"}`,
+      };
     }
 
     return { status: "sent", providerRef: recipient.messageId ?? null };
   } catch (error) {
     return {
       status: "failed",
-      error: error instanceof Error ? `SMS unreachable: ${error.message}` : "SMS unreachable.",
+      error:
+        error instanceof Error
+          ? `SMS unreachable: ${error.message}`
+          : "SMS unreachable.",
     };
   }
 }
@@ -312,7 +349,8 @@ export async function sendWebPush(input: {
 
     return {
       status: "failed",
-      error: error instanceof Error ? error.message : "The push service refused it.",
+      error:
+        error instanceof Error ? error.message : "The push service refused it.",
     };
   }
 }
@@ -352,7 +390,10 @@ export async function sendOtp(input: {
 
   if (input.channel === "whatsapp") {
     if (channelIsConfigured("whatsapp") && !otpTemplate) {
-      return { status: "failed", error: "No WhatsApp authentication template is configured." };
+      return {
+        status: "failed",
+        error: "No WhatsApp authentication template is configured.",
+      };
     }
     return sendWhatsApp({
       to: input.to,

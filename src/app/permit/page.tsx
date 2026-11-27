@@ -5,6 +5,7 @@ import { AppShell } from "@/components/app-shell";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
 import { loadExamPermit } from "@/lib/data/student";
+import { requireStudent } from "@/lib/data/require-student";
 import { formatPercent, naira } from "@/lib/format";
 import { EligibilityPanel } from "./eligibility-panel";
 import { IssuePermitButton, PermitDocument } from "./permit-document";
@@ -32,6 +33,10 @@ export const dynamic = "force-dynamic";
  * without an answer to that is a door with no handle.
  */
 export default async function PermitPage() {
+  // Signed out (or the wrong role) redirects here, as on every other student
+  // screen, rather than letting loadExamPermit throw "Not signed in" as a 500.
+  await requireStudent();
+
   const status = await loadExamPermit();
 
   return (
@@ -44,14 +49,21 @@ export default async function PermitPage() {
       <div className="mt-6 flex flex-col gap-6">
         {/* Above the outcome, not below it. A student who has been refused
             stops reading at the refusal, and what they need is underneath. */}
-        {status.state === "issued" ? null : <EligibilityPanel panel={status.panel} />}
+        {status.state === "issued" ? null : (
+          <EligibilityPanel panel={status.panel} />
+        )}
 
-        {status.state === "issued" ? <PermitDocument permit={status.permit} /> : null}
+        {status.state === "issued" ? (
+          <PermitDocument permit={status.permit} />
+        ) : null}
 
         {status.state === "dues_outstanding" ? (
           <section className="rounded-lg border border-line bg-surface p-5">
             <h2 className="flex items-center gap-2 text-[17px] font-semibold text-ink">
-              <Wallet className="h-5 w-5 shrink-0 text-slate" aria-hidden="true" />
+              <Wallet
+                className="h-5 w-5 shrink-0 text-slate"
+                aria-hidden="true"
+              />
               Your attendance clears you — your dues do not
             </h2>
             <p className="mt-1.5 text-[15px] leading-relaxed text-slate">
@@ -63,8 +75,9 @@ export default async function PermitPage() {
               <strong className="font-semibold text-ink tabular">
                 {naira(status.panel.duesOutstandingKobo)}
               </strong>{" "}
-              still outstanding is paid. Nothing about your attendance changes in the meantime —
-              lectures have been counting all along and go on counting.
+              still outstanding is paid. Nothing about your attendance changes
+              in the meantime — lectures have been counting all along and go on
+              counting.
             </p>
             <Link
               href="/dues"
@@ -95,14 +108,16 @@ export default async function PermitPage() {
 
         {status.state === "needs_issue" ? (
           <section className="rounded-lg border border-line bg-surface p-5">
-            <h2 className="text-[17px] font-semibold text-ink">Your permit is ready</h2>
+            <h2 className="text-[17px] font-semibold text-ink">
+              Your permit is ready
+            </h2>
             <p className="mt-1.5 text-[15px] leading-relaxed text-slate">
               The eligibility list clears you for{" "}
               <span className="font-medium text-ink" translate="no">
                 {status.eligibleCourses.join(", ")}
               </span>
-              . Getting it allocates a reference that stays the same however many times you print
-              it, so an old copy never stops verifying.
+              . Getting it allocates a reference that stays the same however
+              many times you print it, so an old copy never stops verifying.
             </p>
             <div className="mt-4">
               <IssuePermitButton />
@@ -116,9 +131,10 @@ export default async function PermitPage() {
               No permit — you are below the threshold in every course
             </h2>
             <p className="mt-1.5 text-[15px] leading-relaxed text-slate">
-              The eligibility list has been authorized and it does not clear you for any paper.
-              Speak to the department office: if you believe a lecture was recorded wrongly, a
-              dispute is the route, and the Head of Department can correct it.
+              The eligibility list has been authorized and it does not clear you
+              for any paper. Speak to the department office: if you believe a
+              lecture was recorded wrongly, a dispute is the route, and the Head
+              of Department can correct it.
             </p>
 
             <ul className="mt-4 flex flex-col gap-1">
@@ -127,8 +143,11 @@ export default async function PermitPage() {
                   <span className="font-semibold" translate="no">
                     {course.code}
                   </span>{" "}
-                  — <span className="tabular">{formatPercent(course.attendancePct)}</span> counted
-                  attendance
+                  —{" "}
+                  <span className="tabular">
+                    {formatPercent(course.attendancePct)}
+                  </span>{" "}
+                  counted attendance
                 </li>
               ))}
             </ul>

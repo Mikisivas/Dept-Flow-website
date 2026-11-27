@@ -16,7 +16,8 @@
     "test:result": "node --conditions=react-server --experimental-strip-types --import ./tests/register-hooks.mjs tests/query-result.mts",
     "test:demo": "node --conditions=react-server --experimental-strip-types --import ./tests/register-hooks.mjs tests/demo-mode.mts",
     "test:whatsapp": "node --conditions=react-server --experimental-strip-types --import ./tests/register-hooks.mjs tests/whatsapp.mts",
-    "test:sms": "node --conditions=react-server --experimental-strip-types --import ./tests/register-hooks.mjs tests/sms.mts"
+    "test:sms": "node --conditions=react-server --experimental-strip-types --import ./tests/register-hooks.mjs tests/sms.mts",
+    "smoke": "node --env-file=.env.local --conditions=react-server --experimental-strip-types --import ./tests/register-hooks.mjs scripts/channel-smoke.mts"
   },
   "dependencies": {
     "@node-rs/argon2": "^2.0.2",

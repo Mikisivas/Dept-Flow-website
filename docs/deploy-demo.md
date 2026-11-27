@@ -62,13 +62,14 @@ verification, no SIM.
 4. **WhatsApp Manager → Message templates → Create template.** Category
    **Utility**, name **`eeas_alert`**, language **English**, body:
 
-   > Examination-Eligibility Alert System, RMOAU. {{1}}: {{2}} Open the app for the details.
+   > Examination-Eligibility Alert System, MOAUM. {{1}}: {{2}} Open the app for the details.
 
    Sample values when Meta asks: `CMP 301: you are on course to miss the 75% mark`
    and `CMP 301 is projected to finish at 66.5%. Attend 13 of the 17 lectures left and you reach 75%.`
    Submit; utility templates are usually approved within minutes to hours.
    (The body cannot start or end with a placeholder, which is why the fixed
    words are there.)
+
 5. **A token.** The one on the API Setup page lasts 24 hours — fine if you make
    it on the morning of the defence. For a token that lasts, use **Business
    Settings → Users → System users → Add**, assign the app and the WhatsApp
@@ -81,10 +82,10 @@ verification, no SIM.
     where id = (select id from students where matric_no = 'CMP/2021/047');
    ```
 
-   Only messages queued *after* this go to the new number.
+   Only messages queued _after_ this go to the new number.
 
 Then add the WhatsApp variables in step 4. Codes still appear on screen: a
-code by WhatsApp needs a separate *authentication* template, and the demo does
+code by WhatsApp needs a separate _authentication_ template, and the demo does
 not need one.
 
 To show it: log in as the **HOD → Messages**, send a message to Chidera alone,
@@ -111,25 +112,26 @@ not exist" means step 4 is not approved yet.
    Git → Production Branch** and set it to that branch.
 3. **Environment Variables** — add each of these:
 
-   | Name | Value |
-   |---|---|
-   | `NEXT_PUBLIC_SUPABASE_URL` | the demo project's URL |
-   | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | its `anon` key |
-   | `SUPABASE_SERVICE_ROLE_KEY` | its `service_role` key |
-   | `SUPABASE_JWT_SECRET` | its JWT secret |
-   | `PAYSTACK_SECRET_KEY` | the `sk_test_…` key |
-   | `CRON_SECRET` | any long random string |
-   | `VAPID_PUBLIC_KEY` and `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | the public key, in both |
-   | `VAPID_PRIVATE_KEY` | the private key |
-   | `VAPID_SUBJECT` | `mailto:` and an address you read |
-   | `DEMO_DEPLOYMENT` | `true` |
-   | `WHATSAPP_API_TOKEN` | the token from 3b, if you did 3b |
-   | `WHATSAPP_PHONE_NUMBER_ID` | the test number's Phone number ID |
-   | `WHATSAPP_API_VERSION` | the version from the sample request, e.g. `v23.0` |
-   | `NEXT_PUBLIC_SITE_URL` | leave for now — step 5 |
+   | Name                                                  | Value                                             |
+   | ----------------------------------------------------- | ------------------------------------------------- |
+   | `NEXT_PUBLIC_SUPABASE_URL`                            | the demo project's URL                            |
+   | `NEXT_PUBLIC_SUPABASE_ANON_KEY`                       | its `anon` key                                    |
+   | `SUPABASE_SERVICE_ROLE_KEY`                           | its `service_role` key                            |
+   | `SUPABASE_JWT_SECRET`                                 | its JWT secret                                    |
+   | `PAYSTACK_SECRET_KEY`                                 | the `sk_test_…` key                               |
+   | `CRON_SECRET`                                         | any long random string                            |
+   | `VAPID_PUBLIC_KEY` and `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | the public key, in both                           |
+   | `VAPID_PRIVATE_KEY`                                   | the private key                                   |
+   | `VAPID_SUBJECT`                                       | `mailto:` and an address you read                 |
+   | `DEMO_DEPLOYMENT`                                     | `true`                                            |
+   | `WHATSAPP_API_TOKEN`                                  | the token from 3b, if you did 3b                  |
+   | `WHATSAPP_PHONE_NUMBER_ID`                            | the test number's Phone number ID                 |
+   | `WHATSAPP_API_VERSION`                                | the version from the sample request, e.g. `v23.0` |
+   | `NEXT_PUBLIC_SITE_URL`                                | leave for now — step 5                            |
 
    Leave `SMS_API_KEY` and `WHATSAPP_OTP_TEMPLATE` **unset**. That is what
    makes the codes appear on screen.
+
 4. **Deploy.** Note the address it gives you, e.g. `https://eeas-demo.vercel.app`.
 
 ## 5. Point everything at the address
@@ -227,6 +229,7 @@ is the flow worth showing: it is how a real cohort would join.
      courses, and the seed's 300-level core course is CMP 301, which has a
      term of lectures and today's slot. A level with no seeded core course
      gives an account with nothing on its dashboard.
+
 3. **Preview changes**, check the counts, then **Save N rows**. Nothing is
    written before the save.
 4. On each student's phone: **Create account** → matric number, surname,

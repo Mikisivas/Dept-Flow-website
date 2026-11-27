@@ -40,7 +40,10 @@ export function useToast() {
   return context;
 }
 
-const TONES: Record<ToastTone, { Icon: typeof CheckCircle2; className: string }> = {
+const TONES: Record<
+  ToastTone,
+  { Icon: typeof CheckCircle2; className: string }
+> = {
   success: { Icon: CheckCircle2, className: "text-ok" },
   pending: { Icon: Loader2, className: "text-info" },
   error: { Icon: TriangleAlert, className: "text-danger" },
@@ -98,7 +101,11 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                 ) : null}
                 {action ? (
                   <ToastPrimitive.Action asChild altText={action.label}>
-                    <Button variant="secondary" className="mt-2 h-9" onClick={action.onClick}>
+                    <Button
+                      variant="secondary"
+                      className="mt-2 h-9"
+                      onClick={action.onClick}
+                    >
                       {action.label}
                     </Button>
                   </ToastPrimitive.Action>
@@ -118,7 +125,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
           className={cn(
             "fixed z-60 flex w-full flex-col gap-2 p-4 outline-none",
             // Above the student bottom bar, and clear of the home indicator.
-            "bottom-[calc(4rem+env(safe-area-inset-bottom))] sm:right-0 sm:bottom-0 sm:max-w-sm",
+            "bottom-[calc(4rem+env(safe-area-inset-bottom))] sm:right-0 sm:max-w-sm lg:bottom-0",
           )}
         />
       </ToastPrimitive.Provider>

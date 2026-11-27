@@ -20,12 +20,14 @@ export function StickyActionBar({
   return (
     <div
       className={cn(
-        "sticky bottom-0 z-30 -mx-4 mt-6 border-t border-line bg-surface px-4 pt-3",
+        "sticky bottom-0 z-30 -mx-4 mt-6 border-t border-line bg-surface px-4 pt-3 lg:-mx-8 lg:px-8",
         "pb-[max(0.75rem,env(safe-area-inset-bottom))]",
         className,
       )}
     >
-      {context ? <p className="mb-2 text-[13px] text-slate tabular">{context}</p> : null}
+      {context ? (
+        <p className="mb-2 text-[13px] text-slate tabular">{context}</p>
+      ) : null}
       {children}
     </div>
   );

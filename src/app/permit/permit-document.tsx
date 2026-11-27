@@ -30,7 +30,9 @@ export function PermitDocument({ permit }: { permit: ExamPermit }) {
         <header className="flex items-start gap-4 border-b border-line pb-5">
           <UniversityLogo size={72} />
           <div className="min-w-0">
-            <p className="text-[14px] font-semibold text-ink">{INSTITUTION.university}</p>
+            <p className="text-[14px] font-semibold text-ink">
+              {INSTITUTION.university}
+            </p>
             <p className="text-[13px] text-slate">
               {INSTITUTION.faculty} · {INSTITUTION.department}
             </p>
@@ -53,33 +55,43 @@ export function PermitDocument({ permit }: { permit: ExamPermit }) {
           <h2 className="text-[13px] font-semibold text-slate">
             Papers this student may sit
           </h2>
-          <table className="mt-2 w-full border-collapse text-left">
-            <thead>
-              <tr className="border-y border-line">
-                <th scope="col" className="py-2 text-[12px] font-semibold text-muted">
-                  Course
-                </th>
-                <th scope="col" className="py-2 text-right text-[12px] font-semibold text-muted">
-                  Attendance
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {permit.courses.map((course) => (
-                <tr key={course.code} className="border-b border-line">
-                  <td className="py-2.5 text-[15px] text-ink">
-                    <span className="font-semibold" translate="no">
-                      {course.code}
-                    </span>
-                    <span className="block text-[13px] font-normal text-slate">{course.title}</span>
-                  </td>
-                  <td className="py-2.5 text-right align-top text-[15px] text-ink tabular">
-                    {formatPercent(course.attendancePct)}
-                  </td>
+          <div className="mt-2 overflow-x-auto">
+            <table className="w-full border-collapse text-left">
+              <thead>
+                <tr className="border-y border-line">
+                  <th
+                    scope="col"
+                    className="py-2 text-[12px] font-semibold text-muted"
+                  >
+                    Course
+                  </th>
+                  <th
+                    scope="col"
+                    className="py-2 text-right text-[12px] font-semibold text-muted"
+                  >
+                    Attendance
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {permit.courses.map((course) => (
+                  <tr key={course.code} className="border-b border-line">
+                    <td className="py-2.5 text-[15px] text-ink">
+                      <span className="font-semibold" translate="no">
+                        {course.code}
+                      </span>
+                      <span className="block text-[13px] font-normal text-slate">
+                        {course.title}
+                      </span>
+                    </td>
+                    <td className="py-2.5 text-right align-top text-[15px] text-ink tabular">
+                      {formatPercent(course.attendancePct)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </section>
 
         {/* Shown, never quietly omitted. A student who thinks this permit
@@ -96,8 +108,11 @@ export function PermitDocument({ permit }: { permit: ExamPermit }) {
                   <span className="font-semibold" translate="no">
                     {course.code}
                   </span>{" "}
-                  — <span className="tabular">{formatPercent(course.attendancePct)}</span> counted
-                  attendance, below the 75% required
+                  —{" "}
+                  <span className="tabular">
+                    {formatPercent(course.attendancePct)}
+                  </span>{" "}
+                  counted attendance, below the 75% required
                 </li>
               ))}
             </ul>
@@ -112,9 +127,10 @@ export function PermitDocument({ permit }: { permit: ExamPermit }) {
             </dl>
             <p className="mt-3 text-[13px] leading-relaxed text-slate">
               Scan the code, or check the reference by hand at{" "}
-              <span className="font-medium text-ink">/check/permit</span>. Attendance figures are
-              taken from the eligibility list authorized by the Head of Department and do not
-              change after that authorization.
+              <span className="font-medium text-ink">/check/permit</span>.
+              Attendance figures are taken from the eligibility list authorized
+              by the Head of Department and do not change after that
+              authorization.
             </p>
           </div>
 
@@ -148,7 +164,15 @@ export function PermitDocument({ permit }: { permit: ExamPermit }) {
   );
 }
 
-function Field({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+function Field({
+  label,
+  value,
+  mono,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+}) {
   return (
     <div>
       <dt className="text-[12px] text-muted">{label}</dt>
@@ -187,7 +211,9 @@ export function IssuePermitButton() {
             }
             router.refresh();
           } catch {
-            setError("Could not reach the server. Check the connection and try again.");
+            setError(
+              "Could not reach the server. Check the connection and try again.",
+            );
           } finally {
             setWorking(false);
           }

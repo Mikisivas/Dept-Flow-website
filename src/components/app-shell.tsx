@@ -31,9 +31,12 @@ import { INSTITUTION } from "@/lib/institution";
 import { cn } from "@/lib/utils";
 
 /**
- * Students hold a phone one-handed, so they get a bottom bar. Lecturers
- * operate session control standing in front of a class, which is the same
- * constraint, so they get one too. HOD and admin get a desktop sidebar.
+ * Students hold a phone one-handed, so below 1024px they get a bottom bar.
+ * Lecturers operate session control standing in front of a class, which is the
+ * same constraint, so they get one too. HOD and admin get a strip of links
+ * under the header on a phone. From 1024px up (a tablet held landscape, a
+ * laptop, a monitor, a television) every role gets the same left sidebar, so
+ * the layout never leaves a phone-width column floating in a wide screen.
  *
  * This is a website, not an app: the bottom bar is a sticky nav of real links
  * to real routes. Every tab is a URL that can be pasted into a class WhatsApp
@@ -85,7 +88,11 @@ const NAV: Record<AppRole, NavItem[]> = {
     { href: "/admin/courses", label: "Courses", icon: BookOpen },
     { href: "/admin/timetable", label: "Timetable", icon: CalendarDays },
     { href: "/admin/payments", label: "Payments", icon: CreditCard },
-    { href: "/admin/disputes", label: "Registration disputes", icon: ShieldQuestion },
+    {
+      href: "/admin/disputes",
+      label: "Registration disputes",
+      icon: ShieldQuestion,
+    },
     { href: "/admin/config", label: "Configuration", icon: Settings },
     { href: "/admin/audit", label: "Audit log", icon: ScrollText },
     { href: "/admin/rollover", label: "Level rollover", icon: ArrowUpRight },
@@ -110,7 +117,9 @@ function useActiveHref(items: NavItem[]) {
   const pathname = usePathname();
 
   return items
-    .filter((item) => pathname === item.href || pathname.startsWith(`${item.href}/`))
+    .filter(
+      (item) => pathname === item.href || pathname.startsWith(`${item.href}/`),
+    )
     .sort((a, b) => b.href.length - a.href.length)[0]?.href;
 }
 
@@ -124,8 +133,11 @@ export function AppShell({
   counts?: Record<string, number>;
   children: React.ReactNode;
 }) {
-  const items = NAV[role].map((item) => ({ ...item, count: counts?.[item.href] }));
-  const usesBottomBar = role === "student" || role === "lecturer";
+  const items = NAV[role].map((item) => ({
+    ...item,
+    count: counts?.[item.href],
+  }));
+  const bottomBar = role === "student" || role === "lecturer";
 
   return (
     <div className="min-h-dvh">
@@ -139,152 +151,168 @@ export function AppShell({
         Skip to content
       </a>
 
-      {usesBottomBar ? (
-        <BottomBarLayout role={role} items={items}>
-          {children}
-        </BottomBarLayout>
-      ) : (
-        <SidebarLayout role={role} items={items}>
-          {children}
-        </SidebarLayout>
-      )}
+      <ShellLayout role={role} items={items} bottomBar={bottomBar}>
+        {children}
+      </ShellLayout>
     </div>
   );
 }
 
-function BottomBarLayout({
+/**
+ * One layout for every role and every screen.
+ *
+ *   < 1024px   a top bar. Students and lecturers also get the fixed bottom bar;
+ *              HOD and admin get their links as a scrolling strip.
+ *   >= 1024px  a 16rem sidebar (18rem from 1536px) and a centred content column.
+ *
+ * The content column widens with the screen — 48rem on a phone, 56rem beside
+ * the sidebar for students and lecturers, 64rem and then 80rem for the HOD and
+ * admin, whose tables earn the room — and is always centred, so a monitor or a
+ * television shows margins rather than stretched lines of text.
+ */
+function ShellLayout({
   role,
   items,
+  bottomBar,
   children,
 }: {
   role: AppRole;
   items: NavItem[];
+  bottomBar: boolean;
   children: React.ReactNode;
 }) {
   const activeHref = useActiveHref(items);
 
   return (
     <>
-      <header className="sticky top-0 z-40 border-b border-line bg-surface">
-        <div className="mx-auto flex h-14 max-w-3xl items-center gap-2 px-4">
-          <UniversityLogo size={28} decorative />
-          <span className="text-[15px] font-semibold tracking-[-0.01em]" title={INSTITUTION.system}>
-            {INSTITUTION.systemShort}
-          </span>
-          {/* Every role needs a way out of the session, on every screen. The
-              student also has one on /profile; lecturers had nowhere at all,
-              which meant a shared staff laptop could not be handed over. */}
-          <span className="ml-auto text-[13px] text-muted">{ROLE_LABEL[role]}</span>
-          <LogOutButton className="-mr-2 h-9 px-2 text-[13px]" />
-        </div>
-      </header>
+      <div className="lg:grid lg:grid-cols-[16rem_minmax(0,1fr)] 2xl:grid-cols-[18rem_minmax(0,1fr)]">
+        <header
+          className={cn(
+            "border-b border-line bg-surface",
+            "lg:sticky lg:top-0 lg:h-dvh lg:overflow-y-auto lg:border-r lg:border-b-0",
+            // On a phone the student and lecturer top bar stays put while the
+            // page scrolls; the HOD and admin one scrolls away with the page.
+            bottomBar && "sticky top-0 z-40",
+          )}
+        >
+          <div
+            className={cn(
+              "flex h-14 items-center gap-2 px-4 lg:h-16",
+              bottomBar && "mx-auto max-w-3xl lg:max-w-none",
+            )}
+          >
+            <UniversityLogo size={28} decorative />
+            <span
+              className="text-[15px] font-semibold tracking-[-0.01em]"
+              title={INSTITUTION.system}
+            >
+              {INSTITUTION.systemShort}
+            </span>
+            {/* Every role needs a way out of the session, on every screen. The
+                student also has one on /profile; lecturers had nowhere at all,
+                which meant a shared staff laptop could not be handed over. */}
+            <span className="ml-auto text-[13px] text-muted lg:ml-2">
+              {ROLE_LABEL[role]}
+            </span>
+            <LogOutButton className="-mr-2 h-9 px-2 text-[13px] lg:ml-auto lg:-mr-1" />
+          </div>
 
-      <main
-        id="main"
-        className="mx-auto max-w-3xl px-4 pt-5 pb-[calc(5rem+env(safe-area-inset-bottom))]"
-      >
-        {children}
-      </main>
+          {/* Hidden below 1024px for the roles that have the bottom bar, so
+              there is exactly one primary navigation on screen at a time. */}
+          <nav
+            aria-label="Primary"
+            className={cn("px-2 pb-3 lg:pb-3", bottomBar && "hidden lg:block")}
+          >
+            <ul className="flex gap-1 overflow-x-auto lg:flex-col lg:overflow-visible">
+              {items.map(({ href, label, icon: Icon, count }) => {
+                const active = href === activeHref;
+                return (
+                  <li key={href}>
+                    <Link
+                      href={href}
+                      aria-current={active ? "page" : undefined}
+                      className={cn(
+                        "flex min-h-11 items-center gap-2.5 rounded-md px-3 text-[14px] whitespace-nowrap",
+                        "focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-text",
+                        active
+                          ? "border-l-2 border-brand bg-brand-tint font-semibold text-ink lg:rounded-l-none"
+                          : "font-medium text-slate hover:bg-surface-sunken",
+                      )}
+                    >
+                      <Icon
+                        className="h-4.5 w-4.5 shrink-0"
+                        aria-hidden="true"
+                      />
+                      <span className="flex-1">{label}</span>
+                      {count !== undefined ? (
+                        <span className="rounded-full bg-surface-sunken px-1.5 py-0.5 text-[12px] font-semibold text-slate tabular">
+                          {count}
+                        </span>
+                      ) : null}
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </nav>
+        </header>
 
-      <nav
-        aria-label="Primary"
-        className={cn(
-          "fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface",
-          "pb-[env(safe-area-inset-bottom)]",
-        )}
-      >
-        <ul className="mx-auto flex max-w-3xl">
-          {items.map(({ href, label, icon: Icon }) => {
-            const active = href === activeHref;
-            return (
-              <li key={href} className="flex-1">
-                <Link
-                  href={href}
-                  aria-current={active ? "page" : undefined}
-                  className={cn(
-                    // 44px minimum, and the active state is a rule plus a
-                    // weight change — never colour alone.
-                    "relative flex min-h-14 flex-col items-center justify-center gap-0.5 px-1 py-2",
-                    "text-[11px] focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[var(--brand-text)]",
-                    active ? "font-semibold text-ink" : "font-medium text-muted",
-                  )}
-                >
-                  {active ? (
-                    <span
-                      aria-hidden="true"
-                      className="absolute inset-x-3 top-0 h-0.5 rounded-full bg-brand"
-                    />
-                  ) : null}
-                  <Icon className="h-5 w-5" aria-hidden="true" />
-                  {label}
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
-      </nav>
-    </>
-  );
-}
+        {/* min-w-0 lets a wide table scroll inside its own box instead of
+            pushing the whole page sideways. */}
+        <main
+          id="main"
+          className={cn(
+            "mx-auto w-full min-w-0 px-4",
+            bottomBar
+              ? "max-w-3xl pt-5 pb-[calc(5rem+env(safe-area-inset-bottom))] lg:max-w-4xl lg:px-8 lg:pt-8 lg:pb-12"
+              : "max-w-5xl py-6 lg:px-8 xl:max-w-6xl 2xl:max-w-7xl",
+          )}
+        >
+          {children}
+        </main>
+      </div>
 
-function SidebarLayout({
-  role,
-  items,
-  children,
-}: {
-  role: AppRole;
-  items: NavItem[];
-  children: React.ReactNode;
-}) {
-  const activeHref = useActiveHref(items);
-
-  return (
-    <div className="lg:grid lg:grid-cols-[16rem_1fr]">
-      <header className="border-b border-line bg-surface lg:sticky lg:top-0 lg:h-dvh lg:border-r lg:border-b-0">
-        <div className="flex h-14 items-center gap-2 px-4 lg:h-16">
-          <UniversityLogo size={28} decorative />
-          <span className="text-[15px] font-semibold tracking-[-0.01em]" title={INSTITUTION.system}>
-            {INSTITUTION.systemShort}
-          </span>
-          <span className="ml-auto text-[13px] text-muted lg:ml-2">{ROLE_LABEL[role]}</span>
-          <LogOutButton className="-mr-2 h-9 px-2 text-[13px] lg:ml-auto lg:-mr-1" />
-        </div>
-
-        <nav aria-label="Primary" className="px-2 pb-3 lg:pb-0">
-          <ul className="flex gap-1 overflow-x-auto lg:flex-col lg:overflow-visible">
-            {items.map(({ href, label, icon: Icon, count }) => {
+      {bottomBar ? (
+        <nav
+          aria-label="Primary"
+          className={cn(
+            "fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface lg:hidden",
+            "pb-[env(safe-area-inset-bottom)]",
+          )}
+        >
+          <ul className="mx-auto flex max-w-3xl">
+            {items.map(({ href, label, icon: Icon }) => {
               const active = href === activeHref;
               return (
-                <li key={href}>
+                <li key={href} className="flex-1">
                   <Link
                     href={href}
                     aria-current={active ? "page" : undefined}
                     className={cn(
-                      "flex min-h-11 items-center gap-2.5 rounded-md px-3 text-[14px] whitespace-nowrap",
-                      "focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[var(--brand-text)]",
+                      // 44px minimum, and the active state is a rule plus a
+                      // weight change — never colour alone.
+                      "relative flex min-h-14 flex-col items-center justify-center gap-0.5 px-1 py-2",
+                      "text-[11px] md:text-[13px] focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-text",
                       active
-                        ? "border-l-2 border-brand bg-brand-tint font-semibold text-ink lg:rounded-l-none"
-                        : "font-medium text-slate hover:bg-surface-sunken",
+                        ? "font-semibold text-ink"
+                        : "font-medium text-muted",
                     )}
                   >
-                    <Icon className="h-4.5 w-4.5 shrink-0" aria-hidden="true" />
-                    <span className="flex-1">{label}</span>
-                    {count !== undefined ? (
-                      <span className="rounded-full bg-surface-sunken px-1.5 py-0.5 text-[12px] font-semibold text-slate tabular">
-                        {count}
-                      </span>
+                    {active ? (
+                      <span
+                        aria-hidden="true"
+                        className="absolute inset-x-3 top-0 h-0.5 rounded-full bg-brand"
+                      />
                     ) : null}
+                    <Icon className="h-5 w-5" aria-hidden="true" />
+                    {label}
                   </Link>
                 </li>
               );
             })}
           </ul>
         </nav>
-      </header>
-
-      <main id="main" className="mx-auto w-full max-w-5xl px-4 py-6 lg:px-8">
-        {children}
-      </main>
-    </div>
+      ) : null}
+    </>
   );
 }

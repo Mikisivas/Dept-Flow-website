@@ -55,7 +55,8 @@ export function DataTable<Row>({
     return <>{empty}</>;
   }
 
-  const titleColumn = columns.find((column) => column.mobile === "title") ?? columns[0];
+  const titleColumn =
+    columns.find((column) => column.mobile === "title") ?? columns[0];
   const trailingColumn = columns.find((column) => column.mobile === "trailing");
   const metaColumns = columns.filter((column) => column.mobile === "meta");
 
@@ -64,7 +65,7 @@ export function DataTable<Row>({
       <p className="mb-2 text-[13px] text-muted tabular">{caption}</p>
 
       {/* Desktop */}
-      <div className="hidden overflow-hidden rounded-lg border border-line bg-surface md:block">
+      <div className="hidden overflow-x-auto rounded-lg border border-line bg-surface md:block">
         <table className="w-full border-collapse text-left">
           <caption className="sr-only">{caption}</caption>
           <thead>
@@ -86,7 +87,10 @@ export function DataTable<Row>({
           </thead>
           <tbody>
             {rows.map((row) => (
-              <tr key={rowKey(row)} className="border-b border-line last:border-0">
+              <tr
+                key={rowKey(row)}
+                className="border-b border-line last:border-0"
+              >
                 {columns.map((column) => (
                   <td
                     key={column.key}
@@ -135,7 +139,13 @@ export function DataTable<Row>({
 }
 
 /** Skeletons, not spinners — and no layout shift when the rows land. */
-export function TableSkeleton({ columns, label }: { columns: number; label: string }) {
+export function TableSkeleton({
+  columns,
+  label,
+}: {
+  columns: number;
+  label: string;
+}) {
   return (
     <div>
       <p className="mb-2 text-[13px] text-muted" aria-live="polite">

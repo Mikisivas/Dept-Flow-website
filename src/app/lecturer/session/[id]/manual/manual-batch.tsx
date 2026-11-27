@@ -1,0 +1,243 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { TriangleAlert } from "lucide-react";
+import { ConfirmDialog } from "@/components/confirm-dialog";
+import { StickyActionBar } from "@/components/sticky-action-bar";
+import { Button } from "@/components/ui/button";
+import { Field } from "@/components/ui/field";
+import type { RosterEntry } from "@/lib/types";
+import { displayNameRegister, formatScore } from "@/lib/format";
+import { cn } from "@/lib/utils";
+
+/**
+ * Transcribing a paper sign-in sheet after a network outage.
+ *
+ * This screen is deliberately heavier than the normal flow, because it
+ * bypasses the only check the system has left. Attendance is trust-based: the
+ * code on the board is the whole mechanism, and here no code was entered at
+ * all, so a lecturer can mark anyone present. That is not a weakness to hide —
+ * a network that fails during a lecture is ordinary, and the alternative is a
+ * hall of students marked absent for it. The weight is the point: the warning,
+ * the mandatory note and the confirmation are what make the paper route a
+ * monitored path rather than a silent backdoor.
+ *
+ * One checkbox per student, mirroring the one column on the paper sheet, so
+ * transcription is a straight copy rather than a translation.
+ */
+
+export function ManualBatch({
+  sessionInstanceId,
+  roster,
+  courseCode,
+  heldOn,
+}: {
+  sessionInstanceId: string;
+  roster: RosterEntry[];
+  courseCode: string;
+  heldOn: string;
+}) {
+  const router = useRouter();
+  const [marks, setMarks] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(roster.map((entry) => [entry.studentId, false])),
+  );
+  const [note, setNote] = useState("");
+  const [noteTouched, setNoteTouched] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [working, setWorking] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit(justification: string) {
+    setWorking(true);
+    setError(null);
+
+    try {
+      const response = await fetch(`/api/lecturer/sessions/${sessionInstanceId}/manual`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          justification,
+          marks: scored.map((row) => ({ studentId: row.entry.studentId, score: row.score })),
+        }),
+      });
+      const result = await response.json();
+
+      if (!response.ok) {
+        setError(result.error ?? "That did not go through. Try again.");
+        return;
+      }
+
+      setConfirming(false);
+      // Back to the session, and re-read: the transcription closed the lecture
+      // and the scores it wrote are now the record.
+      router.push(`/lecturer/session/${sessionInstanceId}`);
+      router.refresh();
+    } catch {
+      setError("Could not reach the server. Check the connection and try again.");
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  function toggle(studentId: string) {
+    setMarks((current) => ({ ...current, [studentId]: !current[studentId] }));
+  }
+
+  const scored = roster.map((entry) => ({
+    entry,
+    score: marks[entry.studentId] ? 1 : 0,
+  }));
+
+  const withMarks = scored.filter((row) => row.score > 0);
+  const total = scored.reduce((sum, row) => sum + row.score, 0);
+  // Twenty, matching what the database demands. Ten would let a note through
+  // here and have the server reject it, which reads as the button being broken.
+  const noteMissing = note.trim().length < 20;
+
+  return (
+    <div className="flex flex-col gap-6">
+      {/* Stated before anything can be entered, not after. */}
+      <section className="rounded-lg border border-danger bg-danger-tint p-4">
+        <div className="flex gap-3">
+          <TriangleAlert className="mt-0.5 h-5 w-5 shrink-0 text-danger" aria-hidden="true" />
+          <div>
+            <h2 className="text-[15px] font-semibold text-ink">
+              These entries bypass the attendance code
+            </h2>
+            <p className="mt-1 text-[14px] leading-relaxed text-slate">
+              Anything recorded here is tagged as coming from a paper register and is reviewable by
+              the HOD, along with how often you use this route. Only use it when the network
+              genuinely failed during the lecture.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section aria-labelledby="roster-heading">
+        <h2 id="roster-heading" className="text-[13px] font-semibold text-slate">
+          Roster · <span translate="no">{courseCode}</span> · {heldOn}
+        </h2>
+
+        <div className="mt-3 overflow-hidden rounded-lg border border-line bg-surface">
+          <div className="flex items-center gap-3 border-b border-line bg-surface-sunken px-4 py-2.5 text-[12px] font-semibold text-slate">
+            <span className="flex-1">Student</span>
+            <span className="w-11 text-center">Present</span>
+            <span className="w-10 text-right">Score</span>
+          </div>
+
+          <ul className="divide-y divide-line">
+            {scored.map(({ entry, score }) => (
+              <li key={entry.studentId} className="flex items-center gap-3 px-4 py-2.5">
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[14px] font-medium text-ink">
+                    {displayNameRegister(entry)}
+                  </span>
+                  <span className="block text-[12px] text-muted tabular" translate="no">
+                    {entry.matricNo}
+                  </span>
+                </span>
+
+                <span className="flex w-11 justify-center">
+                  <input
+                    type="checkbox"
+                    checked={marks[entry.studentId]}
+                    onChange={() => toggle(entry.studentId)}
+                    // 44px hit target on a control that gets tapped 80 times
+                    // in a row off a paper sheet.
+                    className="h-6 w-6 accent-[var(--brand)]"
+                    aria-label={`${displayNameRegister(entry)}, present`}
+                  />
+                </span>
+
+                {/* Live, so a mis-tick is visible on the row it happened on
+                    rather than in a total at the bottom. */}
+                <span
+                  className={cn(
+                    "w-10 text-right text-[14px] tabular",
+                    score === 0 ? "text-muted" : "font-semibold text-ink",
+                  )}
+                >
+                  {formatScore(score)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </section>
+
+      <Field
+        label="Why is this being entered from paper?"
+        htmlFor="justification"
+        hint="Required, and recorded in the audit log. The HOD reads this."
+        error={
+          noteTouched && noteMissing
+            ? "Give a real explanation — at least a sentence. The HOD reads this."
+            : undefined
+        }
+      >
+        <textarea
+          id="justification"
+          value={note}
+          onChange={(event) => setNote(event.target.value)}
+          rows={3}
+          className={cn(
+            "w-full resize-y rounded-md border border-line bg-surface px-3 py-2 text-base text-ink",
+            "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand-text)]",
+            "aria-[invalid=true]:border-danger",
+          )}
+        />
+      </Field>
+
+      <StickyActionBar
+        context={`${withMarks.length} of ${roster.length} students marked · ${formatScore(total)} marks total`}
+      >
+        <Button
+          size="lg"
+          className="w-full"
+          onClick={() => {
+            setNoteTouched(true);
+            if (!noteMissing) setConfirming(true);
+          }}
+        >
+          Submit paper entries
+        </Button>
+      </StickyActionBar>
+
+      <ConfirmDialog
+        open={confirming}
+        onOpenChange={(open) => {
+          setConfirming(open);
+          if (!open) setError(null);
+        }}
+        title={`Submit ${withMarks.length} paper entries for ${courseCode}?`}
+        description={
+          <>
+            These scores count towards exam eligibility exactly as digital ones do. They are tagged
+            as coming from a paper register, and both this batch and your rate of using it are
+            visible to the HOD.
+          </>
+        }
+        impact={[
+          { label: "Students marked", value: String(withMarks.length) },
+          { label: "Marks awarded", value: formatScore(total) },
+          { label: "Not marked", value: String(roster.length - withMarks.length) },
+        ]}
+        extra={
+          <div className="rounded-md border border-line bg-surface-sunken p-3">
+            <p className="text-[12px] text-muted">What the HOD will see</p>
+            <p className="mt-1 text-[14px] leading-relaxed text-ink">{note.trim()}</p>
+          </div>
+        }
+        // Not asked for a second time: the justification is the field on the
+        // page, beside the warning that explains why it is needed. Asking again
+        // here meant the first one was typed and then thrown away.
+        requireReason={false}
+        error={error}
+        working={working}
+        confirmLabel="Submit paper entries"
+        onConfirm={() => submit(note.trim())}
+      />
+    </div>
+  );
+}

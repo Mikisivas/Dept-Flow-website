@@ -1,0 +1,393 @@
+import "server-only";
+
+import { randomInt } from "node:crypto";
+import { sendOtp } from "@/lib/messaging";
+import { createServiceClient } from "@/lib/supabase/client";
+import { hashPassword, verifyPassword } from "@/lib/auth/passwords";
+import { normaliseMatric } from "@/lib/format";
+import { ok } from "@/lib/supabase/result";
+
+/**
+ * Claiming an account against the register.
+ *
+ * The identity check is matric number + surname + level, matched against an
+ * unclaimed `whitelist_entries` row. First and other names are collected and
+ * stored as account data and are deliberately NOT matched — a student whose
+ * middle name is recorded as "Ngozi" and who types "N." must not be locked out
+ * of their own account.
+ *
+ * The step the client cannot skip is the OTP. Every field the browser sends is
+ * re-checked here at account creation, so a request that jumps straight to the
+ * last step with a matric number it guessed still has to produce a phone that
+ * received a code.
+ */
+
+export type RegisterMatch =
+  | { outcome: "matched"; matricNo: string; surname: string; level: number; programme: string }
+  | { outcome: "no_match" }
+  | { outcome: "already_claimed" };
+
+const PROGRAMME_NAMES: Record<string, string> = {
+  MTH: "Mathematics",
+  CMP: "Computer Science",
+  STA: "Statistics",
+};
+
+/** How long a verified code stays good for finishing the form. */
+const OTP_TTL_MINUTES = 5;
+const CLAIM_WINDOW_MINUTES = 20;
+/** Per phone, per hour. The expensive step is the one worth capping. */
+const OTP_SEND_LIMIT = 5;
+
+export async function checkRegisterMatch(input: {
+  matricNo: string;
+  surname: string;
+  level: number;
+}): Promise<RegisterMatch> {
+  const db = createServiceClient();
+  const matric = normaliseMatric(input.matricNo);
+
+  const { data: entry } = ok(await db
+    .from("whitelist_entries")
+    .select("matric_no, surname, level, claimed")
+    .eq("matric_no", matric)
+    .maybeSingle(), "entry");
+
+  // Surname is compared case-insensitively and trimmed. It is a name a student
+  // typed on a phone, not a password.
+  if (
+    !entry ||
+    entry.surname.trim().toLowerCase() !== input.surname.trim().toLowerCase() ||
+    entry.level !== input.level
+  ) {
+    return { outcome: "no_match" };
+  }
+
+  if (entry.claimed) return { outcome: "already_claimed" };
+
+  return {
+    outcome: "matched",
+    matricNo: entry.matric_no,
+    surname: entry.surname,
+    level: entry.level,
+    programme: PROGRAMME_NAMES[matric.split("/")[0]] ?? "",
+  };
+}
+
+export type SendOtpResult =
+  | {
+      outcome: "sent";
+      expiresAt: string;
+      channels: Array<"sms" | "whatsapp">;
+      /** Demo deployment only: the codes that were shown rather than sent. */
+      demoCodes?: Partial<Record<"sms" | "whatsapp", string>>;
+    }
+  | { outcome: "rate_limited" }
+  | { outcome: "phone_taken" };
+
+/**
+ * Generate, store hashed, and deliver — once per number the student gave.
+ *
+ * The plaintext code is never in an HTTP response, except on a demo
+ * deployment with no provider connected (`src/lib/demo.ts`) — that is the
+ * whole reason delivery is an interface rather than a return value.
+ *
+ * Two numbers, two codes, two verifications. A student whose WhatsApp runs on
+ * a data-only SIM gives both, and BOTH have to be proved reachable before
+ * either is trusted: a WhatsApp number nobody has verified is worse than no
+ * WhatsApp number at all, because the alerting layer will believe it delivered
+ * a warning to it. Most students give one number and see one code.
+ */
+export async function sendRegistrationOtp(input: {
+  matricNo: string;
+  phone: string;
+  /** Only when WhatsApp runs on a different SIM. */
+  whatsappPhone?: string | null;
+}): Promise<SendOtpResult> {
+  const db = createServiceClient();
+  const matric = normaliseMatric(input.matricNo);
+
+  const whatsapp =
+    input.whatsappPhone && input.whatsappPhone !== input.phone ? input.whatsappPhone : null;
+
+  // One phone, one account. Two students sharing a number would each be able
+  // to reset the other's password. Checked against BOTH columns: a number
+  // already serving as somebody's WhatsApp number is just as taken.
+  const { data: taken } = ok(await db
+    .from("profiles")
+    .select("id")
+    .or(
+      [`phone.eq.${input.phone}`, `whatsapp_phone.eq.${input.phone}`]
+        .concat(whatsapp ? [`phone.eq.${whatsapp}`, `whatsapp_phone.eq.${whatsapp}`] : [])
+        .join(","),
+    )
+    .maybeSingle(), "taken");
+
+  if (taken) return { outcome: "phone_taken" };
+
+  const since = new Date(Date.now() - 60 * 60_000).toISOString();
+  const { count } = ok(await db
+    .from("otp_codes")
+    .select("id", { count: "exact", head: true })
+    .eq("phone", input.phone)
+    .gte("created_at", since), "count");
+
+  if ((count ?? 0) >= OTP_SEND_LIMIT) return { outcome: "rate_limited" };
+
+  const expiresAt = new Date(Date.now() + OTP_TTL_MINUTES * 60_000).toISOString();
+  const channels: Array<"sms" | "whatsapp"> = whatsapp ? ["sms", "whatsapp"] : ["sms"];
+
+  const demoCodes: Partial<Record<"sms" | "whatsapp", string>> = {};
+
+  for (const channel of channels) {
+    const to = channel === "sms" ? input.phone : whatsapp!;
+    // randomInt, not Math.random. A predictable code is a bypassed phone
+    // check. A DIFFERENT code per channel, so that receiving one proves that
+    // one number is reachable rather than proving the student holds a code.
+    const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
+
+    const { error } = await db.from("otp_codes").insert({
+      purpose: "registration",
+      matric_no: matric,
+      phone: to,
+      channel,
+      code_hash: await hashPassword(code),
+      expires_at: expiresAt,
+    });
+
+    if (error) throw new Error(`Could not send a code: ${error.message}`);
+
+    const result = await sendOtp({ to, code, channel });
+    if (result.status === "failed") {
+      throw new Error(`Could not send a code to ${to}: ${result.error}`);
+    }
+    if (result.status === "shown") demoCodes[channel] = result.code;
+  }
+
+  return Object.keys(demoCodes).length > 0
+    ? { outcome: "sent", expiresAt, channels, demoCodes }
+    : { outcome: "sent", expiresAt, channels };
+}
+
+export type VerifyOtpResult = { ok: true } | { ok: false; reason: string };
+
+export async function verifyRegistrationOtp(input: {
+  phone: string;
+  code: string;
+}): Promise<VerifyOtpResult> {
+  const db = createServiceClient();
+
+  const { data: row } = ok(await db
+    .from("otp_codes")
+    .select("id, code_hash, expires_at, attempts, max_attempts, consumed_at")
+    .eq("phone", input.phone)
+    .eq("purpose", "registration")
+    .is("consumed_at", null)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle(), "row");
+
+  if (!row) return { ok: false, reason: "Ask for a new code." };
+  if (row.attempts >= row.max_attempts) {
+    return { ok: false, reason: "Too many tries. Ask for a new code." };
+  }
+  if (Date.parse(row.expires_at) <= Date.now()) {
+    return { ok: false, reason: "That code has expired. Ask for a new one." };
+  }
+
+  const matches = await verifyPassword(input.code, row.code_hash);
+
+  if (!matches) {
+    // Checked: this counter is the whole attempt limit on a six-digit code.
+    ok(
+      await db
+        .from("otp_codes")
+        .update({ attempts: row.attempts + 1 })
+        .eq("id", row.id),
+      "the failed-attempt count",
+    );
+    return { ok: false, reason: "That code isn't right." };
+  }
+
+  // Consuming it is what later proves this phone was reached. The account
+  // creation step looks for exactly this row — so a consume that quietly did
+  // not happen is a verification that cannot be produced afterwards.
+  ok(
+    await db.from("otp_codes").update({ consumed_at: new Date().toISOString() }).eq("id", row.id),
+    "consuming the code",
+  );
+
+  return { ok: true };
+}
+
+export type CreateAccountResult =
+  | { outcome: "created"; profileId: string; matricNo: string }
+  | { outcome: "not_verified" }
+  | { outcome: "no_match" }
+  | { outcome: "already_claimed" };
+
+/**
+ * Create the account, re-checking everything the browser claimed.
+ *
+ * Nothing from the earlier steps is trusted: the register match is redone, and
+ * a consumed registration code for this matric number and phone must exist
+ * inside the claim window. Without that second condition the whole flow would
+ * be a POST away from registering anyone in the department.
+ *
+ * When a separate WhatsApp number was given, it needs its own consumed code.
+ * Accepting one verification for two numbers would let a student type any
+ * number at all into the WhatsApp field — and the alerting layer would then
+ * spend Critical warnings on it and record them as delivered.
+ */
+export async function createStudentAccount(input: {
+  matricNo: string;
+  surname: string;
+  level: number;
+  firstName: string;
+  otherNames: string | null;
+  phone: string;
+  whatsappPhone?: string | null;
+  password: string;
+}): Promise<CreateAccountResult> {
+  const db = createServiceClient();
+  const matric = normaliseMatric(input.matricNo);
+
+  const match = await checkRegisterMatch({
+    matricNo: matric,
+    surname: input.surname,
+    level: input.level,
+  });
+
+  if (match.outcome !== "matched") return { outcome: match.outcome };
+
+  const since = new Date(Date.now() - CLAIM_WINDOW_MINUTES * 60_000).toISOString();
+  const { data: verified } = ok(await db
+    .from("otp_codes")
+    .select("id")
+    .eq("purpose", "registration")
+    .eq("matric_no", matric)
+    .eq("phone", input.phone)
+    .not("consumed_at", "is", null)
+    .gte("consumed_at", since)
+    .limit(1)
+    .maybeSingle(), "verified");
+
+  if (!verified) return { outcome: "not_verified" };
+
+  const whatsapp =
+    input.whatsappPhone && input.whatsappPhone !== input.phone ? input.whatsappPhone : null;
+
+  if (whatsapp) {
+    const { data: whatsappVerified } = ok(await db
+      .from("otp_codes")
+      .select("id")
+      .eq("purpose", "registration")
+      .eq("matric_no", matric)
+      .eq("phone", whatsapp)
+      .eq("channel", "whatsapp")
+      .not("consumed_at", "is", null)
+      .gte("consumed_at", since)
+      .limit(1)
+      .maybeSingle(), "whatsappVerified");
+
+    if (!whatsappVerified) return { outcome: "not_verified" };
+  }
+
+  const { data: entry } = ok(await db
+    .from("whitelist_entries")
+    .select("id, academic_session_id")
+    .eq("matric_no", matric)
+    .single(), "entry");
+
+  const { data: profile, error: profileError } = await db
+    .from("profiles")
+    .insert({
+      role: "student",
+      surname: match.surname,
+      first_name: input.firstName.trim(),
+      other_names: input.otherNames?.trim() || null,
+      phone: input.phone,
+      phone_verified_at: new Date().toISOString(),
+      whatsapp_phone: whatsapp,
+      whatsapp_verified_at: whatsapp ? new Date().toISOString() : null,
+      password_hash: await hashPassword(input.password),
+      password_updated_at: new Date().toISOString(),
+    })
+    .select("id")
+    .single();
+
+  if (profileError || !profile) {
+    throw new Error(`Could not create the account: ${profileError?.message}`);
+  }
+
+  const { error: studentError } = await db.from("students").insert({
+    id: profile.id,
+    matric_no: matric,
+    level: match.level,
+    whitelist_entry_id: entry?.id ?? null,
+  });
+
+  if (studentError) {
+    // The profile without a student row is an account that can log in and has
+    // no record. Undo it rather than leave that behind.
+    await db.from("profiles").delete().eq("id", profile.id);
+    throw new Error(`Could not create the student record: ${studentError.message}`);
+  }
+
+  // Claimed last, and conditionally: two people racing the same matric number
+  // means the second update matches no rows, and that student is rolled back
+  // rather than silently sharing the register entry.
+  const { data: claimed, error: claimError } = await db
+    .from("whitelist_entries")
+    .update({ claimed: true, claimed_by: profile.id, claimed_at: new Date().toISOString() })
+    .eq("matric_no", matric)
+    .eq("claimed", false)
+    .select("id");
+
+  // Not wrapped in ok(): the rollback below has to run either way, and a throw
+  // would skip it and leave a profile and a student row behind with no register
+  // entry claimed. The two failures are undone the same way and reported
+  // differently — losing the race is a normal outcome, and a refused update is
+  // not.
+  if (claimError || !claimed || claimed.length === 0) {
+    await db.from("students").delete().eq("id", profile.id);
+    await db.from("profiles").delete().eq("id", profile.id);
+    if (claimError) throw new Error(`Could not claim the register entry: ${claimError.message}`);
+    return { outcome: "already_claimed" };
+  }
+
+  // Uncleared from the first second. Attendance records from day one and
+  // counts from the day they clear — that is the entire mechanism, and it
+  // starts here rather than at their first lecture.
+  if (entry?.academic_session_id) {
+    // Checked, because every compliance reader keys off this row. Without it a
+    // brand-new account has no state at all, which is not the same thing as
+    // uncleared and is not a thing any screen knows how to draw.
+    ok(
+      await db.from("compliance_statuses").insert({
+        student_id: profile.id,
+        academic_session_id: entry.academic_session_id,
+        state: "uncleared",
+      }),
+      "the opening compliance row",
+    );
+
+    // Core courses for their level, immediately. Without this a new account
+    // is enrolled in nothing, so no lecture can ever count for or against
+    // them — they are invisible to the system they just joined. Electives and
+    // carry-overs they choose themselves.
+    const { error: enrolError } = await db.rpc("enrol_in_core_courses", {
+      p_student_id: profile.id,
+      p_academic_session_id: entry.academic_session_id,
+    });
+
+    if (enrolError) {
+      // Not fatal: the account exists and the admin can re-run enrolment. But
+      // a student sitting in lectures that count for nothing is exactly the
+      // failure this system exists to prevent, so it is never silent.
+      console.error("core enrolment failed for", matric, enrolError.message);
+    }
+  }
+
+  return { outcome: "created", profileId: profile.id, matricNo: matric };
+}

@@ -1,0 +1,226 @@
+@import "tailwindcss";
+
+/* ---------------------------------------------------------------------------
+   Palette — derived from the university logo
+
+   The logo carries red, black, blue and green. The brand is its blue,
+   #2CAAE1, sampled from the T. Not the red, though red dominates the logo:
+   this is a system whose most important signal is a red "Critical", and a red
+   primary button on every screen would teach students to stop seeing it. Red
+   stays where the university put it — in the logo — and nowhere else as
+   decoration.
+
+   Every ratio here is measured against WCAG 2.1, not estimated.
+
+   The one rule that matters most: brand blue is a fill that carries BLACK
+   text. White on #2CAAE1 is 2.64:1 and appears nowhere in this product.
+--------------------------------------------------------------------------- */
+
+:root {
+  --brand: #2caae1;         /* fills, motif, primary button. BLACK text: 7.49:1 AAA */
+  --brand-hover: #1b97cd;   /* black text 5.99:1 */
+  --brand-pressed: #1583b3; /* black text 4.65:1 */
+  --brand-text: #0b6f9c;    /* the only brand blue usable as text on white: 5.57:1 */
+  --brand-tint: #eaf7fc;    /* brand-text on it: 5.10:1 */
+  --brand-tint-2: #d3eef9;
+
+  /* The foreground for anything sitting ON a brand fill.
+     This is deliberately NOT --ink: --ink flips to near-white in dark mode,
+     and white on #2CAAE1 is 2.64:1. A brand surface carries black text in
+     both schemes, so this token never changes. */
+  --on-brand: #0a0a0a;
+
+  --ink: #0a0a0a;
+  --slate: #525252;
+  --muted: #737373;
+  --line: #e5e5e5;
+  --surface: #ffffff;
+  --surface-sunken: #fafafa;
+
+  /* Status is kept clear of the brand's hue so the brand can never read as a
+     status. "Pending" was blue until the brand became blue; it is violet now
+     for that reason alone. White on it: 7.10:1. */
+  --ok: #15803d;
+  --ok-tint: #dcfce7;
+  --info: #6d28d9;
+  --info-tint: #ede9fe;
+  --danger: #b91c1c;
+  --danger-tint: #fee2e2;
+
+  /* The checkpoint motif carries meaning through its border, so the border is
+     held above the 3:1 non-text contrast boundary in both states. */
+  --cell-missed: #767676;      /* 4.54:1 */
+  --cell-provisional: #949494; /* 3.03:1 */
+
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* Brand blue is already 7.49:1 on ink — only the text variant lightens. */
+    --brand-text: #5cc3ec; /* 9.87:1 on surface, 8.94:1 on sunken */
+    --brand-tint: #0c1d24;
+    --brand-tint-2: #11303c;
+
+    --ink: #fafafa;
+    --slate: #a3a3a3;
+    --muted: #8a8a8a;
+    --line: #262626;
+    --surface: #0a0a0a;
+    --surface-sunken: #171717;
+
+    --ok: #4ade80;
+    --ok-tint: #14321f;
+    --info: #a78bfa; /* 7.27:1 on ink */
+    --info-tint: #241a3d;
+    --danger: #f87171;
+    --danger-tint: #3a1717;
+
+    --cell-missed: #8a8a8a;
+    --cell-provisional: #6e6e6e;
+
+    color-scheme: dark;
+  }
+}
+
+@theme inline {
+  --color-brand: var(--brand);
+  --color-brand-hover: var(--brand-hover);
+  --color-brand-pressed: var(--brand-pressed);
+  --color-brand-text: var(--brand-text);
+  --color-brand-tint: var(--brand-tint);
+  --color-brand-tint-2: var(--brand-tint-2);
+  --color-on-brand: var(--on-brand);
+
+  --color-ink: var(--ink);
+  --color-slate: var(--slate);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-surface: var(--surface);
+  --color-surface-sunken: var(--surface-sunken);
+
+  --color-ok: var(--ok);
+  --color-ok-tint: var(--ok-tint);
+  --color-info: var(--info);
+  --color-info-tint: var(--info-tint);
+  --color-danger: var(--danger);
+  --color-danger-tint: var(--danger-tint);
+
+  --color-cell-missed: var(--cell-missed);
+  --color-cell-provisional: var(--cell-provisional);
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, sans-serif;
+}
+
+/* ---------------------------------------------------------------------------
+   Base
+--------------------------------------------------------------------------- */
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  html {
+    /* Never user-scalable: no. Pinch zoom stays available. */
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background: var(--surface-sunken);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    font-size: 16px;
+    -webkit-font-smoothing: antialiased;
+    /* A tap should not flash a default blue box over a 44px target. */
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Numbers stack in this product constantly — attendance percentages, matric
+     numbers, amounts, countdowns. Tabular figures stop them jittering. */
+  :where(table, .tabular) {
+    font-variant-numeric: tabular-nums;
+  }
+
+  :where(h1, h2, h3) {
+    text-wrap: balance;
+  }
+
+  :where(p) {
+    text-wrap: pretty;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--brand-text);
+    outline-offset: 2px;
+  }
+
+  /* Buttons and links are always deliberate taps, never double-tap-to-zoom. */
+  :where(button, a, [role="button"]) {
+    touch-action: manipulation;
+  }
+
+  /* A native select on a dark background needs both set explicitly or it
+     renders unreadable on Android. */
+  :where(select) {
+    background-color: var(--surface);
+    color: var(--ink);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Printing
+   ---------------------------------------------------------------------------
+
+   The exam permit and the eligibility list are documents somebody carries on
+   paper. There is no PDF generator: every browser prints to PDF, the output
+   carries the page's own typography, and a server-side renderer would be a
+   second place for the numbers to come from.
+
+   `print:hidden` on navigation, and ink-on-white for everything else — a dark
+   theme sent to a printer wastes a cartridge and produces something unreadable
+   at a hall door. */
+@media print {
+  :root {
+    --surface: #ffffff;
+    --surface-sunken: #ffffff;
+    --ink: #000000;
+    --slate: #000000;
+    --muted: #333333;
+    --line: #999999;
+  }
+
+  body {
+    background: #ffffff;
+    color: #000000;
+  }
+
+  /* Links print as text; a URL in brackets after every word is noise on a
+     document that is going to be looked at, not clicked. */
+  a {
+    text-decoration: none;
+    color: inherit;
+  }
+
+  /* Nothing that only makes sense on screen. */
+  nav,
+  header[data-app-header],
+  [data-print-hidden] {
+    display: none !important;
+  }
+
+  @page {
+    margin: 16mm;
+  }
+}

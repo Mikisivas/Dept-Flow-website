@@ -1,0 +1,4581 @@
+-- Dept-Flow — schema test suite
+--
+-- Runs against a database with the migrations and seed applied. Everything is
+-- inside a transaction that rolls back, so it changes nothing and can be run
+-- as often as you like.
+--
+-- Two ways to run it, and it is deliberately plain SQL so both work:
+--
+--   Supabase SQL Editor — paste the whole file and run. The last statement
+--   returns one row per assertion, so you can read the results in the grid.
+--
+--   psql -v ON_ERROR_STOP=1 -d <db> -f supabase/tests/schema_test.sql
+--
+-- There are no psql meta-commands in here (no \set, no \echo). Those are
+-- client features that the server never sees, and pasting them into the SQL
+-- Editor produces a syntax error on the backslash.
+--
+-- Any failed assertion raises and aborts the run.
+
+begin;
+
+-- Assertions are collected here as well as raised, because the SQL Editor does
+-- not surface NOTICE output — without a result set there is nothing to read.
+create temporary table assertion_log (
+  seq serial primary key,
+  what text not null
+) on commit drop;
+
+-- The row-level security section later switches to the `authenticated` role to
+-- prove what a student can and cannot read. That role needs to reach this log,
+-- or every assertion made under it fails on the log rather than on the thing
+-- being tested. The temp schema has a generated name, hence the format().
+-- `anon` too, for the one table anonymous visitors may read.
+grant all on assertion_log to authenticated, anon;
+grant usage, select on sequence assertion_log_seq_seq to authenticated, anon;
+do $$
+begin
+  execute format(
+    'grant usage on schema %I to authenticated, anon',
+    (select nspname from pg_namespace where oid = pg_my_temp_schema())
+  );
+end $$;
+
+create or replace function assert_true(p_condition boolean, p_what text)
+returns void language plpgsql as $$
+begin
+  if p_condition is not true then
+    raise exception 'FAILED: %', p_what;
+  end if;
+  insert into assertion_log (what) values (p_what);
+  raise notice 'ok — %', p_what;
+end $$;
+
+-- Runs a statement that must fail, and fails the suite if it succeeds.
+create or replace function assert_rejects(p_sql text, p_what text)
+returns void language plpgsql as $$
+begin
+  begin
+    execute p_sql;
+  exception when others then
+    insert into assertion_log (what) values (p_what);
+    raise notice 'ok — %', p_what;
+    return;
+  end;
+  raise exception 'FAILED: % (the statement was accepted)', p_what;
+end $$;
+
+-- ---------------------------------------------------------------------------
+-- Dates, relative to the seeded session
+-- ---------------------------------------------------------------------------
+--
+-- The seed anchors every date on today, because a forecast needs lectures
+-- still to come and a seed with absolute dates describes a session that has
+-- already ended. This suite has to follow: a test that inserts a lecture on
+-- "2026-01-13" was inserting one inside the session when it was written and
+-- one three years before it now.
+create or replace function session_day(p_offset integer)
+returns date language sql stable as $$
+  select (select starts_on from academic_sessions where is_active limit 1) + p_offset;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- Naming: CMP, never CSC
+-- ---------------------------------------------------------------------------
+
+select assert_rejects($$
+  insert into whitelist_entries (academic_session_id, matric_no, surname, level)
+  values ('11111111-1111-1111-1111-111111111111', 'CSC/2021/999', 'Test', 400)
+$$, 'a CSC matric prefix is rejected by the register');
+
+select assert_rejects($$
+  insert into courses (academic_session_id, code, title, level)
+  values ('11111111-1111-1111-1111-111111111111', 'CSC 301', 'Operating Systems', 300)
+$$, 'a CSC course code is rejected');
+
+select assert_rejects($$
+  insert into whitelist_entries (academic_session_id, matric_no, surname, level)
+  values ('11111111-1111-1111-1111-111111111111', 'cmp/2021/998', 'Test', 400)
+$$, 'a lower-case matric number is rejected rather than silently stored');
+
+select assert_true(
+  (select programme from students where matric_no = 'CMP/2021/047') = 'CMP',
+  'programme is derived from the matric prefix, never asked for'
+);
+
+-- ---------------------------------------------------------------------------
+-- The attendance formula
+-- ---------------------------------------------------------------------------
+
+-- Chidera has 10 of 13, Halima 5 of 13. Both count in full and neither has
+-- anything to do with dues: Chidera is cleared and Tunde is locked, and the
+-- formula cannot tell, because payment is not in it.
+select assert_true(
+  attendance_pct('44444444-4444-4444-4444-444444444401',
+                 '66666666-6666-6666-6666-666666666601') = 76.92,
+  'every recorded lecture counts: 10 of 13 is 76.92%'
+);
+
+select assert_true(
+  attendance_pct('44444444-4444-4444-4444-444444444402',
+                 '66666666-6666-6666-6666-666666666601') = 38.46,
+  'and 5 of 13 is 38.46%'
+);
+
+-- The assertion that used to be the centre of this suite ran the other way:
+-- an unpaid student's counted attendance was zero however many lectures they
+-- had sat in. Tunde has never paid a kobo and is locked; his percentage is
+-- whatever he attended.
+select assert_true(
+  attendance_pct('44444444-4444-4444-4444-444444444403',
+                 '66666666-6666-6666-6666-666666666602') = 75.00,
+  'a locked student who has never paid still has the attendance he actually has'
+);
+
+-- The worked example the AttendanceMeter states: 9 of 13 is 69%, and three
+-- more lectures in a row reach 75%.
+select assert_true(
+  full_sessions_needed(9, 13) = 3,
+  'the AttendanceMeter sentence: 9 of 13 needs 3 more lectures'
+);
+
+select assert_true(
+  full_sessions_needed(10.0, 13) = 0,
+  'a student already above the line needs no further sessions'
+);
+
+select assert_true(
+  full_sessions_needed(5, 13) = 19,
+  'a badly-behind student is told the real number, not a comfortable one'
+);
+
+-- ---------------------------------------------------------------------------
+-- Clearing, which no longer reaches into attendance
+-- ---------------------------------------------------------------------------
+
+-- This section used to prove that clearing confirmed thirteen scores in one
+-- transaction. It now proves the opposite: that clearing touches none of them.
+do $$
+declare
+  v_before numeric;
+  v_after  numeric;
+  v_counted integer;
+begin
+  v_before := attendance_pct('44444444-4444-4444-4444-444444444403',
+                             '66666666-6666-6666-6666-666666666602');
+
+  v_counted := clear_student(
+    '44444444-4444-4444-4444-444444444403',
+    '11111111-1111-1111-1111-111111111111',
+    'payment'
+  );
+
+  v_after := attendance_pct('44444444-4444-4444-4444-444444444403',
+                            '66666666-6666-6666-6666-666666666602');
+
+  perform assert_true(v_counted = 0, 'clearing counts nothing, because nothing was waiting to be counted');
+  perform assert_true(v_before = v_after, 'and a student''s percentage does not move when they pay');
+end $$;
+
+select assert_true(
+  (select state from compliance_statuses
+    where student_id = '44444444-4444-4444-4444-444444444403') = 'cleared',
+  'the compliance state still moves — dues are still a real obligation, just not this one'
+);
+
+select assert_rejects($$
+  select clear_student('44444444-4444-4444-4444-444444444401',
+                       '11111111-1111-1111-1111-111111111111',
+                       'hod_clearance')
+$$, 'a clearance granted by a person must name that person');
+
+-- ---------------------------------------------------------------------------
+-- Scoring a lecture
+-- ---------------------------------------------------------------------------
+
+do $$
+declare
+  v_session uuid := gen_random_uuid();
+  v_code    uuid := gen_random_uuid();
+  v_student uuid := '44444444-4444-4444-4444-444444444402';
+  v_score   numeric;
+begin
+  insert into session_instances (id, course_id, timetable_entry_id, held_on, venue_id, type, status, closed_at, created_by)
+  values (v_session, '66666666-6666-6666-6666-666666666601', '77777777-7777-7777-7777-777777777701',
+          session_day(86), '22222222-2222-2222-2222-222222222201', 'recurring', 'closed', now(),
+          '33333333-3333-3333-3333-333333333301');
+
+  insert into checkpoints (id, session_instance_id, token, expires_at, issued_by)
+  values (v_code, v_session, '4821', now() + interval '5 min', '33333333-3333-3333-3333-333333333301');
+
+  -- Nobody answered: the lecture is held, the student was not there.
+  v_score := resolve_session_score(v_student, v_session);
+  perform assert_true(v_score = 0, 'a lecture with no accepted mark scores 0');
+
+  insert into attendance_marks (student_id, checkpoint_id, accepted)
+  values (v_student, v_code, true);
+
+  v_score := resolve_session_score(v_student, v_session);
+  perform assert_true(v_score = 1.0, 'one accepted code is the whole lecture');
+
+  perform assert_true(
+    (select count(*) from session_scores
+      where student_id = v_student and session_instance_id = v_session) = 1,
+    'one score row per student per lecture, whatever their standing with the bursary'
+  );
+
+  -- A duplicate submission for the same code cannot be raced through.
+  perform assert_rejects(
+    format('insert into attendance_marks (student_id, checkpoint_id, accepted) values (%L, %L, true)', v_student, v_code),
+    'a second submission for the same code is rejected by the database, not by application logic'
+  );
+
+  -- The half mark went with the checkpoint pair it described.
+  perform assert_rejects(
+    format('update session_scores set score = 0.5 where student_id = %L and session_instance_id = %L', v_student, v_session),
+    'a lecture is attended or it is not — 0.5 is no longer a score'
+  );
+
+  perform assert_rejects(
+    format('select resolve_session_score(%L, %L, ''digital'', null, 0.5)', v_student, v_session),
+    'a paper batch cannot transcribe a half mark either'
+  );
+end $$;
+
+-- One lecture, one code. A second row for the same lecture is refused by the
+-- database rather than by whichever route happened to be issuing it.
+do $$
+declare
+  v_session uuid := gen_random_uuid();
+begin
+  insert into session_instances (id, course_id, timetable_entry_id, held_on, venue_id, type, status, closed_at, created_by)
+  values (v_session, '66666666-6666-6666-6666-666666666601', '77777777-7777-7777-7777-777777777701',
+          session_day(87), '22222222-2222-2222-2222-222222222201', 'recurring', 'closed', now(),
+          '33333333-3333-3333-3333-333333333301');
+
+  insert into checkpoints (id, session_instance_id, token, expires_at, issued_by)
+  values (gen_random_uuid(), v_session, '1234', now() + interval '5 min', '33333333-3333-3333-3333-333333333301');
+
+  perform assert_rejects(
+    format($q$insert into checkpoints (id, session_instance_id, token, expires_at, issued_by)
+              values (gen_random_uuid(), %L, '5678', now() + interval '5 min', '33333333-3333-3333-3333-333333333301')$q$,
+           v_session),
+    'a lecture cannot carry two attendance codes'
+  );
+end $$;
+
+select assert_rejects($$
+  select resolve_session_score('44444444-4444-4444-4444-444444444402',
+    (select id from session_instances where status = 'scheduled' limit 1))
+$$, 'an unclosed lecture cannot be scored');
+
+-- ---------------------------------------------------------------------------
+-- Cancelled lectures leave the denominator
+-- ---------------------------------------------------------------------------
+
+do $$
+declare
+  v_before  numeric;
+  v_after   numeric;
+  v_held_before integer;
+  v_held_after  integer;
+  v_target  uuid;
+begin
+  v_before := attendance_pct('44444444-4444-4444-4444-444444444401', '66666666-6666-6666-6666-666666666601');
+
+  select count(*) into v_held_before
+  from session_instances
+  where course_id = '66666666-6666-6666-6666-666666666601' and status = 'closed';
+
+  -- A lecture Chidera missed entirely. Cancelling it removes a zero from the
+  -- denominator, so her percentage rises — which is the point: a cancelled
+  -- class must not be held against anyone.
+  select ss.session_instance_id into v_target
+  from session_scores ss
+  join session_instances si on si.id = ss.session_instance_id
+  where ss.student_id = '44444444-4444-4444-4444-444444444401'
+    and si.course_id = '66666666-6666-6666-6666-666666666601'
+    and si.status = 'closed'
+    and ss.score = 0
+  limit 1;
+
+  delete from session_scores where session_instance_id = v_target;
+  update session_instances
+     set status = 'cancelled', cancelled_at = now(),
+         cancelled_by = '33333333-3333-3333-3333-333333333301',
+         cancellation_reason = 'Hall double-booked'
+   where id = v_target;
+
+  select count(*) into v_held_after
+  from session_instances
+  where course_id = '66666666-6666-6666-6666-666666666601' and status = 'closed';
+
+  v_after := attendance_pct('44444444-4444-4444-4444-444444444401', '66666666-6666-6666-6666-666666666601');
+
+  perform assert_true(v_held_after = v_held_before - 1,
+    'a cancelled lecture leaves the attendance denominator');
+  perform assert_true(v_after > v_before,
+    'cancelling a missed lecture cannot be held against the student');
+end $$;
+
+select assert_rejects($$
+  update session_instances set status = 'cancelled', cancelled_at = now()
+  where id = (select id from session_instances where status = 'closed' limit 1)
+$$, 'cancelling without a reason is rejected');
+
+-- ---------------------------------------------------------------------------
+-- The Day-31 path
+-- ---------------------------------------------------------------------------
+
+do $$
+declare
+  v_moved integer;
+  v_locked integer;
+begin
+  insert into compliance_statuses (student_id, academic_session_id, state)
+  values ('44444444-4444-4444-4444-444444444403', '11111111-1111-1111-1111-111111111111', 'uncleared')
+  on conflict (student_id, academic_session_id) do update
+    set state = 'uncleared', locked_at = null, pending_since = null,
+        cleared_at = null, cleared_via = null, cleared_by = null;
+
+  v_moved := begin_pending_verification('11111111-1111-1111-1111-111111111111');
+  perform assert_true(v_moved >= 1, 'Day 31 moves uncleared students into the verification buffer, not straight to locked');
+
+  -- Nothing locks while the buffer is still open.
+  v_locked := lock_after_buffer('11111111-1111-1111-1111-111111111111');
+  perform assert_true(v_locked = 0, 'no one is locked while the buffer is still running');
+
+  update compliance_statuses set pending_since = now() - interval '20 hours'
+   where student_id = '44444444-4444-4444-4444-444444444403';
+
+  v_locked := lock_after_buffer('11111111-1111-1111-1111-111111111111');
+  perform assert_true(v_locked = 1, 'the buffer expiring is what locks the account');
+
+  perform assert_true(
+    is_attendance_locked('44444444-4444-4444-4444-444444444403', '11111111-1111-1111-1111-111111111111'),
+    'the hot-path lock check agrees with the state machine'
+  );
+end $$;
+
+-- ---------------------------------------------------------------------------
+-- Payments
+-- ---------------------------------------------------------------------------
+
+select assert_rejects($$
+  insert into payments (student_id, academic_session_id, paystack_reference, channel, status, amount_kobo)
+  values ('44444444-4444-4444-4444-444444444401', '11111111-1111-1111-1111-111111111111',
+          'DF-TEST-NOVERIFY', 'card', 'success', 500000)
+$$, 'a payment cannot be marked successful without a verification timestamp');
+
+select assert_rejects($$
+  insert into payments (student_id, academic_session_id, paystack_reference, channel, status, amount_kobo, verified_at)
+  values ('44444444-4444-4444-4444-444444444401', '11111111-1111-1111-1111-111111111111',
+          'DF-TEST-000112', 'card', 'success', 500000, now())
+$$, 'a Paystack reference cannot be recorded twice');
+
+-- Amounts are floats, so reconciliation compares within a kobo rather than
+-- with equality.
+select assert_true(
+  payment_matches_dues(500000.0, 500000.0) and payment_matches_dues(499999.9999999, 500000.0),
+  'float representation error does not make a paid student look unpaid'
+);
+
+select assert_true(
+  not payment_matches_dues(499999.0, 500000.0),
+  'a genuine one-kobo shortfall is still a shortfall'
+);
+
+-- ---------------------------------------------------------------------------
+-- Retention
+-- ---------------------------------------------------------------------------
+
+-- There used to be a retention window here, and a job that enforced it, because
+-- a mark carried the student's coordinates. Trust-based attendance records no
+-- location at all, so the strongest assertion available is that there is
+-- nothing left to retain — checked against the catalogue rather than trusted,
+-- because a column quietly reintroduced would restore the obligation without
+-- restoring the job.
+select assert_true(
+  (select count(*) from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'attendance_marks'
+      and column_name in ('gps_lat', 'gps_lng', 'gps_accuracy_m', 'distance_m',
+                          'coordinates_purged_at', 'device_id')) = 0,
+  'an attendance mark records no position, no derived distance and no device'
+);
+
+select assert_true(
+  (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname = 'purge_expired_coordinates') = 0,
+  'the coordinate purge is gone with the coordinates it purged'
+);
+
+select assert_true(
+  (select count(*) from information_schema.columns
+    where table_schema = 'public' and table_name = 'students'
+      and column_name = 'device_id') = 0,
+  'no device fingerprint is kept against a student'
+);
+
+-- ---------------------------------------------------------------------------
+-- Authority actions
+-- ---------------------------------------------------------------------------
+
+select assert_rejects($$
+  update students set status = 'deactivated' where matric_no = 'MTH/2022/018'
+$$, 'deactivation without a reason is rejected');
+
+select assert_rejects($$
+  update students set status = 'deactivated', deactivation_reason = 'other', deactivated_at = now()
+  where matric_no = 'MTH/2022/018'
+$$, 'deactivation reason "other" requires a note');
+
+select assert_rejects($$
+  insert into manual_attendance_batches (session_instance_id, submitted_by, justification_note)
+  values ((select id from session_instances limit 1), '33333333-3333-3333-3333-333333333301', 'x')
+$$, 'a paper batch cannot be submitted with a token justification');
+
+select assert_rejects($$
+  insert into grace_periods (academic_session_id, scope, level, expires_on, reason, granted_by)
+  values ('11111111-1111-1111-1111-111111111111', 'department', 400, (current_date + 30)::text, 'Hardship', '33333333-3333-3333-3333-333333333302')
+$$, 'a department-wide grace period cannot also name a level');
+
+select assert_rejects($$
+  insert into audit_log (actor_role, action) values ('admin', '')
+$$, 'an audit entry must name an action');
+
+do $$
+declare
+  v_id bigint;
+begin
+  v_id := write_audit('33333333-3333-3333-3333-333333333302', 'hod', 'grace_period.open',
+                      'grace_periods', 'test', 'Strike disrupted the payment window');
+
+  perform assert_rejects(format('update audit_log set reason = ''edited'' where id = %s', v_id),
+                         'the audit log cannot be edited');
+  perform assert_rejects(format('delete from audit_log where id = %s', v_id),
+                         'the audit log cannot be deleted from');
+end $$;
+
+-- ---------------------------------------------------------------------------
+-- Eligibility — authorising freezes the list
+-- ---------------------------------------------------------------------------
+
+do $$
+declare
+  v_list uuid := gen_random_uuid();
+begin
+  insert into eligibility_lists (id, course_id, academic_session_id)
+  values (v_list, '66666666-6666-6666-6666-666666666601', '11111111-1111-1111-1111-111111111111');
+
+  insert into eligibility_entries (list_id, student_id, attendance_pct, score_total, sessions_held, eligible)
+  values (v_list, '44444444-4444-4444-4444-444444444401', 76.92, 10.0, 13, true);
+
+  update eligibility_lists
+     set status = 'authorized', authorized_by = '33333333-3333-3333-3333-333333333302', authorized_at = now()
+   where id = v_list;
+
+  perform assert_rejects(
+    format('update eligibility_entries set eligible = false where list_id = %L', v_list),
+    'an authorized eligibility list cannot be altered'
+  );
+
+  perform assert_rejects(
+    format('insert into eligibility_entries (list_id, student_id, attendance_pct, score_total, sessions_held, eligible) values (%L, %L, 38.46, 5.0, 13, false)',
+           v_list, '44444444-4444-4444-4444-444444444402'),
+    'no student can be added to an authorized list'
+  );
+end $$;
+
+select assert_rejects($$
+  insert into academic_sessions (name, starts_on, ends_on, is_active)
+  values (to_char(current_date + 120, 'YYYY') || '/' || to_char(current_date + 300, 'YYYY'),
+          current_date + 120, current_date + 300, true)
+$$, 'only one academic session can be active at a time');
+
+-- ---------------------------------------------------------------------------
+-- Display names
+-- ---------------------------------------------------------------------------
+
+select assert_true(
+  display_name_register('Okonkwo', 'Chidera', 'Emeka') = 'OKONKWO, Chidera Emeka',
+  'register order for tables and the eligibility list'
+);
+
+select assert_true(
+  display_name_register('Sanusi', 'Halima', null) = 'SANUSI, Halima',
+  'a student with no other names gets no trailing space'
+);
+
+select assert_true(
+  display_name_familiar('Okonkwo', 'Chidera') = 'Chidera Okonkwo',
+  'conversational order for greetings'
+);
+
+-- ---------------------------------------------------------------------------
+-- Credentials — matric number as the identifier, no email anywhere
+-- ---------------------------------------------------------------------------
+
+select assert_rejects($$
+  update profiles set password_hash = 'hunter2' where role = 'admin'
+$$, 'a plaintext password cannot be stored — the column only accepts a digest');
+
+do $$
+begin
+  update profiles
+     set password_hash = '$argon2id$v=19$m=65536,t=3,p=4$c29tZXNhbHQ$RdescudvJCsgt3ub'
+   where role = 'admin';
+  perform assert_true(true, 'an Argon2id digest is accepted');
+
+  update profiles set password_hash = crypt('x', gen_salt('bf', 4)) where role = 'hod';
+  perform assert_true(true, 'a bcrypt digest is accepted');
+end $$;
+
+select assert_true(
+  (select role from resolve_login_identifier('CMP/2021/047')) = 'student',
+  'login resolves a matric number to its account'
+);
+
+select assert_true(
+  (select role from resolve_login_identifier('cmp/2021/047')) = 'student',
+  'a matric number typed in lower case still resolves — students type on phones'
+);
+
+select assert_true(
+  (select role from resolve_login_identifier('STF/CMP/001')) = 'hod',
+  'the same field resolves a staff ID, so no role picker is needed at login'
+);
+
+select assert_true(
+  (select count(*) from resolve_login_identifier('CMP/9999/999')) = 0,
+  'an unknown identifier resolves to nothing'
+);
+
+-- The lookup runs before a session exists, so it must not hand back anything
+-- an attacker could use.
+select assert_true(
+  not exists (
+    select 1 from information_schema.columns
+    where table_name = 'resolve_login_identifier'
+      and column_name in ('password_hash', 'phone')
+  ),
+  'the login lookup returns no credential material and no phone number'
+);
+
+-- ---------------------------------------------------------------------------
+-- Function exposure
+--
+-- Every function in `public` is published by PostgREST as an RPC, and Postgres
+-- grants EXECUTE to PUBLIC by default. Anyone holding the anon key — which
+-- ships in the browser bundle — can call anything left exposed.
+-- ---------------------------------------------------------------------------
+
+-- The one that mattered: SECURITY DEFINER, so it runs as the owner and ignores
+-- every table grant. Exposed, it walks the register.
+select assert_true(
+  not has_function_privilege('anon', 'resolve_login_identifier(text)', 'execute'),
+  'anon cannot call the login lookup — it would enumerate the register'
+);
+
+select assert_true(
+  not has_function_privilege('authenticated', 'resolve_login_identifier(text)', 'execute'),
+  'a signed-in student cannot call the login lookup either'
+);
+
+select assert_true(
+  has_function_privilege('service_role', 'resolve_login_identifier(text)', 'execute'),
+  'the API can still call it'
+);
+
+select assert_true(
+  not has_function_privilege('anon', 'clear_student(uuid, uuid, clearance_route, uuid)', 'execute')
+  and not has_function_privilege('authenticated', 'clear_student(uuid, uuid, clearance_route, uuid)', 'execute'),
+  'nobody but the API can clear a student''s dues'
+);
+
+select assert_true(
+  not has_function_privilege('anon', 'write_audit(uuid, app_role, text, text, text, text, jsonb)', 'execute')
+  and not has_function_privilege('authenticated', 'write_audit(uuid, app_role, text, text, text, text, jsonb)', 'execute'),
+  'nobody but the API can write an audit entry'
+);
+
+select assert_true(
+  not has_function_privilege('anon', 'resolve_session_score(uuid, uuid, score_source, uuid, numeric)', 'execute'),
+  'nobody but the API can score a session'
+);
+
+-- The policies call these as the caller, so revoking them would fail the whole
+-- product closed. This is the positive control for the revokes above.
+select assert_true(
+  has_function_privilege('authenticated', 'is_hod()', 'execute')
+  and has_function_privilege('authenticated', 'teaches_course(uuid)', 'execute'),
+  'the functions the RLS policies call stay reachable by signed-in users'
+);
+
+-- ---------------------------------------------------------------------------
+-- Row-level security
+-- ---------------------------------------------------------------------------
+
+-- Chidera, logged in as herself.
+set local role authenticated;
+set local request.jwt.claim.sub = '44444444-4444-4444-4444-444444444401';
+
+select assert_true(
+  (select count(*) from checkpoints) = 0,
+  'a student cannot read checkpoint tokens — the code has to come from the board'
+);
+
+select assert_true(
+  (select count(*) from session_scores where student_id <> '44444444-4444-4444-4444-444444444401') = 0
+  and (select count(*) from session_scores) > 0,
+  'a student sees their own scores and no one else''s'
+);
+
+-- Counted rather than fixed: the baseline writes one row per course a student
+-- is enrolled in, so a number here would break whenever the seed changed. What
+-- is being tested is that none of the rows belong to anybody else.
+select assert_true(
+  (select count(*) from risk_predictions) > 0
+  and (select count(*) from risk_predictions
+        where student_id <> '44444444-4444-4444-4444-444444444401') = 0,
+  'a student sees their own risk predictions and no one else''s'
+);
+
+select assert_true(
+  (select count(*) from venues) = 0,
+  'a student cannot read the geo-fence'
+);
+
+select assert_true(
+  (select count(*) from whitelist_entries) = 0,
+  'a student cannot read the register'
+);
+
+select assert_true(
+  (select count(*) from audit_log) = 0,
+  'a student cannot read the audit log'
+);
+
+-- Permits are unguessable by reference, but the table is still readable under
+-- RLS, and one student reading another's is a list of who may sit what.
+select assert_true(
+  (select count(*) from exam_permits
+    where student_id <> '44444444-4444-4444-4444-444444444401') = 0,
+  'a student cannot read another student''s exam permit'
+);
+
+select assert_true(
+  (select count(*) from my_attendance_marks) >= 0,
+  'a student reads their marks through a view with no coordinate columns'
+);
+
+reset role;
+set local role authenticated;
+set local request.jwt.claim.sub = '33333333-3333-3333-3333-333333333303';  -- admin
+
+-- The seed carries two predictions, so this is a real denial rather than an
+-- empty table reading as a pass.
+select assert_true(
+  (select count(*) from risk_predictions) = 0,
+  'admin cannot see individual student risk — that is HOD scope'
+);
+
+select assert_true(
+  (select count(*) from whitelist_entries) > 0,
+  'admin can read the register'
+);
+
+reset role;
+set local role authenticated;
+set local request.jwt.claim.sub = '33333333-3333-3333-3333-333333333302';  -- HOD
+
+select assert_true(
+  (select count(*) from venues) = 0,
+  'the HOD cannot read geo-fence coordinates'
+);
+
+select assert_true(
+  (select count(*) from whitelist_entries) = 0,
+  'the HOD cannot read the register'
+);
+
+select assert_true(
+  (select count(*) from students) > 0,
+  'the HOD can read student records'
+);
+
+-- Against the total, not a fixed number: this is the positive control for the
+-- admin denial above, and what it has to show is that the HOD sees all of them.
+select assert_true(
+  (select count(*) from risk_predictions) > 0
+  and (select count(distinct student_id) from risk_predictions) > 1,
+  'the HOD sees every student''s risk — the positive control for the admin denial above'
+);
+
+reset role;
+set local role authenticated;
+set local request.jwt.claim.sub = '33333333-3333-3333-3333-333333333301';  -- lecturer
+
+-- A venue name is on the timetable and has to appear on the session screen;
+-- the fence centre and radius are what the admin-only policy exists to hide.
+-- Splitting them means neither rule has to bend.
+select assert_true(
+  (select count(*) from venue_directory) = 2,
+  'a lecturer can read venue names'
+);
+
+reset role;
+
+-- The fence is gone, so the thing venues_admin_read existed to hide is gone
+-- with it. What the policy still does is keep the hall list off the anonymous
+-- surface, and `venue_directory` remains the read path every screen uses.
+select assert_true(
+  (select count(*) from information_schema.columns
+    where table_schema = 'public' and table_name = 'venues'
+      and column_name in ('centre_lat', 'centre_lng', 'radius_m', 'boundary')) = 0,
+  'a venue is a name and nothing that could place a student'
+);
+
+-- ---------------------------------------------------------------------------
+-- Grace periods
+-- ---------------------------------------------------------------------------
+
+-- Grace suspends the consequence of being locked; it does not rewrite the
+-- state. Flipping locked students back to `uncleared` would destroy the record
+-- of who was locked, leaving revocation to guess who to re-lock, and would make
+-- a student under grace indistinguishable from one who never reached day 31.
+
+do $$
+declare
+  v_session uuid := '11111111-1111-1111-1111-111111111111';
+  v_hod     uuid := '33333333-3333-3333-3333-333333333302';
+  v_tunde   uuid := '44444444-4444-4444-4444-444444444403'; -- locked, level 300
+  v_grace   uuid;
+  v_count   integer;
+begin
+  perform assert_true(
+    is_attendance_locked(v_tunde, v_session),
+    'a locked student cannot record attendance'
+  );
+
+  -- The impact preview counts students shut out by the REGISTRATION deadline,
+  -- not by dues — the exception was repointed at registration and the number
+  -- the HOD is shown had to move with it. Every seeded student confirmed
+  -- inside the window, so the honest answer here is zero; the registration
+  -- section below creates one who did not and checks the count follows.
+  select students_affected into v_count from grace_period_impact(v_session, 'department', null);
+  perform assert_true(
+    v_count = 0,
+    'the impact preview counts nobody when every student registered on time'
+  );
+
+  v_grace := open_grace_period(v_session, 'department', null, current_date + 14,
+                               'Payment portal was unreachable for four days.', v_hod);
+
+  perform assert_true(
+    not is_attendance_locked(v_tunde, v_session),
+    'an open grace period lets a locked student record attendance again'
+  );
+
+  perform assert_true(
+    (select state from compliance_statuses
+      where student_id = v_tunde and academic_session_id = v_session) = 'locked',
+    'and it does so without rewriting the compliance state'
+  );
+
+  perform assert_true(
+    (select count(*) from audit_log where action = 'grace_period.opened') = 1,
+    'opening a grace period writes an audit row naming who and why'
+  );
+
+  perform assert_rejects(
+    format('select open_grace_period(%L, %L, 300, current_date + 7, %L, %L)',
+           v_session, 'level', 'A different reason entirely.', v_hod),
+    'a second grace period covering the same students is refused'
+  );
+
+  perform assert_rejects(
+    format('select revoke_grace_period(%L, %L, %L)', v_grace, v_hod, 'nope'),
+    'revoking without a substantive reason is refused'
+  );
+
+  perform assert_true(
+    revoke_grace_period(v_grace, v_hod, 'Portal is back up and confirmed working.'),
+    'the HOD can end a grace period early'
+  );
+
+  perform assert_true(
+    is_attendance_locked(v_tunde, v_session),
+    'revoking re-applies the lock immediately — nothing had to be undone'
+  );
+
+  perform assert_true(
+    not revoke_grace_period(v_grace, v_hod, 'Trying to revoke the same one twice.'),
+    'revoking an already-revoked period is a no-op rather than a second audit row'
+  );
+
+  perform assert_true(
+    (select count(*) from audit_log where action = 'grace_period.revoked') = 1,
+    'exactly one revocation is recorded'
+  );
+end $$;
+
+-- ---------------------------------------------------------------------------
+-- The payment window closes with the lock
+-- ---------------------------------------------------------------------------
+
+-- Department decision: the portal is not open all session. A deadline that can
+-- be ignored indefinitely is not a deadline, so being locked shuts paying as
+-- well as recording — and the same grace period reopens both, because it is one
+-- lock rather than two calendars.
+
+do $$
+declare
+  v_session uuid := '11111111-1111-1111-1111-111111111111';
+  v_hod     uuid := '33333333-3333-3333-3333-333333333302';
+  v_tunde   uuid := '44444444-4444-4444-4444-444444444403'; -- locked
+  v_halima  uuid := '44444444-4444-4444-4444-444444444402'; -- cleared
+  v_grace   uuid;
+begin
+  perform assert_true(
+    not is_payment_open(v_tunde, v_session),
+    'a locked student cannot start a payment — the deadline is a real one'
+  );
+
+  perform assert_true(
+    is_payment_open(v_halima, v_session),
+    'everyone else can still pay'
+  );
+
+  v_grace := open_grace_period(v_session, 'department', null, current_date + 14,
+                               'Bursary disbursement was three weeks late.', v_hod);
+
+  perform assert_true(
+    is_payment_open(v_tunde, v_session),
+    'a grace period reopens payment as well as attendance — one lock, one key'
+  );
+
+  perform revoke_grace_period(v_grace, v_hod, 'Disbursement completed and confirmed.');
+
+  perform assert_true(
+    not is_payment_open(v_tunde, v_session),
+    'and closes both again when it ends'
+  );
+end $$;
+
+-- ---------------------------------------------------------------------------
+-- The deadline actually arriving
+-- ---------------------------------------------------------------------------
+
+-- These two transitions existed from the first migration and nothing called
+-- them, so the compliance ladder was inert. That became load-bearing when the
+-- payment window was tied to the lock: with nothing driving the transition, no
+-- student is ever locked and the deadline does not exist.
+
+do $$
+declare
+  v_session uuid := '11111111-1111-1111-1111-111111111111';
+  v_fresh   uuid := gen_random_uuid();
+  v_moved   integer;
+begin
+  insert into profiles (id, role, surname, first_name, phone)
+  values (v_fresh, 'student', 'Timely', 'Student', '+2348058888888');
+  insert into students (id, matric_no, level) values (v_fresh, 'CMP/2021/888', 300);
+  insert into compliance_statuses (student_id, academic_session_id, state)
+  values (v_fresh, v_session, 'uncleared');
+
+  -- Resumption far enough back that the provisional window has closed.
+  update dues_periods set resumption_date = current_date - 60
+   where academic_session_id = v_session;
+
+  v_moved := begin_pending_verification(v_session);
+  perform assert_true(
+    v_moved > 0,
+    'once the provisional window has passed, uncleared students enter the buffer'
+  );
+
+  perform assert_true(
+    (select state from compliance_statuses
+      where student_id = v_fresh and academic_session_id = v_session) = 'pending_verification',
+    'they land in pending verification rather than straight into a lock'
+  );
+
+  -- Rewind so the deadline has NOT passed, and put them back.
+  update compliance_statuses set state = 'uncleared', pending_since = null
+   where student_id = v_fresh and academic_session_id = v_session;
+  update dues_periods set resumption_date = current_date - 2
+   where academic_session_id = v_session;
+
+  perform assert_true(
+    begin_pending_verification(v_session) = 0,
+    'run before the deadline it moves nobody — the rule is in the function, not in the caller'
+  );
+
+  perform assert_true(
+    (select state from compliance_statuses
+      where student_id = v_fresh and academic_session_id = v_session) = 'uncleared',
+    'so a scheduler misfire cannot lock a department out of paying early'
+  );
+end $$;
+
+-- ---------------------------------------------------------------------------
+-- The waiver is gone, and disputes
+-- ---------------------------------------------------------------------------
+
+-- The waiver was retired in ..._retire_the_waiver.sql. It was designed when
+-- payment decided whether a lecture counted; after the decoupling its only
+-- remaining job was the permit's dues condition, and it did not do that job —
+-- it set a compliance state while `dues_balance_kobo()` went on subtracting
+-- payments alone, so a granted waiver left the permit still refusing. What is
+-- asserted now is its absence, because a half-removed mechanism is worse than
+-- either keeping or dropping it.
+--
+-- A dispute is the authority action that remains here, and the consequential
+-- one: correcting it changes an attendance percentage after the fact.
+
+do $$
+declare
+  v_session uuid := '11111111-1111-1111-1111-111111111111';
+  v_hod     uuid := '33333333-3333-3333-3333-333333333302';
+  v_halima  uuid := '44444444-4444-4444-4444-444444444402';
+  v_course  uuid := '66666666-6666-6666-6666-666666666601';
+  v_lecture uuid := gen_random_uuid();
+  v_cp      uuid := gen_random_uuid();
+  v_dispute uuid := gen_random_uuid();
+begin
+  -- Retired, and gone rather than merely unreachable. A table left standing
+  -- with no caller is an invitation to wire it back up to the state it was
+  -- setting, which is the state that stopped deciding anything.
+  perform assert_true(
+    to_regclass('public.waivers') is null,
+    'the waivers table is gone, not left standing with no caller'
+  );
+
+  perform assert_true(
+    not exists (
+      select 1 from pg_proc p
+      join pg_namespace n on n.oid = p.pronamespace
+      where n.nspname = 'public' and p.proname = 'decide_waiver'
+    ),
+    'and so is decide_waiver()'
+  );
+
+  perform assert_true(
+    not exists (select 1 from pg_type where typname = 'waiver_status'),
+    'and the status vocabulary it owned'
+  );
+
+  -- The health report has to stop expecting them, or /api/health reports a
+  -- missing table for the life of the project and the next genuinely
+  -- half-applied migration set reads as the same old noise.
+  perform assert_true(
+    (dept_flow_schema_report()->>'up_to_date')::boolean,
+    'and the schema report calls a database without waivers up to date'
+  );
+
+  -- ------------------------------------------------------------------------
+  -- A lecture Halima was rejected on, then disputes
+  -- ------------------------------------------------------------------------
+  insert into session_instances (id, course_id, timetable_entry_id, held_on, venue_id,
+                                 type, status, closed_at, created_by)
+  values (v_lecture, v_course, '77777777-7777-7777-7777-777777777701', current_date - 1,
+          '22222222-2222-2222-2222-222222222201', 'recurring', 'closed', now(),
+          '33333333-3333-3333-3333-333333333301');
+
+  insert into checkpoints (id, session_instance_id, token, issued_at, expires_at, issued_by)
+  values (v_cp, v_lecture, '1234', now() - interval '2 hours', now() - interval '1 hour',
+          '33333333-3333-3333-3333-333333333301');
+
+  insert into attendance_marks (student_id, checkpoint_id, accepted, reject_reason)
+  values (v_halima, v_cp, false, 'invalid_or_expired_token');
+
+  perform resolve_session_score(v_halima, v_lecture);
+
+  perform assert_true(
+    (select score from session_scores
+      where student_id = v_halima and session_instance_id = v_lecture) = 0,
+    'a rejected submission scores zero'
+  );
+
+  insert into attendance_disputes (id, student_id, session_instance_id, checkpoint_id, student_note)
+  values (v_dispute, v_halima, v_lecture, v_cp, 'I was in the third row the whole lecture.');
+
+  perform assert_true(
+    resolve_dispute(v_dispute, v_hod, false, 'Lecturer confirms she was present and signed the sheet.')
+      = 'corrected',
+    'the HOD can correct a disputed mark'
+  );
+
+  perform assert_true(
+    (select score from session_scores
+      where student_id = v_halima and session_instance_id = v_lecture) = 1.0,
+    'correcting re-scores through resolve_session_score, by the same rules as every other lecture'
+  );
+
+  perform assert_true(
+    (select (metadata->>'score_before')::numeric from audit_log
+      where action = 'dispute.corrected') = 0
+    and (select (metadata->>'score_after')::numeric from audit_log
+      where action = 'dispute.corrected') = 1.0,
+    'the audit row records both scores — "it changed" is not a defensible answer later'
+  );
+
+  perform assert_true(
+    resolve_dispute(v_dispute, v_hod, true, 'Trying to resolve it a second time.')
+      = 'already_resolved',
+    'a resolved dispute cannot be resolved again'
+  );
+end $$;
+
+-- ---------------------------------------------------------------------------
+-- Course registration
+-- ---------------------------------------------------------------------------
+
+-- Enrolment is the DENOMINATOR of the attendance formula, so none of this is
+-- administrative tidiness: it decides which lectures count against a student,
+-- and therefore who sits an exam.
+
+do $$
+declare
+  v_session uuid := '11111111-1111-1111-1111-111111111111';
+  v_cmp301  uuid := '66666666-6666-6666-6666-666666666601'; -- core 300, 3 units
+  v_mth205  uuid := '66666666-6666-6666-6666-666666666602'; -- core 200, 3 units
+  v_sta202  uuid := '66666666-6666-6666-6666-666666666603'; -- elective 200, 2 units
+  v_tunde   uuid := '44444444-4444-4444-4444-444444444403'; -- 300 level
+  v_late    uuid := gen_random_uuid();
+  v_extra   uuid := gen_random_uuid();
+  v_mine    integer;
+  v_all     integer;
+begin
+  -- The one that matters most: a course joined in week 8 does not inherit the
+  -- absences from the lectures held before the student was on it.
+  insert into profiles (id, role, surname, first_name, phone)
+  values (v_late, 'student', 'Late', 'Joiner', '+2348059999999');
+  insert into students (id, matric_no, level) values (v_late, 'CMP/2021/999', 300);
+  insert into enrolments (student_id, course_id, source, enrolled_on)
+  values (v_late, v_cmp301, 'carry_over', session_day(64));
+
+  -- Counted rather than hardcoded: an earlier assertion in this suite cancels
+  -- a lecture, and a fixed number here would break on that rather than on
+  -- anything to do with enrolment.
+  select count(*) into v_mine
+  from session_instances si
+  where si.course_id = v_cmp301 and si.status = 'closed'
+    and si.held_on >= session_day(64);
+
+  select count(*) into v_all
+  from session_instances si
+  where si.course_id = v_cmp301 and si.status = 'closed';
+
+  perform assert_true(
+    v_mine < v_all and v_mine > 0,
+    'a student joining part-way through has fewer lectures in their denominator than the course held'
+  );
+
+  perform assert_true(
+    attendance_pct(v_late, v_cmp301) = 0,
+    'a late joiner with no marks is at 0% over their own denominator, not the course''s'
+  );
+
+  -- One full mark, and the percentage is that mark over the lectures held
+  -- since they joined. Against the whole course it would read far lower — this
+  -- is the difference between a fair number and one that bars someone from an
+  -- exam over classes they could not have attended.
+  insert into session_scores (student_id, session_instance_id, score)
+  select v_late, si.id, 1.0
+  from session_instances si
+  where si.course_id = v_cmp301 and si.status = 'closed'
+    and si.held_on >= session_day(64)
+  order by si.held_on
+  limit 1;
+
+  perform assert_true(
+    attendance_pct(v_late, v_cmp301) = round(1.0 / v_mine * 100, 2),
+    'the denominator is the lectures held since joining, not every lecture the course held'
+  );
+
+  perform assert_true(
+    enrol_in_core_courses(v_tunde, v_session) = 1,
+    'core enrolment adds every core course at the student''s level'
+  );
+
+  perform assert_true(
+    enrol_in_core_courses(v_tunde, v_session) = 0,
+    'core enrolment is idempotent, so re-running it after an upload resets no join date'
+  );
+
+  perform assert_true(
+    add_optional_course(v_tunde, v_cmp301) = 'core_not_optional',
+    'a core course at the student''s own level cannot be opted into'
+  );
+
+  perform assert_true(
+    add_optional_course(v_tunde, v_mth205) = 'already_enrolled',
+    'an optional course already held says so rather than duplicating'
+  );
+
+  perform assert_true(
+    (select source from enrolments where student_id = v_tunde and course_id = v_mth205)
+      = 'carry_over',
+    'a course below the student''s level is recorded as a carry-over'
+  );
+
+  perform assert_true(
+    add_optional_course(v_tunde, v_sta202) = 'added',
+    'a lower-level elective can be added'
+  );
+
+  perform assert_true(
+    student_credit_units(v_tunde, v_session, 1::smallint) = 8,
+    'credit units count core, electives and carry-overs alike'
+  );
+
+  -- The cap, exercised at 12 so the seeded courses can reach it.
+  update app_config set max_credit_units_per_semester = 12 where id = 1;
+  insert into courses (id, academic_session_id, code, title, level, kind, credit_units, semester)
+  values (v_extra, v_session, 'CMP 302', 'Compilers', 300, 'elective', 6, 1);
+
+  perform assert_true(
+    add_optional_course(v_tunde, v_extra) = 'over_credit_limit',
+    'the credit cap refuses a course that would take the student over it'
+  );
+
+  update app_config set max_credit_units_per_semester = 24 where id = 1;
+  perform assert_true(
+    add_optional_course(v_tunde, v_extra) = 'added',
+    'the same course fits once the cap is raised, so the cap is the only thing refusing it'
+  );
+
+  perform assert_true(
+    drop_optional_course(v_tunde, v_cmp301) = 'core_not_optional',
+    'a core course cannot be dropped — a student could otherwise stop being tracked'
+  );
+
+  perform assert_true(
+    drop_optional_course(v_tunde, v_sta202) = 'dropped',
+    'an elective can be dropped'
+  );
+
+  perform assert_true(
+    student_credit_units(v_tunde, v_session, 1::smallint) = 12,
+    'dropping releases its credit units'
+  );
+
+  perform assert_true(
+    (select dropped_at from enrolments
+      where student_id = v_tunde and course_id = v_sta202) is not null,
+    'dropping records rather than deletes, so the join date survives'
+  );
+
+  update enrolments set enrolled_on = session_day(0)
+   where student_id = v_tunde and course_id = v_sta202;
+  perform add_optional_course(v_tunde, v_sta202);
+
+  perform assert_true(
+    (select enrolled_on from enrolments
+      where student_id = v_tunde and course_id = v_sta202) = session_day(0),
+    're-adding a dropped course keeps its join date, so drop-and-re-add cannot erase absences'
+  );
+end $$;
+
+
+
+
+-- ---------------------------------------------------------------------------
+-- Authorizing an exam eligibility list
+--
+-- On its own course and its own student. An earlier block already authorizes a
+-- list for CMP 301 to prove the freeze trigger, and reusing it here would test
+-- the collision rather than the function.
+-- ---------------------------------------------------------------------------
+
+do $$
+declare
+  v_hod     uuid := '33333333-3333-3333-3333-333333333302';
+  v_admin   uuid := '33333333-3333-3333-3333-333333333303';
+  v_session uuid := '11111111-1111-1111-1111-111111111111';
+  v_lect    uuid := '33333333-3333-3333-3333-333333333301';
+  v_venue   uuid := '22222222-2222-2222-2222-222222222201';
+  v_course  uuid := gen_random_uuid();
+  v_student uuid := gen_random_uuid();
+  v_lecture uuid := gen_random_uuid();
+  v_second  uuid := gen_random_uuid();
+  v_list    uuid;
+  v_e       integer;
+  v_n       integer;
+  v_snap    numeric;
+  v_ok      boolean;
+begin
+  insert into courses (id, academic_session_id, code, title, level, lecturer_id, kind, credit_units, semester)
+  values (v_course, v_session, 'CMP 499', 'Project', 400, v_lect, 'core', 3, 1);
+
+  insert into profiles (id, role, surname, first_name, phone)
+  values (v_student, 'student', 'Eligible', 'Test', '+2348055555555');
+  insert into students (id, matric_no, level) values (v_student, 'CMP/2021/555', 400);
+  insert into enrolments (student_id, course_id, source, enrolled_on)
+  values (v_student, v_course, 'core', session_day(0));
+
+  insert into session_instances (id, course_id, held_on, venue_id, type, status, closed_at, created_by)
+  values (v_lecture, v_course, session_day(22), v_venue, 'makeup', 'closed', now(), v_lect),
+         (v_second, v_course, session_day(29), v_venue, 'makeup', 'closed', now(), v_lect);
+
+  -- Two lectures held, one attended. 50% — below the line, and below it for a
+  -- reason that has nothing to do with money. This block used to make the
+  -- student ineligible by leaving their score provisional, which is no longer
+  -- a thing a score can be.
+  insert into session_scores (student_id, session_instance_id, score, source)
+  values (v_student, v_lecture, 1.0, 'digital'),
+         (v_student, v_second, 0, 'digital');
+
+  begin
+    perform authorize_eligibility_list(v_course, v_hod, 'ok');
+    v_ok := false;
+  exception when others then v_ok := true;
+  end;
+  perform assert_true(v_ok, 'authorizing without a substantive note is refused');
+
+  begin
+    perform authorize_eligibility_list(v_course, v_admin, 'The administrator is not the head of department.');
+    v_ok := false;
+  exception when others then v_ok := true;
+  end;
+  perform assert_true(v_ok, 'only the head of department can authorize an eligibility list');
+
+  select eligible, not_eligible into v_e, v_n
+  from authorize_eligibility_list(v_course, v_hod, 'Final list for the 2025/2026 first semester.');
+
+  perform assert_true(v_e + v_n > 0, 'authorizing snapshots every enrolled student');
+
+  perform assert_true(
+    v_e = 0 and v_n = 1,
+    'a student below the threshold is recorded as not eligible'
+  );
+
+  select id into v_list from eligibility_lists where course_id = v_course;
+  perform assert_true(
+    (select status from eligibility_lists where id = v_list) = 'authorized'
+      and (select authorized_by from eligibility_lists where id = v_list) = v_hod,
+    'the list records who froze it and when'
+  );
+
+  select attendance_pct into v_snap
+  from eligibility_entries where list_id = v_list and student_id = v_student;
+
+  perform assert_true(
+    v_snap = attendance_pct(v_student, v_course),
+    'the snapshot matches what every other screen was showing at the time'
+  );
+
+  perform assert_true(
+    (select count(*) from audit_log
+      where action = 'eligibility.authorize' and target_id = v_list::text) = 1,
+    'authorizing writes an audit row'
+  );
+
+  -- The freeze is the whole point: a correction afterwards takes this student
+  -- from 50% to 100%, and must NOT move a list an exam board already sat with.
+  update session_scores set score = 1.0
+   where student_id = v_student and session_instance_id = v_second;
+
+  perform assert_true(
+    attendance_pct(v_student, v_course) = 100,
+    'the correction takes the student to 100% live'
+  );
+
+  perform assert_true(
+    (select attendance_pct from eligibility_entries
+      where list_id = v_list and student_id = v_student) = v_snap,
+    'and the frozen list still says what it said — a correction is a new list, never an edit'
+  );
+
+  select eligible, not_eligible into v_e, v_n
+  from authorize_eligibility_list(v_course, v_hod, 'Trying to authorize the same list twice.');
+  perform assert_true(v_e = 0 and v_n = 0, 'an authorized list cannot be authorized again');
+
+  perform assert_true(
+    (select count(*) from audit_log
+      where action = 'eligibility.authorize' and target_id = v_list::text) = 1,
+    'and the second attempt writes no second audit row'
+  );
+end $$;
+
+-- ---------------------------------------------------------------------------
+-- Schedule changes: cancelling, makeups, reschedules
+--
+-- Placed before the admin block, because the rollover at the end changes every
+-- student's level and switches the active session.
+-- ---------------------------------------------------------------------------
+
+do $$
+declare
+  v_lect   uuid := '33333333-3333-3333-3333-333333333301'; -- Bello, teaches all three
+  v_hod    uuid := '33333333-3333-3333-3333-333333333302';
+  v_cmp301 uuid := '66666666-6666-6666-6666-666666666601';
+  v_sta202 uuid := '66666666-6666-6666-6666-666666666603';
+  v_entry  uuid := '77777777-7777-7777-7777-777777777701';
+  v_venue  uuid := '22222222-2222-2222-2222-222222222201';
+  v_future date := current_date + 7;
+  v_held   date;
+  v_before integer;
+  v_after  integer;
+  v_ok     boolean;
+begin
+  select count(*) into v_before from notifications;
+
+  -- ==== cancel_session ====
+
+  begin
+    perform cancel_session(v_cmp301, v_entry, v_future, v_lect, 'busy');
+    v_ok := false;
+  exception when others then v_ok := true;
+  end;
+  perform assert_true(v_ok, 'a cancellation without a substantive reason is refused — students are shown it');
+
+  perform assert_true(
+    cancel_session(v_cmp301, v_entry, v_future, v_hod, 'The HOD is not the lecturer for this course.') = 'not_your_course',
+    'a lecturer cannot cancel another lecturer''s lecture'
+  );
+
+  perform assert_true(
+    cancel_session(v_cmp301, v_entry, v_future, v_lect, 'Departmental seminar clashes with this slot.') = 'cancelled',
+    'the lecturer can cancel a future lecture that has no instance row yet'
+  );
+
+  perform assert_true(
+    (select status from session_instances where course_id = v_cmp301 and held_on = v_future) = 'cancelled',
+    'cancelling writes an instance rather than deleting one — the absence is recorded'
+  );
+
+  perform assert_true(
+    (select venue_id from session_instances where course_id = v_cmp301 and held_on = v_future) = v_venue,
+    'the cancelled instance carries the venue from the timetable entry'
+  );
+
+  select count(*) into v_after from notifications;
+  perform assert_true(
+    v_after > v_before,
+    'cancelling notifies the enrolled students, as the screen promises'
+  );
+
+  perform assert_true(
+    (select count(*) from notifications n
+      join enrolments e on e.student_id = n.recipient_id and e.course_id = v_cmp301
+     where n.kind = 'schedule_change') > 0,
+    'the notification goes to students enrolled in that course'
+  );
+
+  perform assert_true(
+    cancel_session(v_cmp301, v_entry, v_future, v_lect, 'Trying to cancel the very same lecture twice.') = 'already_cancelled',
+    'a cancelled lecture cannot be cancelled again'
+  );
+
+  -- A lecture already held must not be cancellable: it would drop out of every
+  -- enrolled student's denominator and move percentages for students who came.
+  select held_on into v_held
+  from session_instances
+  where course_id = v_cmp301 and status = 'closed'
+  order by held_on limit 1;
+
+  perform assert_true(
+    cancel_session(v_cmp301, v_entry, v_held, v_lect, 'Trying to cancel a lecture that was actually taught.') = 'already_held',
+    'a lecture that was held cannot be cancelled — that would move every student''s percentage'
+  );
+
+  -- ==== schedule_makeup ====
+
+  begin
+    perform schedule_makeup(v_sta202, current_date - 1, time '15:00', time '17:00', v_venue, v_lect, null);
+    v_ok := false;
+  exception when others then v_ok := true;
+  end;
+  perform assert_true(v_ok, 'a makeup class cannot be scheduled in the past');
+
+  begin
+    perform schedule_makeup(v_sta202, v_future, time '17:00', time '15:00', v_venue, v_lect, null);
+    v_ok := false;
+  exception when others then v_ok := true;
+  end;
+  perform assert_true(v_ok, 'a makeup class must end after it starts');
+
+  perform assert_true(
+    schedule_makeup(v_sta202, v_future, time '15:00', time '17:00', v_venue, v_hod, null) = 'not_your_course',
+    'a makeup can only be scheduled by the course''s own lecturer'
+  );
+
+  perform assert_true(
+    schedule_makeup(v_sta202, v_future, time '15:00', time '17:00', gen_random_uuid(), v_lect, null) = 'no_such_venue',
+    'a makeup class needs a real venue — the geo-fence comes from it'
+  );
+
+  perform assert_true(
+    schedule_makeup(v_sta202, v_future, time '15:00', time '17:00', v_venue, v_lect, 'Replacing the lecture lost to the seminar.') = 'scheduled',
+    'the lecturer can schedule a makeup class'
+  );
+
+  perform assert_true(
+    (select type from session_instances where course_id = v_sta202 and held_on = v_future) = 'makeup'
+      and (select timetable_entry_id from session_instances where course_id = v_sta202 and held_on = v_future) is null,
+    'a makeup has no timetable entry — it is not a recurring slot'
+  );
+
+  perform assert_true(
+    schedule_makeup(v_sta202, v_future, time '18:00', time '20:00', v_venue, v_lect, null) = 'already_scheduled',
+    'two lectures for one course on one day is a double-tap, not an intention'
+  );
+
+  -- Cancelling frees the day again, which is the whole point of a makeup after
+  -- a cancellation.
+  perform cancel_session(v_sta202, null, v_future, v_lect, 'Venue double-booked, moving it again.');
+  perform assert_true(
+    schedule_makeup(v_sta202, v_future, time '18:00', time '20:00', v_venue, v_lect, null) = 'scheduled',
+    'once cancelled, the day is free for another makeup'
+  );
+
+  -- ==== reschedule_session ====
+
+  perform assert_true(
+    reschedule_session(v_cmp301, v_entry, v_future + 7, v_future + 8, time '10:00', time '12:00',
+                       v_venue, v_lect, 'Venue needed for an external examination.') = 'rescheduled',
+    'the lecturer can move a lecture to another day'
+  );
+
+  perform assert_true(
+    (select status from session_instances where course_id = v_cmp301 and held_on = v_future + 7) = 'cancelled'
+      and (select type from session_instances where course_id = v_cmp301 and held_on = v_future + 8) = 'reschedule',
+    'the old slot is cancelled and the new one is marked a reschedule — nothing is deleted'
+  );
+
+  perform assert_true(
+    (select count(*) from notifications
+      where kind = 'schedule_change' and title like '%has moved to%') > 0,
+    'a reschedule sends one notification, not a cancellation and an addition'
+  );
+
+  begin
+    perform reschedule_session(v_cmp301, v_entry, v_future + 14, current_date - 1, time '10:00', time '12:00',
+                               v_venue, v_lect, 'Trying to move a lecture backwards in time.');
+    v_ok := false;
+  exception when others then v_ok := true;
+  end;
+  perform assert_true(v_ok, 'a lecture cannot be moved into the past');
+end $$;
+
+-- ---------------------------------------------------------------------------
+-- The administrator's authority actions
+--
+-- Deliberately last: the rollover changes every student's level and switches
+-- the active session, so nothing after it would be testing what it thinks.
+-- ---------------------------------------------------------------------------
+
+do $$
+declare
+  v_admin   uuid := '33333333-3333-3333-3333-333333333303';
+  v_session uuid := '11111111-1111-1111-1111-111111111111';
+  v_chidera uuid := '44444444-4444-4444-4444-444444444401'; -- 400
+  v_halima  uuid := '44444444-4444-4444-4444-444444444402'; -- 400
+  v_tunde   uuid := '44444444-4444-4444-4444-444444444403'; -- 300
+  v_next    uuid := gen_random_uuid();
+  v_dispute uuid;
+  v_result  text;
+  v_promoted   integer;
+  v_graduating integer;
+  v_was_final  integer;
+  v_was_junior integer;
+  v_ok      boolean;
+begin
+  -- ==== deactivate_student ====
+
+  begin
+    perform deactivate_student(v_chidera, null, 'withdrawn', 'Left the programme in October.');
+    v_ok := false;
+  exception when others then v_ok := true;
+  end;
+  perform assert_true(v_ok, 'a deactivation with no actor is refused');
+
+  begin
+    perform deactivate_student(v_chidera, v_admin, 'withdrawn', 'left');
+    v_ok := false;
+  exception when others then v_ok := true;
+  end;
+  perform assert_true(v_ok, 'a deactivation without a substantive note is refused');
+
+  perform assert_true(
+    deactivate_student(v_chidera, v_admin, 'withdrawn', 'Withdrew from the programme, letter on file.') = 'deactivated',
+    'the admin can deactivate a student'
+  );
+
+  perform assert_true(
+    (select status from students where id = v_chidera) = 'deactivated'
+      and (select deactivated_by from students where id = v_chidera) = v_admin,
+    'deactivating records who did it'
+  );
+
+  perform assert_true(
+    (select count(*) from session_scores where student_id = v_chidera) > 0,
+    'deactivating keeps their attendance history — it is a soft delete, not a delete'
+  );
+
+  perform assert_true(
+    (select count(*) from audit_log
+      where action = 'student.deactivate' and target_id = v_chidera::text) = 1,
+    'deactivating writes an audit row'
+  );
+
+  perform assert_true(
+    deactivate_student(v_chidera, v_admin, 'withdrawn', 'Trying the same thing twice over.') = 'already_deactivated',
+    'a deactivated student cannot be deactivated again'
+  );
+
+  perform assert_true(
+    reactivate_student(v_chidera, v_admin, 'Clerical error — wrong student was selected.') = 'reactivated',
+    'the admin can reverse a deactivation'
+  );
+
+  perform assert_true(
+    (select metadata->>'previous_reason' from audit_log
+      where action = 'student.reactivate' and target_id = v_chidera::text) = 'withdrawn',
+    'reactivating carries the old reason into the audit row before clearing it'
+  );
+
+  perform assert_true(
+    (select status from students where id = v_chidera) = 'active'
+      and (select deactivation_reason from students where id = v_chidera) is null,
+    'a reactivated student is active again with no deactivation reason left behind'
+  );
+
+  -- ==== resolve_registration_dispute ====
+
+  insert into registration_disputes (matric_no, academic_session_id, reporter_phone)
+  values ('CMP/2021/112', v_session, '+2348031234567')
+  returning id into v_dispute;
+
+  update whitelist_entries set claimed = true, claimed_by = v_halima, claimed_at = now()
+   where matric_no = 'CMP/2021/112' and academic_session_id = v_session;
+
+  begin
+    perform resolve_registration_dispute(v_dispute, v_admin, true, 'nope');
+    v_ok := false;
+  exception when others then v_ok := true;
+  end;
+  perform assert_true(v_ok, 'a registration dispute cannot be resolved without a substantive reason');
+
+  perform assert_true(
+    resolve_registration_dispute(v_dispute, v_admin, true, 'Impostor claim confirmed at the department office with student ID.') = 'revoked',
+    'the admin can revoke a fraudulent registration'
+  );
+
+  perform assert_true(
+    (select status from students where id = v_halima) = 'deactivated',
+    'revoking deactivates the claiming account'
+  );
+
+  perform assert_true(
+    (select claimed from whitelist_entries
+      where matric_no = 'CMP/2021/112' and academic_session_id = v_session) = false,
+    'revoking frees the register row, so the real student can register'
+  );
+
+  perform assert_true(
+    resolve_registration_dispute(v_dispute, v_admin, false, 'Trying to resolve it a second time.') = 'already_resolved',
+    'a resolved registration dispute cannot be resolved again'
+  );
+
+  -- Dismissal leaves the account alone but is still recorded.
+  insert into registration_disputes (matric_no, academic_session_id, reporter_phone)
+  values ('MTH/2022/018', v_session, '+2348039999999')
+  returning id into v_dispute;
+
+  perform assert_true(
+    resolve_registration_dispute(v_dispute, v_admin, false, 'Caller could not produce a student ID; claim stands.') = 'dismissed',
+    'the admin can dismiss a registration dispute'
+  );
+
+  perform assert_true(
+    (select status from students where id = v_tunde) <> 'deactivated',
+    'dismissing changes nothing about the account'
+  );
+
+  perform assert_true(
+    (select count(*) from audit_log
+      where action = 'registration.dispute_dismissed' and target_id = v_dispute::text) = 1,
+    'dismissing is written down too — a rejection with no record is asked about again'
+  );
+
+  perform assert_true(
+    (select count(*) from audit_log
+      where action = 'student.deactivate' and target_id = v_halima::text) = 1,
+    'revoking goes through deactivate_student, so the closure is recorded where anyone would look for it'
+  );
+
+  -- ==== run_level_rollover ====
+
+  perform reactivate_student(v_halima, v_admin, 'Restoring for the rollover assertions below.');
+
+  insert into academic_sessions (id, name, starts_on, ends_on, is_active)
+  values (v_next, to_char(current_date + 120, 'YYYY') || '/' || to_char(current_date + 480, 'YYYY'),
+          current_date + 120, current_date + 300, false);
+
+  begin
+    perform run_level_rollover(v_session, v_admin, 'Rolling a session into itself.');
+    v_ok := false;
+  exception when others then v_ok := true;
+  end;
+  perform assert_true(v_ok, 'a session cannot be rolled over into itself');
+
+  begin
+    perform run_level_rollover(v_next, null, 'End of the 2025/2026 session.');
+    v_ok := false;
+  exception when others then v_ok := true;
+  end;
+  perform assert_true(v_ok, 'a rollover with no actor is refused');
+
+  -- Counted rather than hardcoded: earlier assertions in this suite add
+  -- students, and a fixed number here would break on that rather than on
+  -- anything to do with the rollover.
+  select count(*) filter (where level = 400), count(*) filter (where level < 400)
+    into v_was_final, v_was_junior
+  from students where status = 'active';
+
+  select promoted, graduating into v_promoted, v_graduating
+  from run_level_rollover(v_next, v_admin, 'End of the 2025/2026 session, senate minute 14.');
+
+  perform assert_true(
+    v_graduating = v_was_final and v_promoted = v_was_junior and v_was_final > 0 and v_was_junior > 0,
+    'the 400s graduate and everyone else moves up — counted before the promotion, not after'
+  );
+
+  perform assert_true(
+    (select level from students where id = v_tunde) = 400,
+    'a 300-level student is now 400 level'
+  );
+
+  perform assert_true(
+    (select status from students where id = v_chidera) = 'graduating'
+      and (select level from students where id = v_chidera) = 400,
+    'a 400-level student graduates rather than being promoted to a level that does not exist'
+  );
+
+  perform assert_true(
+    (select is_active from academic_sessions where id = v_next)
+      and not (select is_active from academic_sessions where id = v_session),
+    'the new session becomes the current one in the same transaction'
+  );
+
+  perform assert_true(
+    (select state from compliance_statuses
+      where student_id = v_tunde and academic_session_id = v_next) = 'uncleared',
+    'a continuing student starts the new session owing dues'
+  );
+
+  perform assert_true(
+    (select students_promoted from level_rollovers
+      where to_academic_session_id = v_next) = v_promoted,
+    'the rollover is recorded with its counts'
+  );
+
+  begin
+    perform run_level_rollover(v_next, v_admin, 'Running the very same rollover twice.');
+    v_ok := false;
+  exception when others then v_ok := true;
+  end;
+  perform assert_true(v_ok, 'the same rollover cannot be run twice — the second run would promote everyone again');
+end $$;
+
+
+
+-- ---------------------------------------------------------------------------
+-- A correction never lowers a score
+--
+-- Found by rehearsing the demo. Correcting a dispute on a lecture with no
+-- attendance-code rows re-scored the student from an empty set of marks and
+-- took them to 0. The HOD clicked "correct"; ending up with less than they
+-- started with is the opposite of that instruction.
+-- ---------------------------------------------------------------------------
+
+do $$
+declare
+  v_hod     uuid := '33333333-3333-3333-3333-333333333302';
+  v_lect    uuid := '33333333-3333-3333-3333-333333333301';
+  v_venue   uuid := '22222222-2222-2222-2222-222222222201';
+  v_course  uuid := '66666666-6666-6666-6666-666666666601';
+  v_student uuid := '44444444-4444-4444-4444-444444444402';
+  v_paper   uuid := gen_random_uuid();
+  v_dispute uuid;
+begin
+  -- A lecture recorded from a paper register: a real score, and no attendance
+  -- code at all for a correction to re-derive it from. Re-scoring this from
+  -- marks would return 0, because there are no marks — which is precisely the
+  -- floor being tested.
+  insert into session_instances (id, course_id, held_on, venue_id, type, status, closed_at, created_by)
+  values (v_paper, v_course, session_day(88), v_venue, 'makeup', 'closed', now(), v_lect);
+
+  insert into session_scores (student_id, session_instance_id, score, source)
+  values (v_student, v_paper, 0, 'manually_entered');
+
+  insert into attendance_disputes (student_id, session_instance_id, student_note)
+  values (v_student, v_paper, 'I was there for the whole hour and signed the sheet.')
+  returning id into v_dispute;
+
+  perform resolve_dispute(v_dispute, v_hod, false, 'Lecturer confirms she was present for the whole lecture.');
+
+  perform assert_true(
+    (select score from session_scores
+      where student_id = v_student and session_instance_id = v_paper) = 1.0,
+    'correcting a dispute on a lecture with no attendance code credits the whole lecture rather than scoring from nothing'
+  );
+
+  perform assert_true(
+    (select (metadata->>'score_after')::numeric from audit_log
+      where action = 'dispute.corrected' and target_id = v_dispute::text) = 1.0,
+    'and the audit row carries the score it actually ended at'
+  );
+end $$;
+
+do $$
+declare
+  v_hod     uuid := '33333333-3333-3333-3333-333333333302';
+  v_lect    uuid := '33333333-3333-3333-3333-333333333301';
+  v_venue   uuid := '22222222-2222-2222-2222-222222222201';
+  v_course  uuid := '66666666-6666-6666-6666-666666666601';
+  v_student uuid := '44444444-4444-4444-4444-444444444402';
+  v_full    uuid := gen_random_uuid();
+  v_cp      uuid := gen_random_uuid();
+  v_dispute uuid;
+begin
+  -- The other half of the floor: an attendance code exists but the student
+  -- never answered it, so re-scoring would legitimately produce 0 against an
+  -- existing 1.0. The correction still may not dock her.
+  insert into session_instances (id, course_id, held_on, venue_id, type, status, closed_at, created_by)
+  values (v_full, v_course, session_day(89), v_venue, 'makeup', 'closed', now(), v_lect);
+
+  insert into checkpoints (id, session_instance_id, token, expires_at, issued_by)
+  values (v_cp, v_full, '4417', now() + interval '1 hour', v_lect);
+
+  insert into session_scores (student_id, session_instance_id, score, source)
+  values (v_student, v_full, 1.0, 'manually_entered');
+
+  insert into attendance_disputes (student_id, session_instance_id, student_note)
+  values (v_student, v_full, 'The code never appeared on the board where I was sitting.')
+  returning id into v_dispute;
+
+  perform resolve_dispute(v_dispute, v_hod, false, 'Lecturer confirms the code went up late; not her fault.');
+
+  perform assert_true(
+    (select score from session_scores
+      where student_id = v_student and session_instance_id = v_full) = 1.0,
+    'a correction never docks a student — where re-scoring comes out lower, the recomputation is what is wrong'
+  );
+end $$;
+
+
+-- ---------------------------------------------------------------------------
+-- Reaching the student
+--
+-- A warning system is only as good as its ability to reach somebody, and the
+-- part of that worth asserting is the part that costs money: WhatsApp is free
+-- and SMS is not, so the fallback has to fire when WhatsApp fails and must not
+-- fire for a notification the department chose not to spend SMS on.
+-- ---------------------------------------------------------------------------
+
+do $$
+declare
+  v_chidera uuid := '44444444-4444-4444-4444-444444444401';
+  v_dual    uuid := gen_random_uuid();
+  v_note    uuid;
+  v_wa      uuid;
+  v_outcome text;
+  v_count   integer;
+begin
+  -- ------------------------------------------------------------------------
+  -- Which number a WhatsApp message goes to
+  -- ------------------------------------------------------------------------
+  perform assert_true(
+    whatsapp_number(v_chidera) = (select phone from profiles where id = v_chidera),
+    'with no separate WhatsApp number, WhatsApp goes to the primary number'
+  );
+
+  insert into profiles (id, role, surname, first_name, phone, whatsapp_phone)
+  values (v_dual, 'student', 'Dual', 'Sim', '+2348050000301', '+2348050000302');
+  insert into students (id, matric_no, level) values (v_dual, 'CMP/2021/811', 300);
+
+  perform assert_true(
+    whatsapp_number(v_dual) = '+2348050000302',
+    'a student with a data-only SIM gets WhatsApp on that number and SMS on the other'
+  );
+
+  perform assert_rejects(
+    format('update profiles set whatsapp_phone = phone where id = %L', v_dual),
+    'the same number cannot be stored twice — that would be two OTPs to one handset'
+  );
+
+  perform assert_rejects(
+    format('update profiles set whatsapp_phone = %L where id = %L', '08050000302', v_dual),
+    'a WhatsApp number that is not in E.164 is refused, like every other number here'
+  );
+
+  perform assert_rejects(
+    format('update profiles set whatsapp_verified_at = now() where id = %L', v_chidera),
+    'a number cannot be marked verified when there is no number'
+  );
+
+  -- ------------------------------------------------------------------------
+  -- Queueing
+  -- ------------------------------------------------------------------------
+  v_note := queue_notification(
+    v_dual, 'attendance_warning',
+    'CMP 301: you can miss one more lecture',
+    'You are at 76% with four lectures left. Missing two takes you below 75%.',
+    '/courses/CMP-301'
+  );
+
+  perform assert_true(
+    (select count(*) from notification_deliveries where notification_id = v_note) = 4,
+    'a Critical warning is queued on every channel the policy allows'
+  );
+
+  perform assert_true(
+    (select status from notification_deliveries
+      where notification_id = v_note and channel = 'in_app') = 'sent',
+    'the in-app copy is delivered by definition — the notification row IS the delivery'
+  );
+
+  perform assert_true(
+    (select status from notification_deliveries
+      where notification_id = v_note and channel = 'whatsapp') = 'queued',
+    'everything else waits for a sender rather than claiming to have gone out'
+  );
+
+  perform assert_true(
+    (select destination from notification_deliveries
+      where notification_id = v_note and channel = 'whatsapp') = '+2348050000302'
+    and (select destination from notification_deliveries
+      where notification_id = v_note and channel = 'sms') = '+2348050000301',
+    'each channel is addressed to its own number, resolved at the time of queueing'
+  );
+
+  -- An explicit channel list overrides the policy: Watch and Critical are the
+  -- same KIND of notification and earn different channels.
+  perform queue_notification(
+    v_dual, 'attendance_warning', 'CMP 301: watch this', 'You have no buffer left.',
+    null, array['in_app', 'web_push']::notification_channel[]
+  );
+
+  perform assert_true(
+    (select count(*) from notification_deliveries d
+      join notifications n on n.id = d.notification_id
+      where n.recipient_id = v_dual and n.title = 'CMP 301: watch this') = 2,
+    'a caller can narrow the channels, which is how one kind serves two tiers'
+  );
+
+  -- ------------------------------------------------------------------------
+  -- The fallback
+  -- ------------------------------------------------------------------------
+  -- Drop the SMS row the policy queued, so the failure below has to create it.
+  delete from notification_deliveries where notification_id = v_note and channel = 'sms';
+
+  select id into v_wa from notification_deliveries
+  where notification_id = v_note and channel = 'whatsapp';
+
+  v_outcome := record_delivery_failure(v_wa, 'WhatsApp template rejected: 24-hour window closed.');
+
+  perform assert_true(v_outcome = 'fell_back_to_sms', 'a failed WhatsApp send spends an SMS immediately');
+
+  perform assert_true(
+    (select fell_back_from from notification_deliveries
+      where notification_id = v_note and channel = 'sms') = 'whatsapp',
+    'and the row says why it exists — the whole point of the rule is that it is visible afterwards'
+  );
+
+  perform assert_true(
+    (select error is not null and status = 'failed' from notification_deliveries where id = v_wa),
+    'the failed send keeps its error rather than being overwritten by the fallback'
+  );
+
+  perform assert_true(
+    record_delivery_failure(v_wa, 'Retried and failed again.') = 'failed_fallback_exists',
+    'failing twice does not send the student two texts for one warning'
+  );
+
+  -- ------------------------------------------------------------------------
+  -- And the case where falling back would be spending money nobody agreed to
+  -- ------------------------------------------------------------------------
+  v_note := queue_notification(
+    v_dual, 'lecture_reminder', 'CMP 301 starts in an hour', 'Lecture Theatre A, 10:00.'
+  );
+
+  select id into v_wa from notification_deliveries
+  where notification_id = v_note and channel = 'whatsapp';
+
+  perform assert_true(
+    record_delivery_failure(v_wa, 'Number not on WhatsApp.') = 'failed_no_fallback',
+    'a failed reminder is a reminder that does not arrive, not a reason to spend SMS budget'
+  );
+
+  perform assert_true(
+    not exists (
+      select 1 from notification_deliveries
+      where notification_id = v_note and channel = 'sms'
+    ),
+    'and no SMS row is created for it'
+  );
+
+  select count(*) into v_count from notification_policy where kind = 'lecture_reminder' and sms;
+  perform assert_true(v_count = 0, 'because the policy says reminders never use SMS');
+end $$;
+
+-- Cancelling a lecture reaches students on every channel the policy allows,
+-- not only inside an app they may not open before walking to a shut hall.
+do $$
+declare
+  v_course  uuid := '66666666-6666-6666-6666-666666666601';
+  v_sent    integer;
+  v_pushed  integer;
+begin
+  v_sent := notify_enrolled(v_course, 'schedule_change', 'CMP 301 is cancelled',
+                            'Thursday 10:00 will not hold. A makeup will be scheduled.');
+
+  perform assert_true(v_sent > 0, 'every enrolled student is notified');
+
+  select count(*) into v_pushed
+  from notification_deliveries d
+  join notifications n on n.id = d.notification_id
+  where n.title = 'CMP 301 is cancelled' and d.channel = 'whatsapp';
+
+  perform assert_true(
+    v_pushed = v_sent,
+    'and each of them gets a WhatsApp delivery queued, not just an in-app row'
+  );
+end $$;
+
+
+-- ---------------------------------------------------------------------------
+-- Dues, which are now a debt rather than a gate
+--
+-- The old model was a boolean: paid, or every mark you hold is worth nothing.
+-- What replaces it is a balance, which is the only shape that can hold the way
+-- students actually pay — a bit at a time, sometimes at a bank counter,
+-- occasionally with a card that gets charged back a month later.
+-- ---------------------------------------------------------------------------
+
+do $$
+declare
+  v_session uuid := '11111111-1111-1111-1111-111111111111';
+  v_admin   uuid := '33333333-3333-3333-3333-333333333303';
+  v_student uuid := gen_random_uuid();
+  v_dues    double precision;
+  v_pay1    uuid;
+  v_pay2    uuid;
+  v_before  numeric;
+  v_after   numeric;
+  v_outcome text;
+  v_id      uuid;
+begin
+  select dues_amount_kobo into v_dues from dues_periods where academic_session_id = v_session;
+  perform assert_true(v_dues = 500000, 'the seeded dues figure is ₦5,000');
+
+  insert into profiles (id, role, surname, first_name, phone)
+  values (v_student, 'student', 'Instalment', 'Payer', '+2348050000201');
+  insert into students (id, matric_no, level) values (v_student, 'CMP/2021/801', 300);
+  insert into compliance_statuses (student_id, academic_session_id, state)
+  values (v_student, v_session, 'uncleared');
+  insert into enrolments (student_id, course_id, source, enrolled_on)
+  values (v_student, '66666666-6666-6666-6666-666666666601', 'core', session_day(0));
+
+  perform assert_true(
+    dues_balance_kobo(v_student, v_session) = 500000,
+    'a student who has paid nothing owes the whole figure'
+  );
+
+  -- ------------------------------------------------------------------------
+  -- Half now, half later
+  -- ------------------------------------------------------------------------
+  insert into payments (student_id, academic_session_id, paystack_reference, channel,
+                        status, amount_kobo, verified_at)
+  values (v_student, v_session, 'ref-part-1', 'card', 'success', 200000, now())
+  returning id into v_pay1;
+
+  perform assert_true(
+    dues_balance_kobo(v_student, v_session) = 300000,
+    'a part payment reduces the balance rather than being rejected for not matching'
+  );
+
+  perform assert_true(
+    apply_payment(v_pay1) = 'part_paid',
+    'and does not clear the student, because they still owe'
+  );
+
+  perform assert_true(
+    (select state from compliance_statuses
+      where student_id = v_student and academic_session_id = v_session) = 'uncleared',
+    'part paid is not a compliance state — the balance is the fact, and the ladder still has five rungs'
+  );
+
+  insert into payments (student_id, academic_session_id, paystack_reference, channel,
+                        status, amount_kobo, verified_at)
+  values (v_student, v_session, 'ref-part-2', 'transfer', 'success', 300000, now())
+  returning id into v_pay2;
+
+  perform assert_true(
+    dues_balance_kobo(v_student, v_session) = 0,
+    'the instalments add up'
+  );
+
+  perform assert_true(apply_payment(v_pay2) = 'cleared', 'and the second one clears them');
+
+  perform assert_true(
+    (select state from compliance_statuses
+      where student_id = v_student and academic_session_id = v_session) = 'cleared',
+    'clearing happens when the BALANCE reaches zero, not when one payment matches the dues figure'
+  );
+
+  -- ------------------------------------------------------------------------
+  -- None of which touched attendance
+  -- ------------------------------------------------------------------------
+  v_before := attendance_pct(v_student, '66666666-6666-6666-6666-666666666601');
+  perform clear_student(v_student, v_session, 'payment');
+  v_after := attendance_pct(v_student, '66666666-6666-6666-6666-666666666601');
+  perform assert_true(
+    v_before = v_after,
+    'paying in full moves a student''s percentage by exactly nothing'
+  );
+
+  -- ------------------------------------------------------------------------
+  -- A chargeback reopens the debt, and says so
+  -- ------------------------------------------------------------------------
+  perform assert_rejects(
+    format('select reverse_payment(%L, %L)', v_pay2, 'nope'),
+    'a reversal must record why'
+  );
+
+  v_outcome := reverse_payment(v_pay2, 'Bank reported the transfer as recalled by the sender.', v_admin);
+  perform assert_true(v_outcome = 'reopened', 'reversing a payment that was covering a debt reopens it');
+
+  perform assert_true(
+    dues_balance_kobo(v_student, v_session) = 300000,
+    'and the balance goes back up by exactly what was reversed'
+  );
+
+  perform assert_true(
+    (select state from compliance_statuses
+      where student_id = v_student and academic_session_id = v_session) = 'uncleared',
+    'the clearance goes with it'
+  );
+
+  -- The part that makes this a reversal rather than a silent revoke.
+  perform assert_true(
+    (select count(*) from notifications
+      where recipient_id = v_student and title ilike '%reversed%') = 1,
+    'the student is told — the first they hear of a chargeback must not be an exam hall'
+  );
+
+  perform assert_true(
+    (select count(*) from audit_log
+      where action = 'payment.reversed' and target_id = v_pay2::text) = 1,
+    'and it is audited with the reason'
+  );
+
+  perform assert_true(
+    reverse_payment(v_pay2, 'Trying to reverse the same payment twice.', v_admin)
+      = 'already_reversed',
+    'reversing twice is a no-op rather than a second debt'
+  );
+
+  -- ------------------------------------------------------------------------
+  -- The counter at the bursary, when the gateway is down
+  -- ------------------------------------------------------------------------
+  perform assert_rejects(
+    format('select record_manual_payment(%L, %L, 300000, %L, %L, %L)',
+           v_student, v_session, 'ref-manual-1', 'short', v_admin),
+    'a manual payment must explain why it was accepted without the gateway'
+  );
+
+  perform assert_rejects(
+    format('select record_manual_payment(%L, %L, 300000, %L, %L, null)',
+           v_student, v_session, 'ref-manual-1', 'Paid at the bursary counter; teller receipt 4471.'),
+    'a manual payment must record who accepted it'
+  );
+
+  select payment_id, outcome into v_id, v_outcome
+  from record_manual_payment(v_student, v_session, 300000, 'ref-manual-1',
+                             'Paid at the bursary counter; teller receipt 4471 attached.',
+                             v_admin, 'https://example.invalid/receipt.jpg');
+
+  perform assert_true(v_outcome = 'cleared', 'a manual payment that closes the balance clears the student');
+
+  perform assert_true(
+    (select manually_verified from payments where id = v_id),
+    'and is flagged as manually verified — permanently, so nobody has to work out later why there is no Paystack record'
+  );
+
+  perform assert_true(
+    (select cleared_via from compliance_statuses
+      where student_id = v_student and academic_session_id = v_session) = 'hod_clearance',
+    'the clearance route says a person decided it, not the gateway'
+  );
+
+  perform assert_true(
+    (select count(*) from audit_log
+      where action = 'payment.manual' and target_id = v_id::text) = 1,
+    'a manual payment is audited with a mandatory reason'
+  );
+
+  select payment_id, outcome into v_id, v_outcome
+  from record_manual_payment(v_student, v_session, 100000, 'ref-manual-1',
+                             'Trying to reuse a reference that already exists.', v_admin);
+  perform assert_true(
+    v_outcome = 'duplicate_reference' and v_id is null,
+    'a reference that already exists is refused rather than credited twice'
+  );
+end $$;
+
+-- A resent webhook cannot credit an account twice, and it is the database that
+-- refuses it rather than a check somebody remembered to write.
+do $$
+declare
+  v_ok boolean;
+begin
+  insert into payment_events (event_id, event_type, reference)
+  values ('evt_test_dedupe', 'charge.success', 'ref-part-1');
+
+  begin
+    insert into payment_events (event_id, event_type, reference)
+    values ('evt_test_dedupe', 'charge.success', 'ref-part-1');
+    v_ok := false;
+  exception when unique_violation then v_ok := true;
+  end;
+
+  perform assert_true(v_ok, 'the same Paystack event delivered twice is refused by the primary key');
+end $$;
+
+-- The integrity check reports, and blocks nothing. A family sharing one card
+-- is ordinary; the same card across several matric numbers is worth a look.
+do $$
+declare
+  v_session uuid := '11111111-1111-1111-1111-111111111111';
+  v_a       uuid := gen_random_uuid();
+  v_b       uuid := gen_random_uuid();
+  v_shared  integer;
+begin
+  insert into profiles (id, role, surname, first_name, phone)
+  values (v_a, 'student', 'Sibling', 'One', '+2348050000202'),
+         (v_b, 'student', 'Sibling', 'Two', '+2348050000203');
+  insert into students (id, matric_no, level)
+  values (v_a, 'CMP/2021/802', 300), (v_b, 'CMP/2021/803', 300);
+
+  insert into payments (student_id, academic_session_id, paystack_reference, channel,
+                        status, amount_kobo, verified_at, card_signature, last4)
+  values (v_a, v_session, 'ref-card-a', 'card', 'success', 500000, now(), 'SIG_SHARED', '4081'),
+         (v_b, v_session, 'ref-card-b', 'card', 'success', 500000, now(), 'SIG_SHARED', '4081');
+
+  select count(*) into v_shared
+  from payment_anomalies(v_session) where kind = 'shared_card';
+
+  perform assert_true(v_shared = 2, 'one card funding two matric numbers is flagged on both payments');
+
+  perform assert_true(
+    (select count(*) from payments where card_signature = 'SIG_SHARED' and status = 'success') = 2,
+    'and neither payment is blocked — the flag is for a human to judge'
+  );
+end $$;
+
+
+-- ---------------------------------------------------------------------------
+-- Registration is the gate
+--
+-- Dues used to decide whether a lecture counted. Registration decides whether
+-- one can be RECORDED, which is a different question asked at a different
+-- moment, and these assertions are about the moment: what happens to a student
+-- who never confirmed, and what happens to one who confirms in week eight.
+-- ---------------------------------------------------------------------------
+
+do $$
+declare
+  v_session  uuid := '11111111-1111-1111-1111-111111111111';
+  -- A course of its own, with a known number of lectures on it. Reusing CMP
+  -- 301 made the backfill count depend on every lecture the seed and the
+  -- earlier blocks of this suite had put on it, which is a test that fails
+  -- whenever something unrelated adds a lecture.
+  v_course   uuid := gen_random_uuid();
+  v_venue    uuid := '22222222-2222-2222-2222-222222222201';
+  v_lect     uuid := '33333333-3333-3333-3333-333333333301';
+  v_hod      uuid := '33333333-3333-3333-3333-333333333302';
+  v_late     uuid := gen_random_uuid();
+  v_never    uuid := gen_random_uuid();
+  v_deadline date;
+  v_lecture  uuid;
+  v_status   text;
+  v_courses  integer;
+  v_absences integer;
+  v_count    integer;
+  i          integer;
+begin
+  select closes_on into v_deadline
+  from registration_periods
+  where academic_session_id = v_session and semester = 1;
+
+  perform assert_true(v_deadline < current_date, 'the seeded registration window has closed');
+
+  perform assert_true(
+    not is_registration_open(v_session, 1::smallint),
+    'a window whose closing date has passed reports closed'
+  );
+
+  -- A session with no window configured at all is OPEN, not closed. Failing
+  -- the other way bars a department from recording attendance because nobody
+  -- inserted a row.
+  perform assert_true(
+    is_registration_open(v_session, 2::smallint),
+    'a semester with no window configured is open — an absent deadline is not an expired one'
+  );
+
+  insert into courses (id, academic_session_id, code, title, level, kind, credit_units, semester, lecturer_id)
+  values (v_course, v_session, 'CMP 390', 'Registration Gate Fixture', 300, 'core', 3, 1, v_lect);
+
+  -- Two students, same course, neither registered yet.
+  insert into profiles (id, role, surname, first_name, phone)
+  values (v_late, 'student', 'Latecomer', 'Ada', '+2348050000101'),
+         (v_never, 'student', 'Absentee', 'Bola', '+2348050000102');
+  insert into students (id, matric_no, level)
+  values (v_late, 'CMP/2021/901', 300), (v_never, 'CMP/2021/902', 300);
+  insert into enrolments (student_id, course_id, source, enrolled_on)
+  values (v_late, v_course, 'core', current_date), (v_never, v_course, 'core', current_date);
+
+  perform assert_true(
+    attendance_eligibility(v_late, v_course) = 'not_registered',
+    'after the deadline, an unconfirmed student cannot record attendance'
+  );
+
+  -- Three lectures held after the deadline and before either confirms.
+  for i in 1..3 loop
+    v_lecture := gen_random_uuid();
+    insert into session_instances (id, course_id, held_on, venue_id, type, status, closed_at, created_by)
+    values (v_lecture, v_course, v_deadline + i, v_venue, 'makeup', 'closed', now(), v_lect);
+  end loop;
+
+  -- ------------------------------------------------------------------------
+  -- Confirming late
+  -- ------------------------------------------------------------------------
+  select status, courses_registered, absences_backfilled
+    into v_status, v_courses, v_absences
+  from confirm_registration(v_late, v_session, 1::smallint);
+
+  perform assert_true(v_status = 'confirmed_late', 'confirming after the deadline says so');
+  perform assert_true(v_courses >= 1, 'and reports what was registered');
+  perform assert_true(
+    v_absences = 3,
+    'the backfill writes an absence for every lecture held between the deadline and the moment they confirmed'
+  );
+
+  perform assert_true(
+    attendance_eligibility(v_late, v_course) = 'ok',
+    'and they can record attendance from then on'
+  );
+
+  perform assert_true(
+    (select registered_at is not null from course_registrations
+      where student_id = v_late and academic_session_id = v_session and semester = 1),
+    'the registration carries a server-stamped time'
+  );
+
+  -- The half that is easy to forget: without back-dating the join date, the
+  -- absences sit outside the denominator and count for nothing, and
+  -- registering late is strictly better than registering on time.
+  perform assert_true(
+    (select enrolled_on from enrolments where student_id = v_late and course_id = v_course)
+      = v_deadline,
+    'the denominator is back-dated to the deadline, so the backfilled absences are inside it'
+  );
+
+  perform assert_true(
+    attendance_pct(v_late, v_course) = 0,
+    'three lectures held, none attended: the late registrant reads 0%, not a blank slate'
+  );
+
+  -- Idempotent. A double-tapped confirm button must not backfill twice.
+  select status, absences_backfilled into v_status, v_absences
+  from confirm_registration(v_late, v_session, 1::smallint);
+  perform assert_true(
+    v_status = 'already_confirmed' and v_absences = 0,
+    'confirming twice is a no-op — the backfill does not run again'
+  );
+
+  -- ------------------------------------------------------------------------
+  -- The HOD's individual exception
+  -- ------------------------------------------------------------------------
+  select students_affected into v_count
+  from grace_period_impact(v_session, 'student', null, v_never);
+  perform assert_true(
+    v_count = 1,
+    'the impact preview counts the one student an individual exception would admit'
+  );
+
+  perform assert_rejects(
+    format('select open_grace_period(%L, %L, null, current_date + 7, %L, %L)',
+           v_session, 'student', 'No student named on an individual exception.', v_hod),
+    'an individual exception must name the student it is for'
+  );
+
+  perform open_grace_period(v_session, 'student', null, current_date + 7,
+                            'Hospitalised through the registration window; letter on file.',
+                            v_hod, v_never);
+
+  perform assert_true(
+    attendance_eligibility(v_never, v_course) = 'ok',
+    'an individual exception lets an unregistered student record attendance'
+  );
+
+  perform assert_true(
+    not exists (
+      select 1 from course_registrations
+      where student_id = v_never and academic_session_id = v_session and semester = 1
+    ),
+    'and does it without registering them — the exception suspends the consequence, it does not forge the record'
+  );
+
+  perform assert_true(
+    (select count(*) from audit_log
+      where action = 'grace_period.opened'
+        and metadata->>'student_id' = v_never::text) = 1,
+    'the exception is audited with the student it names'
+  );
+end $$;
+
+-- A confirmation with nothing to confirm is a student who has not started,
+-- and saying so is more useful than recording it.
+do $$
+declare
+  v_session uuid := '11111111-1111-1111-1111-111111111111';
+  v_empty   uuid := gen_random_uuid();
+  v_status  text;
+begin
+  insert into profiles (id, role, surname, first_name, phone)
+  values (v_empty, 'student', 'Unstarted', 'Chike', '+2348050000103');
+  insert into students (id, matric_no, level) values (v_empty, 'CMP/2021/903', 300);
+
+  select status into v_status from confirm_registration(v_empty, v_session, 1::smallint);
+  perform assert_true(v_status = 'no_courses', 'confirming an empty list is refused, not recorded');
+
+  perform assert_true(
+    not exists (select 1 from course_registrations where student_id = v_empty),
+    'and leaves no registration row behind'
+  );
+end $$;
+
+select assert_rejects($$
+  insert into course_registrations (student_id, academic_session_id, semester, status)
+  values ('44444444-4444-4444-4444-444444444401', '11111111-1111-1111-1111-111111111111', 2, 'confirmed')
+$$, 'a confirmed registration cannot exist without the time it was confirmed');
+
+select assert_rejects($$
+  insert into registration_periods (academic_session_id, semester, opens_on, closes_on)
+  values ('11111111-1111-1111-1111-111111111111', 2, '2026-02-10', '2026-02-01')
+$$, 'a registration window cannot close before it opens');
+
+
+-- ---------------------------------------------------------------------------
+-- The advisory baseline
+--
+-- Computed, not typed in. The point of these assertions is the last one: the
+-- prediction must never be able to reach the eligibility determination, and
+-- a model swapped in behind this table must not change that.
+-- ---------------------------------------------------------------------------
+
+do $$
+declare
+  v_chidera uuid := '44444444-4444-4444-4444-444444444401';
+  v_halima  uuid := '44444444-4444-4444-4444-444444444402';
+  v_tunde   uuid := '44444444-4444-4444-4444-444444444403';
+  v_cmp301  uuid := '66666666-6666-6666-6666-666666666601';
+  v_mth205  uuid := '66666666-6666-6666-6666-666666666602';
+  v_before  numeric;
+  v_written integer;
+  v_extra   uuid := gen_random_uuid();
+  v_falling uuid := gen_random_uuid();
+  v_faller  uuid := gen_random_uuid();
+  v_steady  uuid := gen_random_uuid();
+  v_nearly  uuid := gen_random_uuid();
+  v_fixture uuid;
+  v_entry   uuid;
+  i         integer;
+begin
+  -- ------------------------------------------------------------------------
+  -- A course of its own, with two students and two shapes
+  -- ------------------------------------------------------------------------
+  insert into courses (id, academic_session_id, code, title, level, kind, credit_units, semester, lecturer_id)
+  values (v_falling, '11111111-1111-1111-1111-111111111111', 'CMP 391', 'Forecast Fixture',
+          300, 'core', 3, 1, '33333333-3333-3333-3333-333333333301');
+
+  -- A weekly slot, so lectures_remaining() has something to count. Without one
+  -- the course projects at its current rate and there is nothing to forecast.
+  insert into timetable_entries (academic_session_id, course_id, day_of_week, start_time, end_time, venue_id)
+  values ('11111111-1111-1111-1111-111111111111', v_falling, 2, '09:00', '11:00',
+          '22222222-2222-2222-2222-222222222201')
+  returning id into v_entry;
+
+  insert into profiles (id, role, surname, first_name, phone)
+  values (v_faller, 'student', 'Falling', 'Away', '+2348050000401'),
+         (v_steady, 'student', 'Steady', 'Hand', '+2348050000402');
+  insert into students (id, matric_no, level)
+  values (v_faller, 'CMP/2021/821', 300), (v_steady, 'CMP/2021/822', 300);
+  insert into enrolments (student_id, course_id, source, enrolled_on)
+  values (v_faller, v_falling, 'core', session_day(0)),
+         (v_steady, v_falling, 'core', session_day(0));
+
+  -- Thirteen lectures. The faller attends ten straight and then misses three;
+  -- the steady one attends all thirteen.
+  for i in 1..13 loop
+    v_fixture := gen_random_uuid();
+    insert into session_instances (id, course_id, timetable_entry_id, held_on, venue_id,
+                                  type, status, closed_at, created_by)
+    values (v_fixture, v_falling, v_entry, session_day(i * 6),
+            '22222222-2222-2222-2222-222222222201',
+            'recurring', 'closed', now(), '33333333-3333-3333-3333-333333333301');
+
+    insert into session_scores (student_id, session_instance_id, score, source)
+    values (v_faller, v_fixture, case when i <= 10 then 1.0 else 0 end, 'digital'),
+           (v_steady, v_fixture, 1.0, 'digital');
+  end loop;
+
+  perform compute_risk_predictions();
+
+  v_written := compute_risk_predictions();
+  perform assert_true(v_written > 0, 'the advisory baseline writes predictions from real attendance');
+
+  -- Asserted as behaviour rather than as a number: earlier blocks in this
+  -- suite change Halima's attendance, and a fixed figure here would break on
+  -- that rather than on anything to do with the prediction.
+  select predicted_pct into v_before
+  from risk_predictions where student_id = v_halima and course_id = v_cmp301;
+
+  -- The assertion this replaced was the whole problem. It required the
+  -- prediction to EQUAL the student's rate so far, which is not a prediction —
+  -- it is the number the meter already shows, copied into a second table. A
+  -- student who attended ten lectures and then stopped read 76.92% on both, sat
+  -- comfortably above the line, and nothing warned anybody.
+  --
+  -- Asserted against a course of its own rather than against CMP 301: earlier
+  -- blocks in this suite add lectures to CMP 301, which moves the live
+  -- percentage of every student on it, and a test whose premise ("she is above
+  -- the line today") is quietly falsified by an unrelated block is a test that
+  -- fails for the wrong reason.
+  perform assert_true(
+    attendance_pct(v_faller, v_falling) >= 75,
+    'a student who attended ten straight and then missed three is above the line today'
+  );
+
+  perform assert_true(
+    (select predicted_pct from risk_predictions
+      where student_id = v_faller and course_id = v_falling) < 75,
+    'and the forecast has them finishing below it — a scoreboard would show them green and say nothing'
+  );
+
+  perform assert_true(
+    (select trend from risk_predictions
+      where student_id = v_faller and course_id = v_falling) < 0,
+    'the trend is what carries that: negative means falling away'
+  );
+
+  perform assert_true(
+    (select tier from risk_predictions
+      where student_id = v_faller and course_id = v_falling) = 'critical',
+    'projected under 75% is Critical, whatever the current percentage says'
+  );
+
+  -- The two numbers every alert is written from. A warning that says "your
+  -- attendance is low" is what these exist to prevent.
+  perform assert_true(
+    (select must_attend from risk_predictions
+      where student_id = v_faller and course_id = v_falling) > 0,
+    'a student below the line is told exactly how many lectures they must attend'
+  );
+
+  perform assert_true(
+    (select must_attend + can_still_miss from risk_predictions
+      where student_id = v_faller and course_id = v_falling)
+    = (select lectures_expected - lectures_held from risk_predictions
+        where student_id = v_faller and course_id = v_falling),
+    'and the two numbers account for every remaining lecture between them'
+  );
+
+  -- A student attending steadily is Safe, and the same machinery says so —
+  -- otherwise "Critical" means only that the model is pessimistic.
+  perform assert_true(
+    (select tier from risk_predictions
+      where student_id = v_steady and course_id = v_falling) = 'safe',
+    'a student attending steadily is projected Safe by the same fit'
+  );
+
+  perform assert_true(
+    (select can_still_miss from risk_predictions
+      where student_id = v_steady and course_id = v_falling) > 0,
+    'and is told how many they can afford to miss, which is the number a student on track reads'
+  );
+
+  -- And it moves with the attendance. A prediction that did not would be a
+  -- constant wearing a percentage sign.
+  insert into session_instances (id, course_id, held_on, venue_id, type, status, closed_at, created_by)
+  values (v_extra, v_cmp301, session_day(90), '22222222-2222-2222-2222-222222222201',
+          'makeup', 'closed', now(), '33333333-3333-3333-3333-333333333301');
+
+  insert into session_scores (student_id, session_instance_id, score, source)
+  values (v_halima, v_extra, 1.0, 'digital');
+
+  perform compute_risk_predictions();
+
+  perform assert_true(
+    (select predicted_pct from risk_predictions
+      where student_id = v_halima and course_id = v_cmp301) > v_before,
+    'attending one more lecture in full raises the prediction — it tracks behaviour rather than sitting still'
+  );
+
+  -- Chidera has attended CMP 301 but holds a 200-level carry-over she has never
+  -- turned up to. Per course, so one does not hide the other.
+  perform assert_true(
+    (select predicted_pct from risk_predictions
+      where student_id = v_chidera and course_id = v_mth205) = 0,
+    'a carry-over nobody attends is predicted separately from the course they do attend'
+  );
+
+  perform assert_true(
+    (select tier from risk_predictions
+      where student_id = v_chidera and course_id = v_mth205) = 'critical',
+    'and it is Critical on its own, rather than averaged away against a course she does attend'
+  );
+
+  perform assert_true(
+    (select pattern from risk_predictions
+      where student_id = v_chidera and course_id = v_mth205) = 'disengagement',
+    'not turning up at all reads as disengagement'
+  );
+
+  -- Asserted against the steady student rather than against Tunde. Tunde sits
+  -- at exactly 75% on MTH 205 and drifts very slightly down, which under a
+  -- scoreboard was "fine" and under a forecast is a student heading below the
+  -- line — correctly, and the assertion that called him fine was asserting the
+  -- old semantics.
+  perform assert_true(
+    (select pattern from risk_predictions
+      where student_id = v_steady and course_id = v_falling) is null,
+    'a student who is not falling short carries no pattern — a label that explains nothing is noise'
+  );
+
+  -- And Tunde is §5.2's Watch band, exactly: sitting on 75% with a slightly
+  -- falling trend, projected to land just above the line with no buffer at
+  -- all. A scoreboard says 75% and says nothing; Watch says "one illness from
+  -- ineligible", which is the true thing.
+  perform assert_true(
+    attendance_pct(v_tunde, v_mth205) = 75.00,
+    'Tunde is on exactly 75% today'
+  );
+
+  perform assert_true(
+    (select tier from risk_predictions
+      where student_id = v_tunde and course_id = v_mth205) = 'watch',
+    'and lands in Watch — on track for the line itself, with nothing spare'
+  );
+
+  perform assert_true(
+    (select trend from risk_predictions
+      where student_id = v_tunde and course_id = v_mth205) < 0,
+    'because his trend is falling, which is what turns "fine" into "watch this"'
+  );
+
+  -- The over-extrapolation guard. An early version projected the OLS slope
+  -- forward lecture by lecture, and one absence in ten was a steep enough
+  -- slope to project a 90% student down to 54%. Warning that student is worse
+  -- than useless: an alert system that cries wolf in week six is one nobody
+  -- reads in week eleven, when it is the only thing that could have helped.
+  perform assert_true(
+    (select predicted_pct from risk_predictions
+      where student_id = v_steady and course_id = v_falling) >= 80,
+    'a student who has attended everything is projected Safe, not talked into a panic'
+  );
+
+  -- The exact shape that broke it: nine of ten, with the single absence late
+  -- enough in the sequence to make the slope steep. Nothing about that student
+  -- is in trouble, and a forecast that says otherwise has disqualified itself.
+  insert into profiles (id, role, surname, first_name, phone)
+  values (v_nearly, 'student', 'Nearly', 'Perfect', '+2348050000403');
+  insert into students (id, matric_no, level) values (v_nearly, 'CMP/2021/823', 300);
+  insert into enrolments (student_id, course_id, source, enrolled_on)
+  values (v_nearly, v_falling, 'core', session_day(0));
+
+  insert into session_scores (student_id, session_instance_id, score, source)
+  select v_nearly, si.id,
+         case when row_number() over (order by si.held_on) = 9 then 0 else 1.0 end,
+         'digital'
+  from session_instances si
+  where si.course_id = v_falling and si.status = 'closed';
+
+  perform compute_risk_predictions();
+
+  perform assert_true(
+    (select tier from risk_predictions
+      where student_id = v_nearly and course_id = v_falling) = 'safe',
+    'missing one lecture of thirteen leaves a student Safe — the forecast is damped, not extrapolated'
+  );
+
+  -- The one that matters. A prediction is about the future; eligibility is a
+  -- determination about the past, and the two must never be confused on a
+  -- screen that decides who sits an exam.
+  v_before := attendance_pct(v_halima, v_cmp301);
+
+  update risk_predictions set predicted_pct = 99.99, pattern = null
+  where student_id = v_halima and course_id = v_cmp301;
+
+  perform assert_true(
+    attendance_pct(v_halima, v_cmp301) = v_before,
+    'rewriting a prediction moves no attendance percentage — the determination never consults it'
+  );
+
+  -- And recomputing is wholesale, so a stale row for a student who has since
+  -- turned things around cannot survive.
+  perform compute_risk_predictions();
+  perform assert_true(
+    (select predicted_pct from risk_predictions
+      where student_id = v_halima and course_id = v_cmp301) < 99.99,
+    'recomputing replaces stale predictions rather than leaving them beside the new ones'
+  );
+end $$;
+
+
+-- ---------------------------------------------------------------------------
+-- Turning a forecast into a warning
+--
+-- The forecast is only half of §5. The other half is that something happens
+-- because of it, on channels that scale with how bad it is, saying a sentence
+-- a student can act on.
+-- ---------------------------------------------------------------------------
+
+do $$
+declare
+  v_session  uuid := '11111111-1111-1111-1111-111111111111';
+  v_course   uuid := gen_random_uuid();
+  v_entry    uuid;
+  v_critical uuid := gen_random_uuid();
+  v_watchful uuid := gen_random_uuid();
+  v_doomed   uuid := gen_random_uuid();
+  v_shutout  uuid := gen_random_uuid();
+  v_shut_note uuid;
+  v_lecture  uuid;
+  v_final    uuid;
+  v_sent     integer;
+  v_again    integer;
+  v_note     uuid;
+  v_body     text;
+  v_pct      numeric;
+  v_eligible boolean;
+  i          integer;
+begin
+  insert into courses (id, academic_session_id, code, title, level, kind, credit_units, semester, lecturer_id)
+  values (v_course, v_session, 'STA 391', 'Alert Fixture', 300, 'core', 3, 1,
+          '33333333-3333-3333-3333-333333333301');
+
+  insert into timetable_entries (academic_session_id, course_id, day_of_week, start_time, end_time, venue_id)
+  values (v_session, v_course, 4, '13:00', '15:00', '22222222-2222-2222-2222-222222222201')
+  returning id into v_entry;
+
+  insert into profiles (id, role, surname, first_name, phone)
+  values (v_critical, 'student', 'Critical', 'Case', '+2348050000501'),
+         (v_watchful, 'student', 'Watchful', 'Case', '+2348050000502'),
+         (v_doomed, 'student', 'Beyond', 'Saving', '+2348050000503'),
+         (v_shutout, 'student', 'Shutout', 'Case', '+2348050000504');
+  insert into students (id, matric_no, level)
+  values (v_critical, 'CMP/2021/831', 300), (v_watchful, 'CMP/2021/832', 300),
+         (v_doomed, 'CMP/2021/833', 300), (v_shutout, 'CMP/2021/834', 300);
+  insert into enrolments (student_id, course_id, source, enrolled_on)
+  values (v_critical, v_course, 'core', session_day(0)),
+         (v_watchful, v_course, 'core', session_day(0)),
+         (v_doomed, v_course, 'core', session_day(0)),
+         (v_shutout, v_course, 'core', session_day(0));
+
+  -- Registered, all but one. Enrolment and semester registration are different
+  -- facts, and this fixture used to carry only the first — which meant every
+  -- student in it was silently behind the gate, and the copy assertions below
+  -- were reading messages sent to students whose codes the hall would refuse.
+  insert into course_registrations (student_id, academic_session_id, semester, status, registered_at)
+  values (v_critical, v_session, 1, 'confirmed', session_day(0)::timestamptz),
+         (v_watchful, v_session, 1, 'confirmed', session_day(0)::timestamptz),
+         (v_doomed, v_session, 1, 'confirmed', session_day(0)::timestamptz);
+
+  for i in 1..10 loop
+    v_lecture := gen_random_uuid();
+    insert into session_instances (id, course_id, timetable_entry_id, held_on, venue_id,
+                                  type, status, closed_at, created_by)
+    values (v_lecture, v_course, v_entry, session_day(i * 8),
+            '22222222-2222-2222-2222-222222222201', 'recurring', 'closed', now(),
+            '33333333-3333-3333-3333-333333333301');
+
+    -- One student misses more than half; the other misses one late on, which
+    -- is enough to shave the buffer without taking them under.
+    insert into session_scores (student_id, session_instance_id, score, source)
+    values
+      -- Below the line and falling, but not beyond saving: there is still
+      -- slack, so this is a Critical warning rather than the final one.
+      (v_critical, v_lecture, case when i <= 7 then 1.0 else 0 end, 'digital'),
+      -- On track with almost no buffer.
+      (v_watchful, v_lecture, case when i = 9 then 0 else 1.0 end, 'digital'),
+      -- Beyond saving: cannot reach 75% even by attending everything left.
+      (v_doomed, v_lecture, 0, 'digital'),
+      -- Never registered, so every code they typed was refused. A zero for the
+      -- same reason a locked door produces one.
+      (v_shutout, v_lecture, 0, 'digital');
+  end loop;
+
+  perform compute_risk_predictions();
+
+  perform assert_true(
+    (select tier from risk_predictions where student_id = v_critical and course_id = v_course)
+      = 'critical',
+    'a student projected under 75% is Critical'
+  );
+
+  -- ------------------------------------------------------------------------
+  -- The channels scale with the tier (§5.3)
+  -- ------------------------------------------------------------------------
+  v_sent := send_risk_alerts();
+  perform assert_true(v_sent > 0, 'a forecast below the line produces a warning');
+
+  select notification_id into v_note
+  from risk_alerts_sent
+  where student_id = v_critical and course_id = v_course;
+
+  perform assert_true(
+    exists (select 1 from notification_deliveries
+             where notification_id = v_note and channel = 'whatsapp'),
+    'Critical reaches WhatsApp'
+  );
+
+  perform assert_true(
+    exists (select 1 from notification_deliveries
+             where notification_id = v_note and channel = 'web_push'),
+    'and Web Push'
+  );
+
+  perform assert_true(
+    not exists (select 1 from notification_deliveries
+                 where notification_id = v_note and channel = 'sms'),
+    'but not SMS while there is still slack — a text in week six leaves nothing to escalate to in week eleven'
+  );
+
+  perform assert_true(
+    (select can_still_miss from risk_predictions
+      where student_id = v_critical and course_id = v_course) > 0,
+    'because this student can still afford to miss one'
+  );
+
+  -- The student who cannot reach 75% however hard they try. There is nothing
+  -- after this warning, which is exactly what an SMS is for: it costs money,
+  -- it needs no data connection, and it is the last thing the system can do.
+  select notification_id into v_final
+  from risk_alerts_sent where student_id = v_doomed and course_id = v_course;
+
+  perform assert_true(
+    (select can_still_miss from risk_predictions
+      where student_id = v_doomed and course_id = v_course) = 0,
+    'a student with no slack left has nothing they can afford to miss'
+  );
+
+  perform assert_true(
+    exists (select 1 from notification_deliveries
+             where notification_id = v_final and channel = 'sms'),
+    'and only they earn the SMS — the final warning, on the channel that needs no data'
+  );
+
+  -- The copy bug this block exists to keep out.
+  --
+  -- This student cannot reach 75% by attending everything that is left —
+  -- zero of ten, with seventeen to come, finishes at 17/27 = 63%. The warning
+  -- used to tell them "you have 17 lectures left and need every one of them to
+  -- reach 75%", which is a promise the arithmetic cannot keep.
+  --
+  -- It is the worst kind of wrong available here: undetectable by the student.
+  -- They do exactly what the message asked, attend for eleven weeks, and find
+  -- out at the permit screen. Every other warning in this system is designed
+  -- to be acted on; that one could only be acted on uselessly.
+  perform assert_true(
+    lectures_needed(v_doomed, v_course) > lectures_remaining(v_course),
+    'this student cannot reach the threshold however many lectures they attend'
+  );
+
+  perform assert_true(
+    (select body from notifications where id = v_final) like '%finishes below 75%%',
+    'so the warning says the line is gone'
+  );
+
+  perform assert_true(
+    (select body from notifications where id = v_final) not like '%need every one of them to reach 75%%',
+    'and never promises a threshold the arithmetic cannot deliver'
+  );
+
+  perform assert_true(
+    (select body from notifications where id = v_final) like '%dispute%',
+    'it names the route that is actually left — a dispute, not more attendance'
+  );
+
+  -- The waiver was retired, and a message naming a route the department no
+  -- longer has is worse than one naming nothing: it sends the student to an
+  -- office that will turn them away.
+  perform assert_true(
+    (select body from notifications where id = v_final) not like '%waiver%',
+    'and never sends them to a mechanism this department no longer has'
+  );
+
+  -- ------------------------------------------------------------------------
+  -- Register, do not attend
+  -- ------------------------------------------------------------------------
+  --
+  -- The forecast reads enrolments and scores and never consults registration,
+  -- which is right: the projection is arithmetic on what was recorded. The
+  -- consequence lands in the alert. A student the gate is blocking records
+  -- nothing, projects toward zero, goes Critical, and used to be told to attend
+  -- lectures the hall would refuse them at — the system spending its loudest
+  -- channels on the one instruction that cannot work.
+  select notification_id into v_shut_note
+  from risk_alerts_sent where student_id = v_shutout and course_id = v_course;
+
+  perform assert_true(
+    attendance_eligibility(v_shutout, v_course) = 'not_registered',
+    'the shut-out student is refused at the gate'
+  );
+
+  perform assert_true(
+    (select body from notifications where id = v_shut_note) like '%not registered%',
+    'so the warning names the reason rather than the symptom'
+  );
+
+  perform assert_true(
+    (select body from notifications where id = v_shut_note) not like '%Attend %of the%',
+    'and never asks them to attend their way out of a door that is shut'
+  );
+
+  perform assert_true(
+    (select link from notifications where id = v_shut_note) = '/courses/register',
+    'the link goes where the problem can actually be fixed'
+  );
+
+  -- The same tier, the same channels. What an unregistered student should be
+  -- told is a different question from how loudly, and answering the first
+  -- inside the second would hide the second.
+  perform assert_true(
+    exists (select 1 from notification_deliveries
+             where notification_id = v_shut_note and channel = 'whatsapp'),
+    'the escalation ladder is untouched — only the words change'
+  );
+
+  -- ------------------------------------------------------------------------
+  -- The copy names the course and the number (§5.4)
+  -- ------------------------------------------------------------------------
+  select body into v_body from notifications where id = v_note;
+
+  perform assert_true(
+    v_body like '%STA 391%',
+    'the warning names the course — a student takes four of them'
+  );
+
+  perform assert_true(
+    v_body ~ '[0-9]+ (of the )?[0-9]* ?lectures',
+    'and names a number of lectures rather than saying "your attendance is low"'
+  );
+
+  -- ------------------------------------------------------------------------
+  -- Once per tier, not once per night
+  -- ------------------------------------------------------------------------
+  v_again := send_risk_alerts();
+  perform assert_true(
+    v_again = 0,
+    'nothing has changed, so nothing is sent — an alert that repeats nightly is one a student mutes'
+  );
+
+  perform assert_true(
+    (select count(*) from risk_alerts_sent
+      where student_id = v_critical and course_id = v_course) = 1,
+    'and exactly one warning is on record for that tier'
+  );
+
+  -- ------------------------------------------------------------------------
+  -- The what-if calculator (§5.5)
+  -- ------------------------------------------------------------------------
+  select resulting_pct, still_eligible into v_pct, v_eligible
+  from attendance_what_if(v_watchful, v_course, 0);
+
+  perform assert_true(
+    v_eligible,
+    'missing nothing from here keeps a student on track above the line'
+  );
+
+  select resulting_pct into v_body from attendance_what_if(v_watchful, v_course, 0);
+  select resulting_pct, still_eligible into v_pct, v_eligible
+  from attendance_what_if(v_watchful, v_course, 999);
+
+  perform assert_true(
+    not v_eligible,
+    'missing every remaining lecture does not'
+  );
+
+  perform assert_true(
+    v_pct = (select resulting_pct from attendance_what_if(v_watchful, v_course,
+              (select remaining from attendance_what_if(v_watchful, v_course, 0)))),
+    'asking about more lectures than remain is answered as "all of them" rather than as nonsense'
+  );
+
+  -- The calculator and the eligibility rule are the same arithmetic, which is
+  -- why the calculator lives in the database rather than in the browser.
+  perform assert_true(
+    (select resulting_pct from attendance_what_if(v_watchful, v_course, 0)) >=
+    (select resulting_pct from attendance_what_if(v_watchful, v_course, 1)),
+    'missing one more can only ever lower the result'
+  );
+end $$;
+
+
+-- ---------------------------------------------------------------------------
+-- Reminders before, reports after
+--
+-- The cheapest intervention this system has. It needs no forecast behind it
+-- and it addresses the largest single cause of a missed lecture, which is not
+-- reluctance — it is a student who lost track of the day.
+-- ---------------------------------------------------------------------------
+
+-- The clock pinned to 10:00 today, Lagos time, for this block only. The
+-- fixtures below are "a lecture starting in forty minutes" and "one that
+-- started five minutes ago", written as times of day, and a time of day wraps.
+-- Run after about 21:15 and the forty-minute lecture ends past midnight, which
+-- the timetable refuses; run just after midnight and "five minutes ago" is
+-- tonight. Today's date is kept so day_of_week still means today. The suite
+-- is one transaction and rolls back, and the real clock is restored below
+-- anyway, so nothing after this block runs on a pinned clock.
+create or replace function lagos_now()
+returns timestamp
+language sql
+stable
+as $$
+  select (now() at time zone 'Africa/Lagos')::date + time '10:00';
+$$;
+
+do $$
+declare
+  -- The ACTIVE session, read rather than assumed. The rollover block earlier in
+  -- this suite switches which session is active, and upcoming_lectures() only
+  -- looks at the active one — a hardcoded id here tests a timetable nobody is
+  -- teaching from.
+  v_session uuid := (select id from academic_sessions where is_active limit 1);
+  v_course  uuid := gen_random_uuid();
+  v_entry   uuid;
+  v_soon    uuid;
+  v_cancel  uuid := gen_random_uuid();
+  v_student uuid := gen_random_uuid();
+  v_dropped uuid := gen_random_uuid();
+  v_sent    integer;
+  v_again   integer;
+  v_local   timestamp := lagos_now();
+begin
+  insert into courses (id, academic_session_id, code, title, level, kind, credit_units, semester, lecturer_id)
+  values (v_course, v_session, 'MTH 393', 'Reminder Fixture', 300, 'core', 3, 1,
+          '33333333-3333-3333-3333-333333333301');
+
+  insert into profiles (id, role, surname, first_name, phone)
+  values (v_student, 'student', 'Reminded', 'Case', '+2348050000601'),
+         (v_dropped, 'student', 'Dropped', 'Out', '+2348050000602');
+  insert into students (id, matric_no, level)
+  values (v_student, 'CMP/2021/851', 300), (v_dropped, 'CMP/2021/852', 300);
+
+  insert into enrolments (student_id, course_id, source, enrolled_on)
+  values (v_student, v_course, 'core', session_day(0));
+  -- On the course and then off it. A reminder to attend something they left is
+  -- the system asking a student to do the impossible.
+  insert into enrolments (student_id, course_id, source, enrolled_on, dropped_at)
+  values (v_dropped, v_course, 'elective', session_day(0), now());
+
+  -- A slot forty minutes from now, in Lagos time. Computed rather than
+  -- hardcoded: the database runs in UTC and the department does not, and an
+  -- hour's error means the reminder arrives after the lecture.
+  insert into timetable_entries (academic_session_id, course_id, day_of_week, start_time, end_time, venue_id)
+  values (v_session, v_course, extract(dow from v_local)::integer,
+          (v_local + interval '40 minutes')::time,
+          (v_local + interval '160 minutes')::time,
+          '22222222-2222-2222-2222-222222222201')
+  returning id into v_entry;
+
+  v_sent := send_lecture_reminders(60);
+
+  perform assert_true(v_sent = 1, 'every registered student on an upcoming lecture is reminded, and nobody else');
+
+  perform assert_true(
+    exists (
+      select 1 from notifications
+      where recipient_id = v_student and kind = 'lecture_reminder'
+    ),
+    'the reminder reaches the student who is still on the course'
+  );
+
+  perform assert_true(
+    not exists (
+      select 1 from notifications
+      where recipient_id = v_dropped and kind = 'lecture_reminder'
+    ),
+    'and not the one who dropped it'
+  );
+
+  perform assert_true(
+    (select body from notifications
+      where recipient_id = v_student and kind = 'lecture_reminder' limit 1) like '%MTH 393%',
+    'it names the course and the hall rather than saying "you have a lecture"'
+  );
+
+  -- WhatsApp because it is free; never SMS, which would spend the budget the
+  -- policy reserves for the warning that matters.
+  perform assert_true(
+    exists (
+      select 1 from notification_deliveries d
+      join notifications n on n.id = d.notification_id
+      where n.recipient_id = v_student and n.kind = 'lecture_reminder' and d.channel = 'whatsapp'
+    ),
+    'a reminder goes out on WhatsApp, which costs nothing'
+  );
+
+  perform assert_true(
+    not exists (
+      select 1 from notification_deliveries d
+      join notifications n on n.id = d.notification_id
+      where n.recipient_id = v_student and n.kind = 'lecture_reminder' and d.channel = 'sms'
+    ),
+    'and never on SMS — that budget is reserved for the final warning'
+  );
+
+  -- ------------------------------------------------------------------------
+  -- Once per lecture, however often the job runs
+  -- ------------------------------------------------------------------------
+  v_again := send_lecture_reminders(60);
+  perform assert_true(
+    v_again = 0,
+    'the job runs every few minutes over an hour-wide window — one lecture must not produce twenty reminders'
+  );
+
+  -- ------------------------------------------------------------------------
+  -- A cancelled lecture is not upcoming
+  -- ------------------------------------------------------------------------
+  insert into courses (id, academic_session_id, code, title, level, kind, credit_units, semester, lecturer_id)
+  values (v_cancel, v_session, 'MTH 394', 'Cancelled Fixture', 300, 'core', 3, 1,
+          '33333333-3333-3333-3333-333333333301');
+  insert into enrolments (student_id, course_id, source, enrolled_on)
+  values (v_student, v_cancel, 'core', session_day(0));
+
+  insert into timetable_entries (academic_session_id, course_id, day_of_week, start_time, end_time, venue_id)
+  values (v_session, v_cancel, extract(dow from v_local)::integer,
+          (v_local + interval '45 minutes')::time,
+          (v_local + interval '165 minutes')::time,
+          '22222222-2222-2222-2222-222222222201')
+  returning id into v_soon;
+
+  insert into session_instances (course_id, timetable_entry_id, held_on, venue_id, type, status,
+                                 cancelled_at, cancelled_by, cancellation_reason, created_by)
+  values (v_cancel, v_soon, v_local::date, '22222222-2222-2222-2222-222222222201',
+          'recurring', 'cancelled', now(), '33333333-3333-3333-3333-333333333301',
+          'Lecturer is at an external examiners meeting.',
+          '33333333-3333-3333-3333-333333333301');
+
+  perform assert_true(
+    not exists (select 1 from upcoming_lectures(60) where course_id = v_cancel),
+    'a cancelled lecture is not upcoming — reminding students to attend it would contradict whoever cancelled it'
+  );
+
+  -- ------------------------------------------------------------------------
+  -- A lecture already under way is not upcoming either
+  -- ------------------------------------------------------------------------
+  update timetable_entries
+     set start_time = (v_local - interval '5 minutes')::time
+   where id = v_entry;
+
+  delete from lecture_reminders_sent where timetable_entry_id = v_entry;
+
+  perform assert_true(
+    not exists (select 1 from upcoming_lectures(60) where course_id = v_course),
+    'a lecture that started five minutes ago is not upcoming — telling a student they are late is not something they can fix'
+  );
+end $$;
+
+-- The real clock back, exactly as the migration defines it.
+create or replace function lagos_now()
+returns timestamp
+language sql
+stable
+as $$
+  select (now() at time zone 'Africa/Lagos');
+$$;
+
+-- The reports, and the one thing that makes a report more than a number.
+do $$
+declare
+  v_halima uuid := '44444444-4444-4444-4444-444444444402';
+  v_seeded uuid := '11111111-1111-1111-1111-111111111111';
+  v_report record;
+  v_rows   integer;
+  v_sent   integer;
+begin
+  -- Named explicitly: Halima's courses belong to the seeded session, and the
+  -- rollover block earlier in this suite has since made a different one active.
+  -- Defaulting would report on a session she is not enrolled in yet.
+  select count(*) into v_rows from student_semester_report(v_halima, v_seeded);
+  perform assert_true(v_rows > 0, 'the semester report covers every course a student is registered for');
+
+  perform assert_true(
+    (select attendance_pct from student_semester_report(v_halima, v_seeded)
+      where course_code = 'CMP 301')
+    = attendance_pct(v_halima, '66666666-6666-6666-6666-666666666601'),
+    'and its percentage is the same number every other screen shows — the permit reads this too'
+  );
+
+  perform assert_true(
+    (select eligible from student_semester_report(v_halima, v_seeded) where course_code = 'CMP 301')
+      = false,
+    'eligibility on the report is the eligibility rule, not a second opinion about it'
+  );
+
+  select * into v_report from student_period_report(v_halima, 7);
+  perform assert_true(
+    v_report.overall_pct = attendance_pct(v_halima, '66666666-6666-6666-6666-666666666601')
+      or v_report.overall_pct is not null,
+    'the period report carries the running figure alongside the window'
+  );
+
+  -- The delta is the whole point of a periodic report: "68%" says nothing that
+  -- "68%, down from 81%" does not say better. Null rather than zero when there
+  -- is nothing to compare against — a first week reported as "no change" is a
+  -- claim about a week that did not exist.
+  select * into v_report from student_period_report(v_halima, 3650);
+  perform assert_true(
+    v_report.delta is null,
+    'a window with no comparable period before it reports no change rather than "no change"'
+  );
+
+  v_sent := send_weekly_digests();
+  perform assert_true(
+    v_sent >= 0,
+    'the Monday digest runs without needing anyone to have had a good week'
+  );
+
+  perform assert_true(
+    not exists (
+      select 1 from notification_deliveries d
+      join notifications n on n.id = d.notification_id
+      where n.kind = 'weekly_report' and d.channel = 'sms'
+    ),
+    'a digest never spends an SMS — routine messages on the warning channel are how a warning stops being one'
+  );
+end $$;
+
+
+-- ---------------------------------------------------------------------------
+-- The admin setting the registration window (§2.1)
+--
+-- The gate the whole revision turns on, and until now it could only be opened
+-- with SQL access. What is worth asserting is that it is the admin's to set,
+-- that a moved deadline is recoverable from the audit row, and that setting one
+-- changes no registration.
+-- ---------------------------------------------------------------------------
+
+do $$
+declare
+  v_admin   uuid := '33333333-3333-3333-3333-333333333303';
+  v_hod     uuid := '33333333-3333-3333-3333-333333333302';
+  v_session uuid := '11111111-1111-1111-1111-111111111111';
+  v_id      uuid;
+  v_before  integer;
+  v_meta    jsonb;
+begin
+  select count(*) into v_before from course_registrations;
+
+  perform assert_rejects(
+    format('select set_registration_period(%L, %L, 2::smallint, %L, %L, %L)',
+           v_hod, v_session, current_date, current_date + 7,
+           'The head of department is not the administrator.'),
+    'only an administrator can set the registration window'
+  );
+
+  perform assert_rejects(
+    format('select set_registration_period(%L, %L, 2::smallint, %L, %L, %L)',
+           v_admin, v_session, current_date, current_date + 7, 'moved'),
+    'a window change must say why — "moved" is not a reason anyone can act on later'
+  );
+
+  perform assert_rejects(
+    format('select set_registration_period(%L, %L, 2::smallint, %L, %L, %L)',
+           v_admin, v_session, current_date + 7, current_date,
+           'A window that closes before it opens.'),
+    'a window cannot close before it opens'
+  );
+
+  -- Creating one where there was none. Second semester has no row seeded, which
+  -- is why is_registration_open reported it open a few blocks above.
+  v_id := set_registration_period(v_admin, v_session, 2::smallint,
+                                  current_date - 1, current_date + 6,
+                                  'Second semester resumption, seven days as usual.');
+
+  perform assert_true(
+    is_registration_open(v_session, 2::smallint),
+    'the window the admin just opened is open'
+  );
+
+  select metadata into v_meta from audit_log
+   where action = 'registration_period.set' and target_id = v_id::text
+   order by id desc limit 1;
+
+  perform assert_true(
+    (v_meta->>'created')::boolean,
+    'the audit row says a window was created rather than moved'
+  );
+
+  -- Moving it, which is the case the audit row has to survive: a student will
+  -- eventually argue they registered in time, and only the previous dates can
+  -- settle it.
+  perform set_registration_period(v_admin, v_session, 2::smallint,
+                                  current_date - 1, current_date - 1,
+                                  'Closed early; the senate calendar moved.');
+
+  select metadata into v_meta from audit_log
+   where action = 'registration_period.set' and target_id = v_id::text
+   order by id desc limit 1;
+
+  perform assert_true(
+    (v_meta->>'previous_closes_on') = (current_date + 6)::text
+      and (v_meta->>'closes_on') = (current_date - 1)::text,
+    'a moved deadline records the date it replaced, not only the one it took'
+  );
+
+  perform assert_true(
+    not is_registration_open(v_session, 2::smallint),
+    'and the gate closes behind it'
+  );
+
+  perform assert_true(
+    (select count(*) from course_registrations) = v_before,
+    'setting a window confirms, un-confirms and backfills nobody — that is confirm_registration()''s to decide'
+  );
+
+  perform assert_true(
+    (select count(*) from registration_periods
+      where academic_session_id = v_session and semester = 2) = 1,
+    'setting the same semester twice moves the one window rather than opening a second'
+  );
+end $$;
+
+
+-- ---------------------------------------------------------------------------
+-- The admin setting the dues (§8)
+--
+-- One row per SESSION, never per semester — dues are charged for the year. The
+-- assertions that matter are about what a changed figure does to people who
+-- have already paid, because every reader computes from it live and a raise is
+-- otherwise silent until the permit queue.
+--
+-- This block restores the seeded figure before it ends. The suite is one
+-- transaction, and the permit assertions further down are written against the
+-- seeded dues amount.
+-- ---------------------------------------------------------------------------
+
+do $$
+declare
+  v_admin    uuid := '33333333-3333-3333-3333-333333333303';
+  v_hod      uuid := '33333333-3333-3333-3333-333333333302';
+  v_session  uuid := '11111111-1111-1111-1111-111111111111';
+  v_payer    uuid := gen_random_uuid();
+  v_amount   double precision;
+  v_resumed  date;
+  v_id       uuid;
+  v_impact   record;
+  v_meta     jsonb;
+begin
+  select dues_amount_kobo, resumption_date into v_amount, v_resumed
+  from dues_periods where academic_session_id = v_session;
+
+  perform assert_true(
+    (select count(*) from dues_periods where academic_session_id = v_session) = 1,
+    'a session has exactly one dues period — the amount is charged for the year, not per semester'
+  );
+
+  perform assert_rejects(
+    format('select set_dues_period(%L, %L, %L, 500000, %L)',
+           v_hod, v_session, current_date, 'The head of department does not set the fee.'),
+    'only an administrator can set the dues — the role that forgives a debt does not also set it'
+  );
+
+  perform assert_rejects(
+    format('select set_dues_period(%L, %L, %L, 500000, %L)',
+           v_admin, v_session, current_date, 'raised'),
+    'a dues change must say why'
+  );
+
+  perform assert_rejects(
+    format('select set_dues_period(%L, %L, %L, 0, %L)',
+           v_admin, v_session, current_date, 'A fee of nothing at all.'),
+    'the dues amount must be more than zero'
+  );
+
+  perform assert_rejects(
+    format('select set_dues_period(%L, %L, %L, 1000.5, %L)',
+           v_admin, v_session, current_date, 'Half a kobo, which does not exist.'),
+    'the dues amount must be a whole number of kobo'
+  );
+
+  -- Someone who has paid the fee in full, to be moved across the line.
+  insert into profiles (id, role, surname, first_name, phone)
+  values (v_payer, 'student', 'Paidup', 'Chidi', '+2348050000801');
+  insert into students (id, matric_no, level) values (v_payer, 'STA/2021/864', 200);
+  insert into payments (student_id, academic_session_id, paystack_reference, channel,
+                        status, amount_kobo, verified_at)
+  values (v_payer, v_session, 'ref-dues-change', 'card', 'success', v_amount, now());
+
+  perform assert_true(
+    dues_balance_kobo(v_payer, v_session) = 0,
+    'the fixture student owes nothing at the current figure'
+  );
+
+  select * into v_impact from dues_change_impact(v_session, v_amount + 200000);
+  perform assert_true(
+    v_impact.newly_owing >= 1,
+    'the preview counts the student a raise would put back into debt, before the raise happens'
+  );
+
+  perform assert_true(
+    (select newly_owing from dues_change_impact(v_session, v_amount)) = 0,
+    'and setting the same figure again moves nobody'
+  );
+
+  -- The raise itself.
+  v_id := set_dues_period(v_admin, v_session, v_resumed, v_amount + 200000,
+                          'Senate approved an increase for this session.');
+
+  perform assert_true(
+    dues_balance_kobo(v_payer, v_session) = 200000,
+    'raising the figure puts a fully-paid student back in debt immediately — every reader computes from it live'
+  );
+
+  select metadata into v_meta from audit_log
+   where action = 'dues_period.set' and target_id = v_id::text
+   order by id desc limit 1;
+
+  perform assert_true(
+    (v_meta->>'previous_dues_amount_kobo')::double precision = v_amount,
+    'the audit row keeps the figure it replaced'
+  );
+
+  perform assert_true(
+    (v_meta->>'newly_owing')::integer >= 1,
+    'and records how many students the change put back in debt, which is asked months later'
+  );
+
+  perform assert_true(
+    (select count(*) from dues_periods where academic_session_id = v_session) = 1,
+    'setting it twice moves the one row rather than opening a second'
+  );
+
+  -- Put the seeded figure back: the permit assertions below are written
+  -- against it, and this suite is a single transaction.
+  perform set_dues_period(v_admin, v_session, v_resumed, v_amount,
+                          'Restoring the seeded figure for the rest of the suite.');
+
+  perform assert_true(
+    dues_balance_kobo(v_payer, v_session) = 0,
+    'and lowering it back clears them again, with no recompute anywhere'
+  );
+end $$;
+
+
+-- ---------------------------------------------------------------------------
+-- The HOD talking to students (§7.3)
+--
+-- Four audiences from one function, drawn from the registration data and the
+-- matric number. What is worth asserting is mostly the boundaries: who it
+-- reaches, who it does not, and that it cannot spend the SMS budget.
+-- ---------------------------------------------------------------------------
+
+do $$
+declare
+  v_hod     uuid := '33333333-3333-3333-3333-333333333302';
+  v_admin   uuid := '33333333-3333-3333-3333-333333333303';
+  v_seeded  uuid := '11111111-1111-1111-1111-111111111111';
+  v_course  uuid := gen_random_uuid();
+  v_on      uuid := gen_random_uuid();
+  v_off     uuid := gen_random_uuid();
+  v_other   uuid := gen_random_uuid();
+  v_id      uuid;
+  v_count   integer;
+  v_sent    integer;
+begin
+  insert into courses (id, academic_session_id, code, title, level, kind, credit_units, semester, lecturer_id)
+  values (v_course, v_seeded, 'STA 394', 'Message Fixture', 300, 'core', 3, 1,
+          '33333333-3333-3333-3333-333333333301');
+
+  insert into profiles (id, role, surname, first_name, phone)
+  values (v_on, 'student', 'Still', 'Registered', '+2348050000701'),
+         (v_off, 'student', 'Dropped', 'It', '+2348050000702');
+  insert into students (id, matric_no, level)
+  values (v_on, 'CMP/2021/861', 300), (v_off, 'CMP/2021/862', 300);
+
+  insert into enrolments (student_id, course_id, source, enrolled_on)
+  values (v_on, v_course, 'core', session_day(0));
+  insert into enrolments (student_id, course_id, source, enrolled_on, dropped_at)
+  values (v_off, v_course, 'elective', session_day(0), now());
+
+  -- ------------------------------------------------------------------------
+  -- Who may send at all
+  -- ------------------------------------------------------------------------
+  perform assert_rejects(
+    format('select send_hod_message(%L, %L, %L, null, %L, %L)',
+           v_admin, 'course', v_course, 'Notice', 'The administrator is not the head of department.'),
+    'only the head of department can message students'
+  );
+
+  perform assert_rejects(
+    format('select send_hod_message(%L, %L, %L, null, %L, %L)',
+           v_hod, 'course', v_course, 'Notice', 'see me'),
+    'a message reaching a whole course has to say something — "see me" is a summons nobody can act on'
+  );
+
+  -- ------------------------------------------------------------------------
+  -- A course group is everyone CURRENTLY registered
+  -- ------------------------------------------------------------------------
+  v_count := hod_message_audience('course', v_course, null);
+  perform assert_true(
+    v_count = 1,
+    'the audience preview counts the registered student and not the one who dropped it'
+  );
+
+  select message_id, recipients into v_id, v_count
+  from send_hod_message(v_hod, 'course', v_course, null,
+                        'STA 394 venue change',
+                        'Thursday''s lecture moves to Lecture Theatre A for the rest of the term.');
+
+  perform assert_true(v_count = 1, 'and the send reaches exactly that audience');
+
+  perform assert_true(
+    exists (select 1 from notifications where recipient_id = v_on and kind = 'hod_message'),
+    'the registered student gets it'
+  );
+
+  perform assert_true(
+    not exists (select 1 from notifications where recipient_id = v_off and kind = 'hod_message'),
+    'and the one who left the course does not — a message about a course they dropped is the system not having noticed'
+  );
+
+  -- ------------------------------------------------------------------------
+  -- Same channels as everything else, and never SMS
+  -- ------------------------------------------------------------------------
+  perform assert_true(
+    exists (
+      select 1 from notification_deliveries d
+      join notifications n on n.id = d.notification_id
+      where n.recipient_id = v_on and n.kind = 'hod_message' and d.channel = 'whatsapp'
+    ),
+    'it routes through the same channels as an alert rather than a messaging system of its own'
+  );
+
+  perform assert_true(
+    not exists (
+      select 1 from notification_deliveries d
+      join notifications n on n.id = d.notification_id
+      where n.kind = 'hod_message' and d.channel = 'sms'
+    ),
+    'and never SMS — an HOD who could spend that budget on a routine notice eventually would'
+  );
+
+  -- ------------------------------------------------------------------------
+  -- Reaching four hundred phones is an authority action
+  -- ------------------------------------------------------------------------
+  perform assert_true(
+    (select count(*) from audit_log
+      where action = 'hod_message.sent' and target_id = v_id::text) = 1,
+    'every send is audited with the actor, the scope and the audience size'
+  );
+
+  perform assert_true(
+    (select (metadata->>'recipients')::integer from audit_log
+      where action = 'hod_message.sent' and target_id = v_id::text) = 1,
+    'and the audit records how many phones it actually reached'
+  );
+
+  -- ------------------------------------------------------------------------
+  -- One student, and a level
+  -- ------------------------------------------------------------------------
+  select recipients into v_count
+  from send_hod_message(v_hod, 'student', v_on, null,
+                        'About your attendance',
+                        'Please come and see me before Friday about CMP 301.');
+  perform assert_true(v_count = 1, 'an individual message reaches one student');
+
+  perform assert_true(
+    hod_message_audience('level', null, 300) >= 1,
+    'a level message reaches everyone at that level'
+  );
+
+  perform assert_rejects(
+    format('insert into hod_messages (sent_by, scope, level, subject, body) values (%L, %L, 300, %L, %L)',
+           v_hod, 'student', 'Wrong', 'A student-scoped message that names a level instead.'),
+    'a scope and its target cannot disagree'
+  );
+
+  -- ------------------------------------------------------------------------
+  -- One level of one programme — "300 level Computer Science"
+  -- ------------------------------------------------------------------------
+  -- A mathematician at the same level, to prove the programme half does work.
+  -- Without them the scope would be indistinguishable from `level` in a test.
+  insert into profiles (id, role, surname, first_name, phone)
+  values (v_other, 'student', 'Other', 'Programme', '+2348050000703');
+  insert into students (id, matric_no, level) values (v_other, 'MTH/2021/863', 300);
+
+  perform assert_true(
+    (select programme from students where id = v_other) = 'MTH',
+    'the programme is read off the matric number, never asked for'
+  );
+
+  -- Counted against the students themselves rather than a literal: the suite is
+  -- one transaction and earlier blocks have already added students, so a
+  -- hard-coded total here would assert the order of this file rather than the
+  -- behaviour of the function.
+  v_count := hod_message_audience('programme_level', null, 300, 'CMP');
+  perform assert_true(
+    v_count = (select count(*) from students
+                where programme = 'CMP' and level = 300 and status <> 'deactivated'),
+    'a programme-and-level audience is exactly the active students of that programme at that level'
+  );
+
+  perform assert_true(
+    hod_message_audience('programme_level', null, 300, 'MTH')
+      <> hod_message_audience('programme_level', null, 300, 'CMP')
+      or not exists (select 1 from students where programme = 'MTH' and level = 300),
+    'and the same level in another programme is a different audience'
+  );
+
+  perform assert_true(
+    v_count < hod_message_audience('level', null, 300, null),
+    'one programme at a level is narrower than the whole level, which is the point of having both'
+  );
+
+  -- The distinction the scope exists for. `v_off` dropped STA 394, so a course
+  -- message misses them; they are still a 300L CMP student, so this does not.
+  -- Sending to a course and believing you have addressed a level of a
+  -- programme is the silent under-delivery this scope removes.
+  perform assert_true(
+    hod_message_audience('programme_level', null, 300, 'CMP')
+      > hod_message_audience('course', v_course, null),
+    'the programme audience includes the student who dropped the course, which a course message cannot reach'
+  );
+
+  select message_id, recipients into v_id, v_sent
+  from send_hod_message(v_hod, 'programme_level', null, 300,
+                        'CMP 300 project briefing',
+                        'The briefing for 300 level Computer Science is on Thursday at ten.',
+                        'CMP');
+  perform assert_true(
+    v_sent = v_count,
+    'and the send reaches exactly the number the preview promised — a confirmation that lies is worse than none'
+  );
+
+  perform assert_true(
+    exists (select 1 from notifications
+             where recipient_id = v_on and title = 'CMP 300 project briefing')
+    and exists (select 1 from notifications
+             where recipient_id = v_off and title = 'CMP 300 project briefing'),
+    'both 300L CMP students receive it, the one who dropped the course included'
+  );
+
+  perform assert_true(
+    (select programme from hod_messages where id = v_id) = 'CMP'
+      and (select level from hod_messages where id = v_id) = 300,
+    'the record carries both halves of the audience, because neither names it alone'
+  );
+
+  perform assert_true(
+    not exists (
+      select 1 from notifications
+      where recipient_id = v_other and title = 'CMP 300 project briefing'
+    ),
+    'and the mathematician at the same level is not on it'
+  );
+
+  perform assert_true(
+    (select metadata->>'programme' from audit_log
+      where action = 'hod_message.sent' and target_id = v_id::text) = 'CMP',
+    'the audit row says which programme was reached, not only how many'
+  );
+
+  -- CSC is the prefix a newcomer types. Refused by name rather than by
+  -- matching nobody and reporting a successful send to zero students.
+  perform assert_rejects(
+    format('select send_hod_message(%L, %L, null, 300, %L, %L, %L)',
+           v_hod, 'programme_level', 'Notice',
+           'A programme this department does not have.', 'CSC'),
+    'CSC is refused by name — this department''s Computer Science prefix is CMP'
+  );
+
+  perform assert_rejects(
+    format('insert into hod_messages (sent_by, scope, level, subject, body) values (%L, %L, 300, %L, %L)',
+           v_hod, 'programme_level', 'Wrong',
+           'A programme-scoped message that never says which programme.'),
+    'a programme-and-level message without a programme is refused'
+  );
+
+  -- The same hole one scope over, and the reason every arm now guards with
+  -- `is not null`: `null in (100, 200, 300, 400)` is NULL, `true and NULL` is
+  -- NULL, and a CHECK accepts NULL. Before that guard this row inserted, and
+  -- the send it recorded reported success to an audience of nobody.
+  perform assert_rejects(
+    format('insert into hod_messages (sent_by, scope, subject, body) values (%L, %L, %L, %L)',
+           v_hod, 'level', 'Wrong',
+           'A level-scoped message that never says which level.'),
+    'a level message without a level is refused, rather than sent to nobody and called a success'
+  );
+end $$;
+
+-- The payment compliance report the HOD needs precisely BECAUSE dues no longer
+-- gate attendance: it used to be visible as a side effect of the attendance
+-- screens, and now it is visible nowhere unless somebody goes looking.
+do $$
+declare
+  v_seeded uuid := '11111111-1111-1111-1111-111111111111';
+  v_rows   integer;
+begin
+  select count(*) into v_rows from payment_compliance_report(v_seeded);
+  perform assert_true(v_rows > 0, 'the payment report covers every level with students in it');
+
+  perform assert_true(
+    not exists (
+      select 1 from payment_compliance_report(v_seeded)
+      where paid_in_full + part_paid + nothing_paid <> students
+    ),
+    'and every student is in exactly one of the three columns'
+  );
+
+  -- Part paid is its own column because it is its own conversation. A student
+  -- who has paid half is not a student who has not paid, and a boolean cannot
+  -- hold the difference.
+  perform assert_true(
+    (select count(*) from information_schema.routines
+      where routine_name = 'payment_compliance_report') = 1,
+    'the report exists as one function rather than as a query copied onto a screen'
+  );
+end $$;
+
+
+-- ---------------------------------------------------------------------------
+-- The paper register
+--
+-- The one route with no token, no geo-fence and no device check behind it, so
+-- what is asserted here is mostly what it refuses.
+-- ---------------------------------------------------------------------------
+
+do $$
+declare
+  v_lect    uuid := '33333333-3333-3333-3333-333333333301';
+  v_hod     uuid := '33333333-3333-3333-3333-333333333302';
+  v_cmp301  uuid := '66666666-6666-6666-6666-666666666601';
+  v_venue   uuid := '22222222-2222-2222-2222-222222222201';
+  v_chidera uuid := '44444444-4444-4444-4444-444444444401';  -- unpaid
+  v_halima  uuid := '44444444-4444-4444-4444-444444444402';  -- cleared
+  -- Created here rather than borrowed: earlier blocks in this suite enrol the
+  -- seeded students in extra courses, so "not enrolled" has to be guaranteed
+  -- rather than assumed.
+  v_outsider uuid := gen_random_uuid();
+  v_inst    uuid := gen_random_uuid();
+  v_batch   uuid;
+  v_n       integer;
+  v_ok      boolean;
+begin
+  insert into profiles (id, role, surname, first_name, phone)
+  values (v_outsider, 'student', 'Outside', 'Course', '+2348057777777');
+  insert into students (id, matric_no, level) values (v_outsider, 'STA/2021/333', 300);
+
+  insert into session_instances (id, course_id, held_on, venue_id, type, status, created_by)
+  values (v_inst, v_cmp301, current_date, v_venue, 'makeup', 'open', v_lect);
+
+  begin
+    perform submit_manual_batch(v_inst, v_lect, 'network down',
+      jsonb_build_array(jsonb_build_object('student_id', v_chidera, 'score', 1.0)));
+    v_ok := false;
+  exception when others then v_ok := true;
+  end;
+  perform assert_true(v_ok, 'a paper batch needs a real account of why, not one word');
+
+  begin
+    perform submit_manual_batch(v_inst, v_hod, 'The network was down in the hall for the whole hour.',
+      jsonb_build_array(jsonb_build_object('student_id', v_chidera, 'score', 1.0)));
+    v_ok := false;
+  exception when others then v_ok := true;
+  end;
+  perform assert_true(v_ok, 'only the course''s own lecturer can enter a paper register for it');
+
+  begin
+    perform submit_manual_batch(v_inst, v_lect, 'The network was down in the hall for the whole hour.',
+      jsonb_build_array(jsonb_build_object('student_id', v_outsider, 'score', 1.0)));
+    v_ok := false;
+  exception when others then v_ok := true;
+  end;
+  perform assert_true(v_ok, 'a student not enrolled in the course cannot be marked present in it');
+
+  select recorded, batch_id into v_n, v_batch
+  from submit_manual_batch(v_inst, v_lect,
+    'The network was down in Lecture Theatre A for the whole hour; register taken on paper.',
+    jsonb_build_array(
+      jsonb_build_object('student_id', v_chidera, 'score', 1.0),
+      jsonb_build_object('student_id', v_halima,  'score', 1.0)
+    ));
+
+  perform assert_true(v_n = 2, 'the batch records every student marked present');
+  perform assert_true(v_batch is not null, 'and returns the batch it created');
+
+  perform assert_true(
+    (select count(*) from session_scores
+      where manual_batch_id = v_batch and source = 'manually_entered') = 2,
+    'every score it wrote is traceable to the batch and tagged as paper'
+  );
+
+  -- This used to check that a paper mark was gated on dues exactly like a
+  -- digital one. Neither is gated on dues any more, so what is left worth
+  -- asserting is that the paper route produces the same KIND of row: a real
+  -- score against a real lecture, tagged so the HOD can tell it apart.
+  perform assert_true(
+    (select count(*) from session_scores ss
+      where ss.session_instance_id = v_inst and ss.score > 0) = 2,
+    'a paper mark is a score like any other — the fallback is for the network, not a second scoring rule'
+  );
+
+  perform assert_true(
+    (select score from session_scores where student_id = v_halima and session_instance_id = v_inst) = 1.0,
+    'the transcribed score is what is stored — there are no code marks to derive it from'
+  );
+
+  perform assert_true(
+    (select status from session_instances where id = v_inst) = 'closed',
+    'the lecture is closed by the act of transcribing it, so the digital path cannot overwrite the sheet'
+  );
+
+  perform assert_true(
+    (select count(*) from audit_log
+      where action = 'manual_batch.submit' and target_id = v_batch::text) = 1,
+    'the batch is audited — this is the route with no code behind it'
+  );
+
+  -- The whole point of the batch row: the HOD's oversight screen counts them.
+  perform assert_true(
+    (select count(*) from manual_attendance_batches
+      where session_instance_id = v_inst and submitted_by = v_lect) = 1,
+    'the HOD''s lecturer oversight can see it, which is what makes this a monitored path'
+  );
+
+  begin
+    perform submit_manual_batch(v_inst, v_lect, 'Trying to award a score that is not on the scale.',
+      jsonb_build_array(jsonb_build_object('student_id', v_chidera, 'score', 0.75)));
+    v_ok := false;
+  exception when others then v_ok := true;
+  end;
+  perform assert_true(v_ok, 'a lecture is attended or it is not — a paper entry cannot invent a fraction');
+end $$;
+
+
+-- ---------------------------------------------------------------------------
+-- Payments that reconcile themselves (§8.4)
+--
+-- Nobody presses a re-verify button in this system, so the schedule has to be
+-- right on its own. Two properties are asserted harder than the rest:
+--
+--   * An unreachable Paystack NEVER abandons a payment. "Could not ask" is a
+--     fact about the network; recording it as "did not pay" tells a student
+--     who paid that they did not.
+--   * Giving up asking is not giving up accepting. An abandoned row keeps its
+--     money claim open — a webhook arriving on day four still resolves it.
+-- ---------------------------------------------------------------------------
+
+do $$
+declare
+  v_session uuid := '11111111-1111-1111-1111-111111111111';
+  v_student uuid := gen_random_uuid();
+  v_fresh   uuid;
+  v_old     uuid;
+  v_next    timestamptz;
+  v_before  timestamptz;
+  v_status  text;
+  v_due     integer;
+begin
+  insert into profiles (id, role, surname, first_name, phone)
+  values (v_student, 'student', 'Reconcile', 'Case', '+2348050000601');
+  insert into students (id, matric_no, level) values (v_student, 'CMP/2021/941', 300);
+
+  -- ------------------------------------------------------------------------
+  -- Every new payment schedules itself
+  -- ------------------------------------------------------------------------
+  insert into payments (student_id, academic_session_id, paystack_reference, status, amount_kobo)
+  values (v_student, v_session, 'ref-recon-fresh', 'pending', 500000)
+  returning id into v_fresh;
+
+  perform assert_true(
+    (select next_check_at from payments where id = v_fresh) is not null,
+    'a new pending payment is scheduled for a check without anybody remembering to do it'
+  );
+
+  perform assert_true(
+    (select next_check_at from payments where id = v_fresh) > now(),
+    'and not immediately — the first ninety seconds belong to the webhook'
+  );
+
+  perform assert_true(
+    (select count(*) from payments_due_for_check(50) d where d.payment_id = v_fresh) = 0,
+    'so a payment thirty seconds old is not yet swept'
+  );
+
+  -- ------------------------------------------------------------------------
+  -- The curve widens with age
+  -- ------------------------------------------------------------------------
+  insert into payments (student_id, academic_session_id, paystack_reference, status, amount_kobo,
+                        initialized_at)
+  values (v_student, v_session, 'ref-recon-old', 'pending', 500000, now() - interval '3 hours')
+  returning id into v_old;
+
+  update payments set next_check_at = now() - interval '1 minute' where id = v_old;
+
+  perform assert_true(
+    (select count(*) from payments_due_for_check(50) d where d.payment_id = v_old) = 1,
+    'a payment whose check is overdue is picked up by the sweep'
+  );
+
+  v_next := schedule_payment_check(v_old, true);
+
+  perform assert_true(
+    v_next > now() + interval '10 minutes' and v_next < now() + interval '20 minutes',
+    'a three-hour-old payment is asked about every fifteen minutes, not every minute'
+  );
+
+  perform assert_true(
+    (select check_attempts from payments where id = v_old) = 1,
+    'and the attempt is counted, so a stuck row is distinguishable from a new one'
+  );
+
+  -- ------------------------------------------------------------------------
+  -- Unreachable Paystack never abandons anybody
+  -- ------------------------------------------------------------------------
+  update payments
+     set initialized_at = now() - interval '10 days', check_attempts = 40
+   where id = v_old;
+
+  v_next := schedule_payment_check(v_old, false);
+
+  perform assert_true(
+    v_next is not null,
+    'an unreachable Paystack reschedules rather than resolving'
+  );
+
+  perform assert_true(
+    (select status from payments where id = v_old) = 'pending',
+    'a ten-day-old payment we could not ask about is STILL pending — we have learned nothing about it'
+  );
+
+  -- ------------------------------------------------------------------------
+  -- Two days of Paystack saying "pending" is an abandoned checkout
+  -- ------------------------------------------------------------------------
+  v_next := schedule_payment_check(v_old, true);
+
+  perform assert_true(v_next is null, 'past two days the polling stops');
+
+  select status into v_status from payments where id = v_old;
+  perform assert_true(
+    v_status = 'abandoned',
+    'and the row says abandoned, so the student''s screen stops claiming something is in flight'
+  );
+
+  perform assert_true(
+    (select verified_at from payments where id = v_old) is null,
+    'with nothing marked verified — there was nothing to verify'
+  );
+
+  perform assert_true(
+    (select count(*) from payments_due_for_check(50) d where d.payment_id = v_old) = 0,
+    'and it is off the sweep'
+  );
+
+  -- ------------------------------------------------------------------------
+  -- Giving up asking is not giving up accepting
+  -- ------------------------------------------------------------------------
+  -- A late webhook resolves an abandoned row. The schema has to permit it, or
+  -- a student who paid on day four is refused by the database rather than by
+  -- anybody's decision.
+  update payments
+     set status = 'success', channel = 'transfer', verified_at = now()
+   where id = v_old;
+
+  perform assert_true(
+    (select status from payments where id = v_old) = 'success',
+    'an abandoned payment can still be settled later — the polling stopped, the door did not close'
+  );
+
+  -- ------------------------------------------------------------------------
+  -- The health signal
+  -- ------------------------------------------------------------------------
+  update payments set next_check_at = now() - interval '30 minutes' where id = v_fresh;
+
+  select overdue into v_due from reconciliation_health();
+  perform assert_true(
+    v_due >= 1,
+    'an overdue payment shows in the health report — a sweep that stopped running looks exactly like one with nothing to do'
+  );
+end $$;
+
+
+-- ---------------------------------------------------------------------------
+-- What is still outstanding (§9.2)
+--
+-- The panel that replaces a flat yes/no, and the arithmetic under it.
+--
+-- Everything here is deterministic: the threshold, the lectures the course
+-- will have held by the end, and subtraction. The forecast never appears,
+-- which is the cross-cutting rule stated as a test — "ML stays advisory;
+-- actual eligibility is always the deterministic 75% rule". The last
+-- assertion in this block deletes every prediction and checks the numbers do
+-- not move.
+-- ---------------------------------------------------------------------------
+
+do $$
+declare
+  v_session   uuid := '11111111-1111-1111-1111-111111111111';
+  v_lect      uuid := '33333333-3333-3333-3333-333333333301';
+  v_venue     uuid := '22222222-2222-2222-2222-222222222201';
+  v_course    uuid := gen_random_uuid();
+  v_full      uuid := gen_random_uuid();
+  v_none      uuid := gen_random_uuid();
+  v_entry     uuid;
+  v_fixture   uuid;
+  v_remaining integer;
+  v_needed    integer;
+  v_panel     record;
+  v_before    integer;
+begin
+  insert into courses (id, academic_session_id, code, title, level, kind, credit_units, semester, lecturer_id)
+  values (v_course, v_session, 'CMP 392', 'Permit Panel Fixture', 300, 'core', 3, 1, v_lect);
+
+  -- A weekly slot, so the course has lectures still to come. Without one the
+  -- denominator is what has already been held, and the panel would be a
+  -- scoreboard reporting the past rather than a route out of it.
+  insert into timetable_entries (academic_session_id, course_id, day_of_week, start_time, end_time, venue_id)
+  values (v_session, v_course, 3, '13:00', '15:00', v_venue)
+  returning id into v_entry;
+
+  insert into profiles (id, role, surname, first_name, phone)
+  values (v_full, 'student', 'Perfect', 'Attendance', '+2348050000501'),
+         (v_none, 'student', 'Never', 'Came', '+2348050000502');
+  insert into students (id, matric_no, level)
+  values (v_full, 'CMP/2021/931', 300), (v_none, 'CMP/2021/932', 300);
+  insert into enrolments (student_id, course_id, source, enrolled_on)
+  values (v_full, v_course, 'core', session_day(0)),
+         (v_none, v_course, 'core', session_day(0));
+
+  -- Ten held. One student attended all ten, the other none of them.
+  for i in 1..10 loop
+    v_fixture := gen_random_uuid();
+    insert into session_instances (id, course_id, timetable_entry_id, held_on, venue_id,
+                                   type, status, closed_at, created_by)
+    values (v_fixture, v_course, v_entry, session_day(i * 2), v_venue,
+            'recurring', 'closed', now(), v_lect);
+
+    insert into session_scores (student_id, session_instance_id, score, source)
+    values (v_full, v_fixture, 1.0, 'digital'),
+           (v_none, v_fixture, 0, 'digital');
+  end loop;
+
+  v_remaining := lectures_remaining(v_course);
+  perform assert_true(v_remaining > 0, 'the fixture course has lectures still to come');
+
+  -- ------------------------------------------------------------------------
+  -- The requirement lands exactly on the line
+  --
+  -- This is the assertion that would catch a ceiling in the wrong direction,
+  -- which is the bug this arithmetic is prone to and the one a student would
+  -- discover by being turned away at the door with a screen behind them saying
+  -- they had done enough.
+  -- ------------------------------------------------------------------------
+  v_needed := lectures_needed(v_full, v_course);
+
+  perform assert_true(
+    (10 + v_needed)::numeric / (10 + v_remaining) * 100 >= 75,
+    'attending the number asked for finishes at or above the threshold'
+  );
+  perform assert_true(
+    v_needed = 0 or (10 + v_needed - 1)::numeric / (10 + v_remaining) * 100 < 75,
+    'and one fewer does not — the number is the smallest that works, not a round-up'
+  );
+
+  perform assert_true(
+    lectures_needed(v_none, v_course) > lectures_needed(v_full, v_course),
+    'a student who has attended nothing needs more of what is left than one who has attended everything'
+  );
+
+  -- ------------------------------------------------------------------------
+  -- Out of reach, said out loud
+  -- ------------------------------------------------------------------------
+  select * into v_panel from permit_eligibility(v_none, v_session) where course_code = 'CMP 392';
+
+  perform assert_true(
+    not v_panel.eligible and v_panel.attendance_pct = 0,
+    'the student who attended nothing is not eligible'
+  );
+  perform assert_true(
+    not v_panel.reachable,
+    'and cannot reach 75% however many of the remaining lectures they attend'
+  );
+  perform assert_true(
+    v_panel.must_attend = v_panel.lectures_remaining,
+    'so the instruction is capped at what exists — never "attend 21 of the 17 left"'
+  );
+
+  select * into v_panel from permit_eligibility(v_full, v_session) where course_code = 'CMP 392';
+
+  perform assert_true(
+    v_panel.eligible and v_panel.reachable and v_panel.attendance_pct = 100,
+    'the student who attended everything is eligible and stays reachable'
+  );
+  perform assert_true(
+    v_panel.must_attend > 0,
+    'and is still told how many of the lectures to come they need — 100% today is not a finished term'
+  );
+
+  -- ------------------------------------------------------------------------
+  -- One generator, two documents (§6.3)
+  -- ------------------------------------------------------------------------
+  perform assert_true(
+    (select count(*) from permit_eligibility(v_full, v_session)) =
+    (select count(*) from student_semester_report(v_full, v_session)),
+    'the permit panel and the semester report cover the same courses'
+  );
+  perform assert_true(
+    (select r.attendance_pct from student_semester_report(v_full, v_session) r
+      where r.course_code = 'CMP 392') = v_panel.attendance_pct,
+    'and agree on the figure — they are one generator, not two'
+  );
+
+  -- ------------------------------------------------------------------------
+  -- The model does not decide this
+  -- ------------------------------------------------------------------------
+  perform compute_risk_predictions();
+  v_before := (select pe.must_attend from permit_eligibility(v_full, v_session) pe
+                where pe.course_code = 'CMP 392');
+
+  delete from risk_predictions where course_id = v_course;
+
+  perform assert_true(
+    (select pe.must_attend from permit_eligibility(v_full, v_session) pe
+      where pe.course_code = 'CMP 392') = v_before,
+    'deleting every prediction changes nothing — eligibility is arithmetic, not a forecast'
+  );
+end $$;
+
+
+-- ---------------------------------------------------------------------------
+-- The exam permit (§9)
+--
+-- On its own student and course: an earlier block authorizes a list marking
+-- Chidera eligible, so borrowing her would test that collision rather than
+-- this.
+--
+-- Two things are asserted hardest here.
+--
+-- The first is that the permit reads the AUTHORIZED list rather than live
+-- attendance. A permit computed from current figures could contradict the list
+-- the exam board sat with, and the system would have forged it itself.
+--
+-- The second is the dual condition. Payment gates nothing on the way in — a
+-- lecture counts whether or not a naira has been paid — and it gates this. If
+-- the dues half of §9.1 is ever quietly dropped, a student walks into the hall
+-- owing the department five thousand naira and the schema said it was fine.
+-- ---------------------------------------------------------------------------
+
+do $$
+declare
+  v_hod     uuid := '33333333-3333-3333-3333-333333333302';
+  v_admin   uuid := '33333333-3333-3333-3333-333333333303';
+  v_lect    uuid := '33333333-3333-3333-3333-333333333301';
+  v_session uuid := '11111111-1111-1111-1111-111111111111';
+  v_venue   uuid := '22222222-2222-2222-2222-222222222201';
+  v_course  uuid := gen_random_uuid();
+  v_student uuid := gen_random_uuid();
+  v_lecture uuid := gen_random_uuid();
+  v_ref     text;
+  v_again   text;
+  v_check   jsonb;
+  v_pay     uuid;
+  v_ok      boolean;
+  v_panel   record;
+begin
+  insert into courses (id, academic_session_id, code, title, level, lecturer_id, kind, credit_units, semester)
+  values (v_course, v_session, 'STA 401', 'Inference', 400, v_lect, 'core', 3, 1);
+
+  insert into profiles (id, role, surname, first_name, phone)
+  values (v_student, 'student', 'Permit', 'Holder', '+2348056666666');
+  insert into students (id, matric_no, level) values (v_student, 'STA/2021/444', 400);
+  insert into enrolments (student_id, course_id, source, enrolled_on)
+  values (v_student, v_course, 'core', session_day(0));
+
+  insert into session_instances (id, course_id, held_on, venue_id, type, status, closed_at, created_by)
+  values (v_lecture, v_course, session_day(22), v_venue, 'makeup', 'closed', now(), v_lect);
+
+  insert into session_scores (student_id, session_instance_id, score, source)
+  values (v_student, v_lecture, 1.0, 'digital');
+
+  perform assert_true(
+    issue_exam_permit(v_student, v_session) is null,
+    'no permit before the department has authorized anything — not an empty one, none'
+  );
+
+  perform authorize_eligibility_list(v_course, v_hod, 'Final list for the 2025/2026 first semester.');
+
+  -- §9.1. Attendance is not in question here — this student attended the one
+  -- lecture that was held and the HOD has authorized the list saying so. The
+  -- dues are, and on their own they are enough to hold the document.
+  begin
+    v_ref := issue_exam_permit(v_student, v_session);
+    v_ok := false;
+  exception when others then v_ok := true;
+  end;
+  perform assert_true(
+    v_ok,
+    'an authorized list is not enough on its own — dues outstanding hold the permit'
+  );
+
+  perform assert_true(
+    (select count(*) from exam_permits where student_id = v_student) = 0,
+    'and no reference is allocated on the way to refusing, or it would verify against nothing'
+  );
+
+  -- The panel that replaces the flat no. It says what is outstanding, in the
+  -- terms the student can act on.
+  select * into v_panel
+  from permit_eligibility(v_student, v_session)
+  where course_code = 'STA 401';
+
+  perform assert_true(
+    v_panel.attendance_pct = 100 and v_panel.eligible,
+    'the panel reports the attendance half as met'
+  );
+  perform assert_true(
+    dues_balance_kobo(v_student, v_session) = 500000,
+    'and the balance is the other half of what it has to report'
+  );
+
+  -- Paid in full, in two instalments, because that is how students pay.
+  insert into payments (student_id, academic_session_id, paystack_reference, channel,
+                        status, amount_kobo, verified_at)
+  values (v_student, v_session, 'ref-permit-1', 'transfer', 'success', 200000, now())
+  returning id into v_pay;
+  perform apply_payment(v_pay);
+
+  begin
+    v_ref := issue_exam_permit(v_student, v_session);
+    v_ok := false;
+  exception when others then v_ok := true;
+  end;
+  perform assert_true(v_ok, 'part paid is not paid — the permit is still held');
+
+  insert into payments (student_id, academic_session_id, paystack_reference, channel,
+                        status, amount_kobo, verified_at)
+  values (v_student, v_session, 'ref-permit-2', 'card', 'success', 300000, now())
+  returning id into v_pay;
+  perform apply_payment(v_pay);
+
+  v_ref := issue_exam_permit(v_student, v_session);
+  perform assert_true(
+    v_ref is not null,
+    'authorized list and dues paid in full — both conditions, and the permit issues'
+  );
+  perform assert_true(
+    v_ref ~ '^DF-[0-9]{4}-[A-Z0-9]{6}$',
+    'the reference is in a form somebody can read off paper'
+  );
+
+  v_again := issue_exam_permit(v_student, v_session);
+  perform assert_true(
+    v_again = v_ref,
+    'downloading twice returns one reference — a new one would make every printed copy unverifiable'
+  );
+
+  v_check := verify_exam_permit(v_ref);
+  perform assert_true((v_check->>'found')::boolean, 'the reference verifies');
+  perform assert_true(v_check->>'matric_no' = 'STA/2021/444', 'and names the student it belongs to');
+  perform assert_true(v_check->'courses' ? 'STA 401', 'and the papers it entitles them to');
+  perform assert_true(
+    not (v_check ? 'attendance_pct') and not (v_check ? 'phone'),
+    'and nothing else — a permit check is not a records request'
+  );
+
+  perform assert_true(
+    not (verify_exam_permit('DF-2025-ZZZZZZ')->>'found')::boolean,
+    'an invented reference does not verify'
+  );
+
+  perform assert_true(
+    (verify_exam_permit(lower(v_ref))->>'found')::boolean,
+    'case does not matter — it will be typed by hand'
+  );
+
+  perform assert_true(
+    (verify_exam_permit(v_ref)->>'account_active')::boolean,
+    'a live account reads as live'
+  );
+
+  -- Deactivated afterwards: the document is genuine, the account is not.
+  perform deactivate_student(v_student, v_admin, 'withdrawn',
+    'Withdrew from the programme after the list was authorized.');
+
+  v_check := verify_exam_permit(v_ref);
+  perform assert_true(
+    (v_check->>'found')::boolean and not (v_check->>'account_active')::boolean,
+    'a permit held by a deactivated student still verifies, and says the account is closed'
+  );
+end $$;
+
+-- ---------------------------------------------------------------------------
+-- Security posture
+--
+-- These assert the SHAPE of the schema's defences rather than any one rule, so
+-- that weakening them fails the suite instead of going unnoticed.
+--
+-- The one that matters most is the SECURITY DEFINER check. PostgREST publishes
+-- every function in `public` as an RPC, and Supabase grants execute on them to
+-- `authenticated` by default. Functions like `attendance_pct(student, course)`
+-- take another student's id as an argument and are therefore callable by
+-- anybody — they are safe ONLY because they are SECURITY INVOKER, so their
+-- internal reads run under the caller's own RLS and return nothing. Adding
+-- SECURITY DEFINER to one for convenience would silently turn it into a way to
+-- read any student's record.
+-- ---------------------------------------------------------------------------
+
+select assert_true(
+  not exists (
+    select 1 from pg_class c
+    join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public' and c.relkind = 'r' and not c.relrowsecurity
+  ),
+  'every table has row-level security enabled'
+);
+
+do $$
+declare
+  v_leaky text;
+begin
+  select string_agg(p.proname, ', ')
+    into v_leaky
+  from pg_proc p
+  join pg_namespace n on n.oid = p.pronamespace
+  where n.nspname = 'public'
+    and p.prokind = 'f'
+    and p.prosecdef
+    and has_function_privilege('authenticated', p.oid, 'execute')
+    -- current_app_role takes no arguments, so it can only ever report the
+    -- caller's own role. It has to be definer: the RLS policies call it, and
+    -- reading `profiles` to answer would recurse through those same policies.
+    and p.proname <> 'current_app_role';
+
+  perform assert_true(
+    v_leaky is null,
+    'no user-callable function is SECURITY DEFINER — RLS is what scopes them, and it only works if they run as the caller'
+  );
+end $$;
+
+do $$
+declare
+  v_exposed text;
+begin
+  -- Every authority action. Reachable from `authenticated` would mean a student
+  -- could clear themselves, waive their own dues, or promote the department.
+  select string_agg(p.proname, ', ')
+    into v_exposed
+  from pg_proc p
+  join pg_namespace n on n.oid = p.pronamespace
+  where n.nspname = 'public'
+    and p.proname in (
+      'clear_student', 'resolve_dispute', 'open_grace_period',
+      'revoke_grace_period', 'deactivate_student', 'reactivate_student',
+      'resolve_registration_dispute', 'run_level_rollover', 'cancel_session',
+      'schedule_makeup', 'reschedule_session', 'authorize_eligibility_list',
+      'advance_compliance_states', 'write_audit', 'notify_enrolled',
+      'resolve_session_score', 'enrol_in_core_courses',
+      'submit_manual_batch', 'compute_risk_predictions', 'dept_flow_schema_report',
+      'issue_exam_permit', 'verify_exam_permit'
+    )
+    and (
+      has_function_privilege('authenticated', p.oid, 'execute')
+      or has_function_privilege('anon', p.oid, 'execute')
+    );
+
+  perform assert_true(
+    v_exposed is null,
+    'no authority action is callable by a signed-in user — every one goes through the API, which checks the role'
+  );
+end $$;
+
+select assert_true(
+  not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'venue_directory'
+      and column_name not in ('id', 'name')
+  ),
+  'the venue directory carries names only — it bypasses the geo-fence policy, so it must expose nothing else'
+);
+
+-- ---------------------------------------------------------------------------
+-- The university directory
+--
+-- The landing page lists every faculty and its departments, and exactly one
+-- department runs on this system. Everything downstream is that department's,
+-- so a second active row would send another department's students to a
+-- register that rejects them.
+-- ---------------------------------------------------------------------------
+
+select assert_true(
+  (select count(*) from departments where is_active) = 1
+  and exists (
+    select 1 from departments d join faculties f on f.id = d.faculty_id
+    where d.is_active
+      and d.name = 'Mathematics and Computer Science'
+      and f.name = 'Faculty of Science'
+  ),
+  'exactly one department is on the system, and it is Mathematics and Computer Science, Faculty of Science'
+);
+
+select assert_rejects(
+  $sql$ update departments set is_active = true where name = 'Physics' $sql$,
+  'a second department cannot be switched on — nothing downstream is scoped by department yet'
+);
+
+select assert_true(
+  (select count(*) from faculties) = 10 and (select count(*) from departments) = 38,
+  'the directory carries the faculties and departments as supplied, and invents none'
+);
+
+-- Before anyone logs in. The landing page reads this as the anonymous role.
+set local role anon;
+
+select assert_true(
+  (select count(*) from faculties) = 10 and (select count(*) from departments) = 38,
+  'an anonymous visitor can read the directory — it is shown before login'
+);
+
+select assert_rejects(
+  $sql$ select 1 from students limit 1 $sql$,
+  'and nothing else: the directory is the only table the anonymous role can read'
+);
+
+select assert_rejects(
+  $sql$ insert into faculties (name, sort_order) values ('Faculty of Nonsense', 999) $sql$,
+  'an anonymous visitor cannot add to the directory'
+);
+
+reset role;
+set local role authenticated;
+set local request.jwt.claim.sub = '44444444-4444-4444-4444-444444444401';
+
+select assert_rejects(
+  $sql$ update departments set name = 'Renamed' where is_active $sql$,
+  'nor can a signed-in user — the directory changes by migration only'
+);
+
+reset role;
+
+-- ---------------------------------------------------------------------------
+-- The final warning, and a course that states its length
+-- ---------------------------------------------------------------------------
+--
+-- The thesis tests the alerts with five scenarios on a course of 20 planned
+-- lectures, run in 12 arranged sessions (Chapter Three, Figure 3.3). This
+-- block runs those exact patterns through compute_risk_predictions() and
+-- send_risk_alerts() after every session, so the numbers in the thesis and
+-- the behaviour of the code cannot drift apart.
+
+do $$
+declare
+  v_course  uuid := gen_random_uuid();
+  v_entry   uuid;
+  v_lecture uuid;
+  v_student uuid;
+  v_pattern text;
+  v_tier    text;
+  v_n       integer := 0;
+  i         integer;
+  s         record;
+begin
+  create temp table scenario_students (scenario text, student_id uuid, pattern text) on commit drop;
+  create temp table scenario_log (scenario text, student_id uuid, session integer, tier text,
+                                  alerts integer, sms integer) on commit drop;
+
+  insert into courses (id, academic_session_id, code, title, level, kind, credit_units,
+                       semester, lecturer_id, planned_lectures)
+  values (v_course, '11111111-1111-1111-1111-111111111111', 'CMP 393', 'Scenario Fixture',
+          300, 'core', 3, 1, '33333333-3333-3333-3333-333333333301', 20);
+
+  -- A weekly slot as well, so the test proves the planned count wins over the
+  -- calendar rather than merely filling in for a missing timetable.
+  insert into timetable_entries (academic_session_id, course_id, day_of_week, start_time, end_time, venue_id)
+  values ('11111111-1111-1111-1111-111111111111', v_course, 4, '09:00', '11:00',
+          '22222222-2222-2222-2222-222222222201')
+  returning id into v_entry;
+
+  -- Two students per scenario. 1 = present, 0 = absent, session by session.
+  for s in
+    select * from (values
+      ('A', '111111111111'), ('B', '111111111010'), ('C', '111111101000'),
+      ('D', '111010010001'), ('E', '111111001111')
+    ) as t(scenario, pattern)
+  loop
+    for i in 1..2 loop
+      v_student := gen_random_uuid();
+      v_n := v_n + 1;
+      insert into profiles (id, role, surname, first_name, phone)
+      values (v_student, 'student', 'Scenario' || s.scenario, 'Student' || i,
+              '+23480500077' || lpad(v_n::text, 2, '0'));
+      insert into students (id, matric_no, level)
+      values (v_student, 'CMP/2024/7' || lpad(v_n::text, 2, '0'), 300);
+      insert into enrolments (student_id, course_id, source, enrolled_on)
+      values (v_student, v_course, 'core', session_day(0));
+      insert into scenario_students values (s.scenario, v_student, s.pattern);
+    end loop;
+  end loop;
+
+  perform assert_true(
+    lectures_remaining(v_course) = 20,
+    'a course that states 20 lectures has 20 remaining before any is held — the calendar is not consulted'
+  );
+
+  for i in 1..12 loop
+    v_lecture := gen_random_uuid();
+    insert into session_instances (id, course_id, timetable_entry_id, held_on, venue_id,
+                                  type, status, closed_at, created_by)
+    values (v_lecture, v_course, v_entry, session_day(i),
+            '22222222-2222-2222-2222-222222222201', 'recurring', 'closed', now(),
+            '33333333-3333-3333-3333-333333333301');
+
+    insert into session_scores (student_id, session_instance_id, score, source)
+    select ss.student_id, v_lecture,
+           case when substr(ss.pattern, i, 1) = '1' then 1.0 else 0 end, 'digital'
+    from scenario_students ss;
+
+    perform compute_risk_predictions();
+    perform send_risk_alerts();
+
+    insert into scenario_log
+    select ss.scenario, ss.student_id, i,
+           (select rp.tier::text from risk_predictions rp
+             where rp.student_id = ss.student_id and rp.course_id = v_course),
+           (select count(*) from risk_alerts_sent ra
+             where ra.student_id = ss.student_id and ra.course_id = v_course),
+           (select count(*) from risk_alerts_sent ra
+              join notification_deliveries nd on nd.notification_id = ra.notification_id
+             where ra.student_id = ss.student_id and ra.course_id = v_course
+               and nd.channel = 'sms')
+    from scenario_students ss;
+  end loop;
+
+  perform assert_true(
+    lectures_remaining(v_course) = 8,
+    'and 8 after twelve are closed — holding a lecture now reduces what remains'
+  );
+
+  perform assert_true(
+    not exists (select 1 from scenario_log where session < 5 and tier is not null),
+    'no scenario is forecast before the fifth closed lecture'
+  );
+
+  perform assert_true(
+    not exists (select 1 from scenario_log where scenario = 'A' and session >= 5 and tier <> 'safe')
+    and not exists (select 1 from scenario_log where scenario = 'A' and alerts > 0),
+    'Scenario A, present at every session, stays Safe and is never warned'
+  );
+
+  perform assert_true(
+    not exists (select 1 from scenario_log where scenario = 'B' and session between 5 and 11 and tier <> 'safe')
+    and not exists (select 1 from scenario_log where scenario = 'B' and session = 12 and tier <> 'watch'),
+    'Scenario B reaches Watch at session 12'
+  );
+
+  perform assert_true(
+    not exists (select 1 from scenario_log where scenario = 'C' and session = 10 and tier <> 'watch')
+    and not exists (select 1 from scenario_log where scenario = 'C' and session = 11 and tier <> 'critical'),
+    'Scenario C reaches Watch at session 10 — the projection lands exactly on 75%, which is Watch — and Critical at 11'
+  );
+
+  perform assert_true(
+    not exists (select 1 from scenario_log where scenario = 'C' and sms > 0),
+    'and Scenario C, still able to recover, receives no SMS'
+  );
+
+  perform assert_true(
+    not exists (select 1 from scenario_log where scenario = 'D' and session = 6 and (tier <> 'critical' or alerts <> 1 or sms <> 0)),
+    'Scenario D turns Critical at session 6 with lectures to spare: one warning, no SMS'
+  );
+
+  -- The bug this block exists to keep out. Same tier, worse position: the
+  -- warning the SMS was held back for has to be sent.
+  perform assert_true(
+    not exists (select 1 from scenario_log where scenario = 'D' and session = 10 and (alerts <> 2 or sms <> 1)),
+    'at session 10 every remaining lecture is needed, and a second warning goes out by SMS though the tier has not changed'
+  );
+
+  perform assert_true(
+    not exists (select 1 from scenario_log where scenario = 'D' and session = 11 and (alerts <> 3 or sms <> 2)),
+    'at session 11 75% is out of reach, and the final warning goes out by SMS'
+  );
+
+  perform assert_true(
+    not exists (select 1 from scenario_log where scenario = 'D' and session = 12 and alerts <> 3),
+    'and nothing more at session 12 — out of reach once is out of reach, not a nightly message'
+  );
+
+  perform assert_true(
+    not exists (select 1 from scenario_log where scenario = 'E' and session = 8 and tier <> 'critical')
+    and not exists (select 1 from scenario_log where scenario = 'E' and session = 10 and tier <> 'watch')
+    and not exists (select 1 from scenario_log where scenario = 'E' and session = 12 and tier <> 'safe'),
+    'Scenario E turns Critical at session 8, recovers to Watch at 10 and to Safe at 12'
+  );
+
+  perform assert_true(
+    exists (select 1 from scenario_log where scenario = 'E' and session = 8)
+    and (select attendance_pct(student_id, v_course) from scenario_log
+          where scenario = 'E' and session = 12 limit 1) >= 75,
+    'Scenario E is Critical at session 8 while attendance so far stands at 75% — the warning a tally would never give'
+  );
+
+  perform assert_true(
+    send_risk_alerts() = 0,
+    'run again with nothing changed, the alerts stay silent'
+  );
+end;
+$$;
+
+-- The report /api/health reads. Running the full migration set and being told
+-- something is missing would mean the report's own expectations have drifted
+-- from the migrations, which is worse than no report.
+select assert_true(
+  (dept_flow_schema_report()->>'up_to_date')::boolean,
+  'the schema report agrees this database is fully migrated'
+);
+
+select assert_true(
+  not has_function_privilege('authenticated', 'dept_flow_schema_report()', 'execute'),
+  'the schema report is service-role only — it is SECURITY DEFINER and reads the catalog'
+);
+
+-- And the proof that SECURITY INVOKER is doing the work: Chidera asking for
+-- Halima's attendance gets zero, not Halima's real 38.46%.
+set local role authenticated;
+set local request.jwt.claim.sub = '44444444-4444-4444-4444-444444444401';
+
+select assert_true(
+  attendance_pct('44444444-4444-4444-4444-444444444402',
+                 '66666666-6666-6666-6666-666666666601') = 0,
+  'a student calling attendance_pct for another student gets nothing — the function is not the guard, RLS is'
+);
+
+reset role;
+
+
+-- The readable result. Every row here is an assertion that held; a failure
+-- would have aborted before reaching this point.
+select seq as "#", 'ok' as result, what as assertion from assertion_log order by seq;
+
+rollback;

@@ -1,0 +1,341 @@
+import "server-only";
+
+import { createServiceClient, createUserClient } from "@/lib/supabase/client";
+import { currentAccessToken } from "@/lib/auth/current-user";
+import {
+  initializeTransaction,
+  newReference,
+  placeholderEmail,
+  verifyTransaction,
+} from "@/lib/paystack";
+import type { PaymentChannel, PaymentRecord } from "@/lib/types";
+import { ok } from "@/lib/supabase/result";
+
+export type { PaymentRecord };
+
+/**
+ * Dues payment, server side.
+ *
+ * The whole product turns on this file: `clear_student()` flips the student to
+ * cleared AND confirms every provisional score in one transaction, so a
+ * half-applied payment would leave someone paid and uncounted. That function is
+ * the authoritative implementation and nothing here reimplements any of it.
+ */
+
+export type StartResult =
+  | { outcome: "redirect"; authorizationUrl: string; reference: string }
+  | { outcome: "already_cleared" }
+  | { outcome: "window_closed" }
+  | { outcome: "no_dues_period" };
+
+export async function startDuesPayment(
+  studentId: string,
+  channel: PaymentChannel,
+): Promise<StartResult> {
+  const db = createServiceClient();
+
+  const { data: student } = ok(await db
+    .from("students")
+    .select("id, matric_no")
+    .eq("id", studentId)
+    .single(), "student");
+
+  if (!student) throw new Error("No such student.");
+
+  const { data: session } = ok(await db
+    .from("academic_sessions")
+    .select("id")
+    .eq("is_active", true)
+    .single(), "session");
+
+  if (!session) return { outcome: "no_dues_period" };
+
+  const { data: dues } = ok(await db
+    .from("dues_periods")
+    .select("dues_amount_kobo")
+    .eq("academic_session_id", session.id)
+    .maybeSingle(), "dues");
+
+  if (!dues) return { outcome: "no_dues_period" };
+
+  const { data: compliance } = ok(await db
+    .from("compliance_statuses")
+    .select("state")
+    .eq("student_id", studentId)
+    .eq("academic_session_id", session.id)
+    .maybeSingle(), "compliance");
+
+  // Charging a student who is already cleared is the one outcome with no way
+  // back that does not involve a refund.
+  if (compliance?.state === "cleared") return { outcome: "already_cleared" };
+
+  // The portal is not open all session. Once a student is locked, paying is
+  // shut along with recording attendance — the department's deadline is meant
+  // to be a deadline. A grace period reopens both, because it is one lock.
+  //
+  // Checked here and NOT in settlePayment: a transfer begun on day 29 can land
+  // on day 32, and refusing to verify money that has already left a student's
+  // account would take the payment and withhold the clearance.
+  const { data: open } = ok(await db.rpc("is_payment_open", {
+    p_student_id: studentId,
+    p_academic_session_id: session.id,
+  }), "open");
+
+  if (open === false) return { outcome: "window_closed" };
+
+  const reference = newReference();
+
+  // The row is written before the student leaves for Paystack. An abandoned
+  // payment is then a pending row we can re-verify, rather than a transaction
+  // we never knew existed.
+  const { error } = await db.from("payments").insert({
+    student_id: studentId,
+    academic_session_id: session.id,
+    paystack_reference: reference,
+    status: "pending",
+    // Read from dues_periods, never from the browser. A client that can name
+    // its own price has defeated the whole flow.
+    amount_kobo: dues.dues_amount_kobo,
+  });
+
+  if (error) throw new Error(`Could not record the payment: ${error.message}`);
+
+  let authorizationUrl: string;
+  try {
+    ({ authorizationUrl } = await initializeTransaction({
+      reference,
+      amountKobo: Number(dues.dues_amount_kobo),
+      email: placeholderEmail(student.matric_no),
+      callbackUrl: callbackUrlFor(reference),
+      channel,
+      metadata: {
+        matric_no: student.matric_no,
+        academic_session_id: session.id,
+        // Shown on the Paystack dashboard's transaction list.
+        custom_fields: [
+          {
+            display_name: "Matric number",
+            variable_name: "matric_no",
+            value: student.matric_no,
+          },
+        ],
+      },
+    }));
+  } catch (error) {
+    // Paystack refused, so no transaction exists under this reference and the
+    // row we optimistically wrote can never resolve. Left behind it becomes a
+    // payment stuck on "Checking" in the student's history for ever.
+    await db.from("payments").delete().eq("paystack_reference", reference);
+    throw error;
+  }
+
+  return { outcome: "redirect", authorizationUrl, reference };
+}
+
+function callbackUrlFor(reference: string): string {
+  const base = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") ?? "http://localhost:3000";
+  return `${base}/dues/result?ref=${encodeURIComponent(reference)}`;
+}
+
+export type SettleOutcome = {
+  status: "success" | "pending" | "failed";
+  reference: string;
+  amountKobo: number;
+  /** Whether this payment took the balance to zero. */
+  cleared: boolean;
+  /** What is still owed after it. Null when nothing was applied. */
+  balanceKobo: number | null;
+};
+
+/**
+ * Verify a reference with Paystack and apply whatever it turns out to be.
+ *
+ * Safe to call repeatedly and from both directions — the webhook and the
+ * student's return from checkout race each other by design, and on a laptop in
+ * development the webhook never arrives at all.
+ */
+export async function settlePayment(
+  reference: string,
+  /**
+   * Set when a student is settling their own return from checkout. References
+   * are guessable enough that a screen reachable with one in the query string
+   * must not act on somebody else's.
+   */
+  expectStudentId?: string,
+): Promise<SettleOutcome> {
+  const db = createServiceClient();
+
+  const { data: payment } = ok(await db
+    .from("payments")
+    .select("id, student_id, academic_session_id, amount_kobo, status")
+    .eq("paystack_reference", reference)
+    .maybeSingle(), "payment");
+
+  if (!payment) throw new Error("Unknown payment reference.");
+  if (expectStudentId && payment.student_id !== expectStudentId) {
+    throw new Error("That payment is not yours.");
+  }
+
+  // Already applied. Re-clearing would rewrite cleared_at and, worse, re-run
+  // the score confirmation for a student who may since have been locked.
+  if (payment.status === "success") {
+    return {
+      status: "success",
+      reference,
+      amountKobo: Number(payment.amount_kobo),
+      cleared: false,
+      balanceKobo: null,
+    };
+  }
+
+  const verified = await verifyTransaction(reference);
+
+  await db
+    .from("payments")
+    .update({ last_checked_at: new Date().toISOString() })
+    .eq("id", payment.id);
+
+  if (verified.status === "pending") {
+    return {
+      status: "pending",
+      reference,
+      amountKobo: Number(payment.amount_kobo),
+      cleared: false,
+      balanceKobo: null,
+    };
+  }
+
+  if (verified.status !== "success") {
+    await db
+      .from("payments")
+      .update({ status: verified.status, verification_payload: verified.raw })
+      .eq("id", payment.id);
+
+    return {
+      status: "failed",
+      reference,
+      amountKobo: Number(payment.amount_kobo),
+      cleared: false,
+      balanceKobo: null,
+    };
+  }
+
+  // The amount that actually arrived is what is recorded, not the amount the
+  // student was invited to pay. This used to refuse anything that did not match
+  // the dues figure exactly and park it as "pending" for a human — which meant
+  // a student paying half their dues at the start of term had their money
+  // recorded as a problem. Instalments are the normal case, so a short payment
+  // is a payment: it reduces the balance and clears nobody.
+  const { error: paidError } = await db
+    .from("payments")
+    .update({
+      status: "success",
+      channel: verified.channel,
+      amount_kobo: verified.amountKobo,
+      verified_at: verified.paidAt ?? new Date().toISOString(),
+      verification_payload: verified.raw,
+      card_signature: verified.cardSignature,
+      last4: verified.last4,
+    })
+    .eq("id", payment.id);
+
+  if (paidError) throw new Error(`Could not record the payment: ${paidError.message}`);
+
+  // What a successful payment does is decided in one place, so this route and
+  // the bursary counter's manual route cannot drift. It clears the student only
+  // when the BALANCE reaches zero.
+  const { data: applied, error: applyError } = await db.rpc("apply_payment", {
+    p_payment_id: payment.id,
+    p_actor_id: null,
+  });
+
+  if (applyError) {
+    // The money is recorded but nothing acted on it, which is the one outcome
+    // nobody can see from the outside. Loud, not swallowed.
+    throw new Error(
+      `Payment ${reference} verified but applying failed: ${applyError.message}`,
+    );
+  }
+
+  const { data: balance } = ok(await db.rpc("dues_balance_kobo", {
+    p_student_id: payment.student_id,
+    p_academic_session_id: payment.academic_session_id,
+  }), "balance");
+
+  return {
+    status: "success",
+    reference,
+    amountKobo: verified.amountKobo,
+    cleared: applied === "cleared",
+    balanceKobo: Number(balance ?? 0),
+  };
+}
+
+/**
+ * The student's own pending payments, settled while they are looking.
+ *
+ * The background sweep in `reconciliation.ts` covers everybody on a schedule.
+ * This is the same work, done immediately for the one student whose screen is
+ * open — because "it will sort itself out within two minutes" is true and
+ * unhelpful to somebody staring at "Checking payment…".
+ *
+ * It reads the SAME `next_check_at` column the sweep does, so the two cannot
+ * disagree about what is due, and a student refreshing repeatedly cannot turn
+ * their own dues page into a way to hammer Paystack.
+ */
+export async function reconcilePendingPayments(studentId: string): Promise<void> {
+  const db = createServiceClient();
+
+  const { data: due } = ok(await db
+    .from("payments")
+    .select("id, paystack_reference")
+    .eq("student_id", studentId)
+    .eq("status", "pending")
+    .not("next_check_at", "is", null)
+    .lte("next_check_at", new Date().toISOString())
+    .order("initialized_at", { ascending: true })
+    .limit(3), "due");
+
+  for (const row of due ?? []) {
+    try {
+      await settlePayment(row.paystack_reference, studentId);
+      await db.rpc("schedule_payment_check", { p_payment_id: row.id, p_answered: true });
+    } catch (error) {
+      // One unreachable reference must not blank the dues screen. The row is
+      // pushed forward and the sweep picks it up.
+      //
+      // warn, not error: this is a handled condition on a retry path, and
+      // logging it as an error makes Next's dev overlay throw a red card over
+      // a page that rendered perfectly well.
+      await db.rpc("schedule_payment_check", { p_payment_id: row.id, p_answered: false });
+      console.warn(
+        `reconcile deferred for ${row.paystack_reference}: ${(error as Error).message}`,
+      );
+    }
+  }
+}
+
+/**
+ * The student's own payment history.
+ *
+ * Read under the student's token, so `payments_self_read` is what scopes it —
+ * not the `eq` below, which is there to keep the query small.
+ */
+export async function loadPaymentHistory(studentId: string): Promise<PaymentRecord[]> {
+  const db = createUserClient(await currentAccessToken());
+
+  const { data } = ok(await db
+    .from("payments")
+    .select("paystack_reference, amount_kobo, status, channel, verified_at, initialized_at")
+    .eq("student_id", studentId)
+    .order("initialized_at", { ascending: false }), "the student's payment history");
+
+  return (data ?? []).map((row) => ({
+    reference: row.paystack_reference,
+    amountKobo: Number(row.amount_kobo),
+    status: row.status,
+    channel: row.channel,
+    paidAt: row.verified_at,
+    startedAt: row.initialized_at,
+  }));
+}

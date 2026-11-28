@@ -12,8 +12,7 @@ export function channelIsConfigured(channel: Channel): boolean {
   switch (channel) {
     case "whatsapp":
       return Boolean(
-        process.env.WHATSAPP_API_TOKEN &&
-        process.env.WHATSAPP_PHONE_NUMBER_ID,
+        process.env.WHATSAPP_API_TOKEN && process.env.WHATSAPP_PHONE_NUMBER_ID,
       );
 
     case "sms":
@@ -21,8 +20,7 @@ export function channelIsConfigured(channel: Channel): boolean {
 
     case "web_push":
       return Boolean(
-        process.env.VAPID_PRIVATE_KEY &&
-        process.env.VAPID_PUBLIC_KEY,
+        process.env.VAPID_PRIVATE_KEY && process.env.VAPID_PUBLIC_KEY,
       );
   }
 }
@@ -119,7 +117,9 @@ export async function sendWhatsApp(input: {
           name: input.template,
 
           language: {
-            code: process.env.WHATSAPP_TEMPLATE_LANGUAGE || "en",
+            // Trimmed: a stray space in .env.local becomes "en " and Meta
+            // answers "template does not exist in the translation".
+            code: (process.env.WHATSAPP_TEMPLATE_LANGUAGE || "en").trim(),
           },
 
           components,
@@ -153,23 +153,26 @@ export async function sendWhatsApp(input: {
 
         metaError?.error_data?.details,
 
-        metaError?.error_subcode
-          ? `Subcode: ${metaError.error_subcode}`
-          : null,
+        metaError?.error_subcode ? `Subcode: ${metaError.error_subcode}` : null,
 
-        metaError?.fbtrace_id
-          ? `Trace ID: ${metaError.fbtrace_id}`
-          : null,
+        metaError?.fbtrace_id ? `Trace ID: ${metaError.fbtrace_id}` : null,
       ]
         .filter(Boolean)
         .join(" | ");
+
+      // 131049: Meta chose not to deliver a marketing-category message to
+      // this recipient. A Utility template is not subject to that limit.
+      const hint =
+        metaError?.code === 131049
+          ? " | Meta limits marketing templates per recipient; use a Utility template."
+          : "";
 
       return {
         status: "failed",
 
         error: `WhatsApp refused it: ${
           reason || `HTTP ${response.status}`
-        }`,
+        }${hint}`,
       };
     }
 
@@ -195,9 +198,7 @@ export async function sendWhatsApp(input: {
 function templateText(text: string): string {
   const flat = text.replace(/\s+/g, " ").trim();
 
-  return flat.length > 900
-    ? `${flat.slice(0, 899)}…`
-    : flat;
+  return flat.length > 900 ? `${flat.slice(0, 899)}…` : flat;
 }
 
 /**
@@ -249,22 +250,19 @@ export async function sendSms(input: {
   }
 
   try {
-    const response = await fetch(
-      `https://${host}/version1/messaging`,
-      {
-        method: "POST",
+    const response = await fetch(`https://${host}/version1/messaging`, {
+      method: "POST",
 
-        headers: {
-          apiKey: process.env.SMS_API_KEY!,
-          Accept: "application/json",
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
-
-        body: form,
-
-        signal: AbortSignal.timeout(10_000),
+      headers: {
+        apiKey: process.env.SMS_API_KEY!,
+        Accept: "application/json",
+        "Content-Type": "application/x-www-form-urlencoded",
       },
-    );
+
+      body: form,
+
+      signal: AbortSignal.timeout(10_000),
+    });
 
     const body = (await response.json().catch(() => null)) as {
       SMSMessageData?: {
@@ -285,10 +283,7 @@ export async function sendSms(input: {
 
     const recipient = body?.SMSMessageData?.Recipients?.[0];
 
-    if (
-      !recipient ||
-      ![100, 101, 102].includes(recipient.statusCode ?? -1)
-    ) {
+    if (!recipient || ![100, 101, 102].includes(recipient.statusCode ?? -1)) {
       return {
         status: "failed",
 
@@ -332,18 +327,14 @@ export async function sendWebPush(input: {
       };
     }
 
-    console.info(
-      `\n  [dev push] ${input.title} — ${input.body}\n`,
-    );
+    console.info(`\n  [dev push] ${input.title} — ${input.body}\n`);
 
     return { status: "sent", providerRef: null };
   }
 
   const webpush = (await import("web-push")).default;
 
-  type PushSubscription = Parameters<
-    typeof webpush.sendNotification
-  >[0];
+  type PushSubscription = Parameters<typeof webpush.sendNotification>[0];
 
   webpush.setVapidDetails(
     process.env.VAPID_SUBJECT || "mailto:deptflow@example.edu.ng",
@@ -386,9 +377,7 @@ export async function sendWebPush(input: {
       status: "failed",
 
       error:
-        error instanceof Error
-          ? error.message
-          : "The push service refused it.",
+        error instanceof Error ? error.message : "The push service refused it.",
     };
   }
 }
@@ -396,9 +385,7 @@ export async function sendWebPush(input: {
 /**
  * OTP result.
  */
-export type OtpResult =
-  | SendResult
-  | { status: "shown"; code: string };
+export type OtpResult = SendResult | { status: "shown"; code: string };
 
 /**
  * Send OTP through SMS or WhatsApp.
@@ -413,8 +400,7 @@ export async function sendOtp(input: {
   const canSend =
     input.channel === "sms"
       ? channelIsConfigured("sms")
-      : channelIsConfigured("whatsapp") &&
-        Boolean(otpTemplate);
+      : channelIsConfigured("whatsapp") && Boolean(otpTemplate);
 
   if (!canSend && isDemoDeployment()) {
     return {
